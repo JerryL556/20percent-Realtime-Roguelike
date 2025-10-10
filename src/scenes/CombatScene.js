@@ -5,6 +5,8 @@ import { generateRoom } from '../systems/ProceduralGen.js';
 import { createEnemy } from '../systems/EnemyFactory.js';
 import { getWeaponById, weaponDefs } from '../core/Weapons.js';
 
+const DISABLE_WALLS = true; // Temporary: remove concrete walls
+
 export default class CombatScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Combat); }
 
@@ -36,7 +38,14 @@ export default class CombatScene extends Phaser.Scene {
     const mods = this.gs.getDifficultyMods();
     const room = generateRoom(this.gs.rng, this.gs.currentDepth);
     this.room = room;
-    this.createArenaWalls(room);
+    if (!DISABLE_WALLS) {
+      this.createArenaWalls(room);
+    } else {
+      // Expand arena to full screen when walls are disabled
+      const { width, height } = this.scale;
+      this.arenaRect = new Phaser.Geom.Rectangle(0, 0, width, height);
+      this.walls = null;
+    }
     room.spawnPoints.forEach((p) => {
       const e = createEnemy(this, p.x, p.y, Math.floor(20 * mods.enemyHp), Math.floor(10 * mods.enemyDamage), 60);
       this.enemies.add(e);
@@ -99,8 +108,9 @@ export default class CombatScene extends Phaser.Scene {
       b.setVelocity(vx, vy);
       b.damage = weapon.damage;
       b.update = () => {
-        // Lifetime and arena bounds
-        if (!this.arenaRect.contains(b.x, b.y)) { b.destroy(); return; }
+        // Lifetime via camera view when walls are disabled
+        const view = this.cameras?.main?.worldView;
+        if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
       };
       b.on('destroy', () => b._g?.destroy());
     }

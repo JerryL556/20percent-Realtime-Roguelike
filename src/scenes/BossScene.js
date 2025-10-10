@@ -4,6 +4,8 @@ import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
 import { getWeaponById } from '../core/Weapons.js';
 
+const DISABLE_WALLS = true; // Temporary: remove concrete walls
+
 export default class BossScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Boss); }
 
@@ -27,7 +29,14 @@ export default class BossScene extends Phaser.Scene {
     this.physics.add.existing(this.boss);
 
     // Arena walls
-    this.createArenaWalls();
+    if (!DISABLE_WALLS) {
+      this.createArenaWalls();
+    } else {
+      // No walls: arena spans full screen
+      const { width, height } = this.scale;
+      this.arenaRect = new Phaser.Geom.Rectangle(0, 0, width, height);
+      this.walls = null;
+    }
     if (this.walls) {
       this.physics.add.collider(this.player, this.walls);
       this.physics.add.collider(this.boss, this.walls);
