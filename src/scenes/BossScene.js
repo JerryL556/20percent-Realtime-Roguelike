@@ -97,12 +97,20 @@ export default class BossScene extends Phaser.Scene {
   }
 
   win() {
-    // Reward and open exit
+    // Reward and spawn portal to hub
     this.gs.gold += 50;
-    this.prompt.setText('Boss defeated! E to exit');
-    this.exitRect = new Phaser.Geom.Rectangle(this.scale.width - 50, this.scale.height / 2 - 30, 40, 60);
+    this.prompt.setText('Boss defeated! Enter portal');
+    const px = this.scale.width - 50 + 20; // center of previous exit area
+    const py = this.scale.height / 2;
     this.exitG.clear();
-    this.exitG.fillStyle(0x22ff88, 1).fillRect(this.exitRect.x, this.exitRect.y, this.exitRect.width, this.exitRect.height);
+    // Create a visible portal sprite and physics overlap
+    this.portal = this.physics.add.staticImage(px, py, 'portal');
+    this.portal.setSize(24, 24).setOffset(0, 0);
+    this.physics.add.overlap(this.player, this.portal, () => {
+      this.gs.progressAfterBoss();
+      SaveManager.saveToLocal(this.gs);
+      this.scene.start(SceneKeys.Hub);
+    });
   }
 
   shoot() {
@@ -201,17 +209,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Exit check
-    if (this.exitRect) {
-      const playerRect = this.player.getBounds();
-      if (Phaser.Geom.Intersects.RectangleToRectangle(playerRect, this.exitRect)) {
-        if (this.inputMgr.pressedInteract) {
-          this.gs.progressAfterBoss();
-          SaveManager.saveToLocal(this.gs);
-          this.scene.start(SceneKeys.Hub);
-        }
-      }
-    }
+    // Portal check handled by physics overlap when it exists
   }
 
   createArenaWalls() {

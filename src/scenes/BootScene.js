@@ -11,6 +11,11 @@ export default class BootScene extends Phaser.Scene {
     g.generateTexture('player_square', 12, 12);
     g.clear(); g.fillStyle(0xff4444, 1); g.fillRect(0, 0, 12, 12);
     g.generateTexture('enemy_square', 12, 12);
+    // Portal (simple ring)
+    g.clear();
+    g.fillStyle(0x00ffcc, 0.25); g.fillCircle(12, 12, 12);
+    g.lineStyle(2, 0x22ff88, 1).strokeCircle(12, 12, 10);
+    g.generateTexture('portal', 24, 24);
     // Wall tile
     g.clear(); g.fillStyle(0x666666, 1); g.fillRect(0, 0, 16, 16);
     g.lineStyle(1, 0x999999, 1).strokeRect(0, 0, 16, 16);
