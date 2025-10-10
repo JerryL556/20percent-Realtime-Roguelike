@@ -24,8 +24,12 @@ export default class CombatScene extends Phaser.Scene {
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
 
-    // Bullets group
-    this.bullets = this.physics.add.group({ maxSize: 64, runChildUpdate: true });
+    // Bullets group (use Arcade.Image for proper pooling)
+    this.bullets = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 64,
+      runChildUpdate: true,
+    });
 
     // Enemies
     this.enemies = this.add.group();
@@ -44,7 +48,7 @@ export default class CombatScene extends Phaser.Scene {
       this.physics.add.collider(this.enemies.getChildren(), this.walls);
     }
 
-    this.physics.add.overlap(this.bullets, this.enemies.getChildren(), (b, e) => {
+    this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
       e.hp -= b.damage || 10;
       b.destroy();
@@ -88,16 +92,15 @@ export default class CombatScene extends Phaser.Scene {
       const angle = baseAngle + t * spread;
       const vx = Math.cos(angle) * weapon.bulletSpeed;
       const vy = Math.sin(angle) * weapon.bulletSpeed;
-      const b = this.bullets.get();
+      const b = this.bullets.get(startX, startY, 'bullet');
       if (!b) continue;
       b.setActive(true).setVisible(true);
-      b.body = this.physics.add.image(startX, startY, 'bullet');
-      b.body.setCircle(2).setOffset(-2, -2);
-      b.body.setVelocity(vx, vy);
+      b.setCircle(2).setOffset(-2, -2);
+      b.setVelocity(vx, vy);
       b.damage = weapon.damage;
       b.update = () => {
         // Lifetime and arena bounds
-        if (!this.arenaRect.contains(b.body.x, b.body.y)) { b.destroy(); return; }
+        if (!this.arenaRect.contains(b.x, b.y)) { b.destroy(); return; }
       };
       b.on('destroy', () => b._g?.destroy());
     }

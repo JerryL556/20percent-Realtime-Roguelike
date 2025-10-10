@@ -46,8 +46,12 @@ export default class BossScene extends Phaser.Scene {
       }
     });
 
-    // Player bullets
-    this.bullets = this.physics.add.group({ maxSize: 64, runChildUpdate: true });
+    // Player bullets (Arcade.Image pool)
+    this.bullets = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 64,
+      runChildUpdate: true,
+    });
     this.physics.add.overlap(this.bullets, this.boss, (b, boss) => {
       if (!b.active || !boss.active) return;
       boss.hp -= b.damage || 12;
@@ -58,8 +62,12 @@ export default class BossScene extends Phaser.Scene {
       }
     });
 
-    // Boss bullets
-    this.bossBullets = this.physics.add.group({ maxSize: 64, runChildUpdate: true });
+    // Boss bullets (Arcade.Image pool)
+    this.bossBullets = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 64,
+      runChildUpdate: true,
+    });
     this.physics.add.overlap(this.player, this.bossBullets, (p, b) => {
       if (this.time.now < this.player.iframesUntil) return;
       this.gs.hp -= 10; // boss bullet damage
@@ -102,15 +110,14 @@ export default class BossScene extends Phaser.Scene {
       const angle = baseAngle + t * spread;
       const vx = Math.cos(angle) * weapon.bulletSpeed;
       const vy = Math.sin(angle) * weapon.bulletSpeed;
-      const b = this.bullets.get();
+      const b = this.bullets.get(startX, startY, 'bullet');
       if (!b) continue;
       b.setActive(true).setVisible(true);
-      b.body = this.physics.add.image(startX, startY, 'bullet');
-      b.body.setCircle(2).setOffset(-2, -2);
-      b.body.setVelocity(vx, vy);
+      b.setCircle(2).setOffset(-2, -2);
+      b.setVelocity(vx, vy);
       b.damage = weapon.damage;
       b.update = () => {
-        if (!this.cameras.main.worldView.contains(b.body.x, b.body.y)) b.destroy();
+        if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy();
       };
       b.on('destroy', () => b._g?.destroy());
     }
@@ -175,13 +182,12 @@ export default class BossScene extends Phaser.Scene {
         // Fire 3-way aimed burst
         const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
         [0, -0.15, 0.15].forEach((off) => {
-          const b = this.bossBullets.get(); if (!b) return;
           const vx = Math.cos(base + off) * 240; const vy = Math.sin(base + off) * 240;
+          const b = this.bossBullets.get(this.boss.x, this.boss.y, 'bullet'); if (!b) return;
           b.setActive(true).setVisible(true);
-          b.body = this.physics.add.image(this.boss.x, this.boss.y, 'bullet');
-          b.body.setCircle(2).setOffset(-2, -2);
-          b.body.setVelocity(vx, vy);
-          b.update = () => { if (!this.cameras.main.worldView.contains(b.body.x, b.body.y)) b.destroy(); };
+          b.setCircle(2).setOffset(-2, -2);
+          b.setVelocity(vx, vy);
+          b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); };
         });
       }
     }
