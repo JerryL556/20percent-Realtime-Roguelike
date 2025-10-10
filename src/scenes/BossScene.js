@@ -5,7 +5,7 @@ import { createBoss } from '../systems/EnemyFactory.js';
 import { getWeaponById } from '../core/Weapons.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
-const TEMP_BOSS_BOUND_GUARD = true; // Try: keep boss on-screen (reversible)
+const TEMP_BOSS_BOUND_GUARD = false; // Try: keep boss on-screen (reversible)
 
 export default class BossScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Boss); }
