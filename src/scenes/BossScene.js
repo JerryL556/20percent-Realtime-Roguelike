@@ -5,6 +5,7 @@ import { createBoss } from '../systems/EnemyFactory.js';
 import { getWeaponById } from '../core/Weapons.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
+const TEMP_BOSS_BOUND_GUARD = true; // Try: keep boss on-screen (reversible)
 
 export default class BossScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Boss); }
@@ -27,6 +28,13 @@ export default class BossScene extends Phaser.Scene {
     const mods = this.gs.getDifficultyMods();
     this.boss = createBoss(this, width / 2, 100, Math.floor(300 * mods.enemyHp), Math.floor(20 * mods.enemyDamage), 50);
     this.physics.add.existing(this.boss);
+
+    if (TEMP_BOSS_BOUND_GUARD) {
+      this.physics.world.setBounds(0, 0, width, height);
+      this.boss.setCollideWorldBounds(true);
+      // Track off-screen to warp back if needed
+      this._bossOffscreenSince = 0;
+    }
 
     // Arena walls
     if (!DISABLE_WALLS) {
@@ -190,6 +198,24 @@ export default class BossScene extends Phaser.Scene {
       const ny = dy / len;
       const wobble = Math.sin(time / 300) * 60;
       this.boss.body.setVelocity((nx * this.boss.speed) + wobble * -ny * 0.4, (ny * this.boss.speed) + wobble * nx * 0.4);
+
+      if (TEMP_BOSS_BOUND_GUARD) {
+        // Clamp inside screen bounds
+        const { width, height } = this.scale;
+        this.boss.x = Phaser.Math.Clamp(this.boss.x, 12, width - 12);
+        this.boss.y = Phaser.Math.Clamp(this.boss.y, 12, height - 12);
+        // Failsafe: if off-camera for >1.5s, warp back near center
+        const inView = this.cameras.main.worldView.contains(this.boss.x, this.boss.y);
+        if (!inView) {
+          if (!this._bossOffscreenSince) this._bossOffscreenSince = time;
+          if (time - this._bossOffscreenSince > 1500) {
+            this.boss.setPosition(width / 2, height / 3);
+            this._bossOffscreenSince = 0;
+          }
+        } else {
+          this._bossOffscreenSince = 0;
+        }
+      }
     }
 
     // Boss shooting pattern
