@@ -2,7 +2,9 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
+import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
+import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
 const TEMP_BOSS_BOUND_GUARD = false; // Try: keep boss on-screen (reversible)
@@ -12,6 +14,8 @@ export default class BossScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Ensure UI overlay is active during boss fight
+    this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
 
@@ -23,11 +27,15 @@ export default class BossScene extends Phaser.Scene {
     this.dash = { active: false, until: 0, cooldownUntil: 0, vx: 0, vy: 0, charges: 0, regen: [] };
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
+    this.registry.set('dashRegenProgress', 1);
 
     // Boss
     const mods = this.gs.getDifficultyMods();
-    this.boss = createBoss(this, width / 2, 100, Math.floor(300 * mods.enemyHp), Math.floor(20 * mods.enemyDamage), 50);
-    this.physics.add.existing(this.boss);
+    const pistol = getWeaponById('pistol');
+    const baseBossHp = Math.floor((pistol?.damage || 15) * 20);
+    this.boss = createBoss(this, width / 2, 100, Math.floor(baseBossHp * (mods.enemyHp || 1)), Math.floor(20 * (mods.enemyDamage || 1)), 50);
+    // this.boss is already a physics sprite from createBoss; no need to add again
+    this._won = false;
 
     if (TEMP_BOSS_BOUND_GUARD) {
       this.physics.world.setBounds(0, 0, width, height);
@@ -56,7 +64,8 @@ export default class BossScene extends Phaser.Scene {
       this.gs.hp -= this.boss.damage;
       this.player.iframesUntil = this.time.now + 700;
       if (this.gs.hp <= 0) {
-        this.gs.hp = this.gs.maxHp;
+        const eff = getPlayerEffects(this.gs);
+        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
         this.gs.nextScene = SceneKeys.Hub;
         SaveManager.saveToLocal(this.gs);
         this.scene.start(SceneKeys.Hub);
@@ -70,12 +79,19 @@ export default class BossScene extends Phaser.Scene {
       runChildUpdate: true,
     });
     this.physics.add.overlap(this.bullets, this.boss, (b, boss) => {
-      if (!b.active || !boss.active) return;
+      if (this._won || !b.active || !boss.active) return;
+      if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
       boss.hp -= b.damage || 12;
-      b.destroy();
+      // Destroy bullet immediately to avoid multiple hits and visual linger
+      if (b.active && !b._removed) {
+        b._removed = true;
+        try { if (b.body) b.body.enable = false; } catch (e) {}
+        try { b.setActive(false).setVisible(false); } catch (e) {}
+        try { b.disableBody?.(true, true); } catch (e) {}
+        this.time.delayedCall(0, () => { try { b.destroy(); } catch (e) {} });
+      }
       if (boss.hp <= 0) {
-        boss.destroy();
-        this.win();
+        if (!this._won) { this._won = true; this.win(); boss.destroy(); }
       }
     });
 
@@ -91,23 +107,26 @@ export default class BossScene extends Phaser.Scene {
       this.player.iframesUntil = this.time.now + 600;
       b.destroy();
       if (this.gs.hp <= 0) {
-        this.gs.hp = this.gs.maxHp;
+        const eff = getPlayerEffects(this.gs);
+        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
         this.gs.nextScene = SceneKeys.Hub;
         SaveManager.saveToLocal(this.gs);
         this.scene.start(SceneKeys.Hub);
       }
     });
 
-    // Text
-    this.prompt = this.add.text(width / 2, 20, 'Defeat the Boss', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
+    // Text + Boss HP bar at bottom
+    // Move in-game prompt down to avoid overlapping UI
+    this.prompt = this.add.text(width / 2, 40, 'Defeat the Boss', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
+    this.bossHpBar = new HpBar(this, 16, height - 24, width - 32, 12);
     this.exitRect = null;
     this.exitG = this.add.graphics();
   }
 
   win() {
     // Reward and spawn portal to hub
-    this.gs.gold += 50;
-    this.prompt.setText('Boss defeated! Enter portal');
+    if (this.gs) this.gs.gold += 50;
+    if (this.prompt) this.prompt.setText('Boss defeated! Enter portal');
     const px = this.scale.width - 50 + 20; // center of previous exit area
     const py = this.scale.height / 2;
     this.exitG.clear();
@@ -123,7 +142,7 @@ export default class BossScene extends Phaser.Scene {
 
   shoot() {
     const gs = this.gs;
-    const weapon = getWeaponById(gs.activeWeapon);
+    const weapon = getEffectiveWeapon(gs, gs.activeWeapon);
     const startX = this.player.x;
     const startY = this.player.y;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
@@ -141,6 +160,10 @@ export default class BossScene extends Phaser.Scene {
       b.setCircle(2).setOffset(-2, -2);
       b.setVelocity(vx, vy);
       b.damage = weapon.damage;
+      b.setTint(0xffffff);
+      b._core = weapon._core || null;
+      if (b._core === 'pierce') { b._pierceLeft = 1; }
+      b.setTint(0xffffff); // player bullets are white
       b.update = () => {
         if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy();
       };
@@ -151,6 +174,30 @@ export default class BossScene extends Phaser.Scene {
   update(time) {
     // Update dash charge display for UI
     this.registry.set('dashCharges', this.dash.charges);
+    const eff = getPlayerEffects(this.gs);
+    // Dash regen progress for UI (0..1) for next slot
+    let prog = 0;
+    if (this.dash.charges < this.gs.dashMaxCharges && this.dash.regen.length) {
+      const now = time;
+      const nextReady = Math.min(...this.dash.regen);
+      const remaining = Math.max(0, nextReady - now);
+      const denom = (eff.dashRegenMs || this.gs.dashRegenMs || 1000);
+      prog = 1 - Math.min(1, remaining / denom);
+    } else {
+      prog = 1;
+    }
+    this.registry.set('dashRegenProgress', prog);
+
+    // Failsafe: if boss is gone or at 0 HP but win() not processed yet, trigger it
+    if (!this._won && this.boss && (!this.boss.active || this.boss.hp <= 0)) {
+      this._won = true;
+      try { this.win(); } catch (e) { /* noop safeguard */ }
+    }
+
+    // Draw boss HP bar
+    if (this.bossHpBar && this.boss && this.boss.active) {
+      this.bossHpBar.draw(Math.max(0, this.boss.hp), Math.max(1, this.boss.maxHp || 1));
+    }
 
     // Movement + dash
     const mv = this.inputMgr.moveVec;
@@ -162,13 +209,13 @@ export default class BossScene extends Phaser.Scene {
       this.dash.active = true; this.dash.until = now + dur; this.dash.cooldownUntil = now + 600;
       this.dash.vx = Math.cos(angle) * dashSpeed; this.dash.vy = Math.sin(angle) * dashSpeed;
       this.player.iframesUntil = now + dur;
-      this.dash.charges -= 1; this.dash.regen.push(now + this.gs.dashRegenMs);
+      this.dash.charges -= 1; this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
     if (this.dash.active && now < this.dash.until) {
       this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
-      const speed = 200;
+      const speed = 200 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
 
@@ -183,7 +230,7 @@ export default class BossScene extends Phaser.Scene {
     }
 
     // Shooting with LMB per weapon fireRate
-    const weapon = getWeaponById(this.gs.activeWeapon);
+    const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
     if (this.inputMgr.isLMBDown && (!this.lastShot || time - this.lastShot > weapon.fireRateMs)) {
       this.shoot();
       this.lastShot = time;
@@ -230,6 +277,7 @@ export default class BossScene extends Phaser.Scene {
           b.setActive(true).setVisible(true);
           b.setCircle(2).setOffset(-2, -2);
           b.setVelocity(vx, vy);
+          b.setTint(0xffff00); // enemy bullets are yellow
           b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); };
         });
       }

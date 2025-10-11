@@ -2,8 +2,9 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom } from '../systems/ProceduralGen.js';
-import { createEnemy } from '../systems/EnemyFactory.js';
-import { getWeaponById, weaponDefs } from '../core/Weapons.js';
+import { createEnemy, createShooterEnemy } from '../systems/EnemyFactory.js';
+import { weaponDefs } from '../core/Weapons.js';
+import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
 
@@ -12,6 +13,8 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Ensure UI overlay is active during combat
+    this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
 
@@ -25,6 +28,7 @@ export default class CombatScene extends Phaser.Scene {
     this.dash = { active: false, until: 0, cooldownUntil: 0, vx: 0, vy: 0, charges: 0, regen: [] };
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
+    this.registry.set('dashRegenProgress', 1);
 
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
@@ -47,7 +51,14 @@ export default class CombatScene extends Phaser.Scene {
       this.walls = null;
     }
     room.spawnPoints.forEach((p) => {
-      const e = createEnemy(this, p.x, p.y, Math.floor(20 * mods.enemyHp), Math.floor(10 * mods.enemyDamage), 60);
+      // 40% chance to spawn a shooter enemy instead of melee
+      const roll = this.gs.rng.next();
+      let e;
+      if (roll < 0.4) {
+        e = createShooterEnemy(this, p.x, p.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
+      } else {
+        e = createEnemy(this, p.x, p.y, Math.floor(60 * mods.enemyHp), Math.floor(10 * mods.enemyDamage), 60);
+      }
       this.enemies.add(e);
     });
 
@@ -59,21 +70,60 @@ export default class CombatScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
+      if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+      // Apply damage
       e.hp -= b.damage || 10;
-      b.destroy();
-      if (e.hp <= 0) {
-        e.destroy();
-        // coin drop
-        this.gs.gold += 5;
+      // Apply blast splash before destroying the bullet
+      if (b._core === 'blast') {
+        const radius = 40;
+        this.enemies.getChildren().forEach((other) => {
+          if (!other.active || other === e) return;
+          const dx = other.x - b.x; const dy = other.y - b.y;
+          if (dx * dx + dy * dy <= radius * radius) {
+            if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
+            other.hp -= Math.ceil((b.damage || 10) * 0.5);
+            if (other.hp <= 0) { other.destroy(); this.gs.gold += 5; }
+          }
+        });
       }
+      // Destroy bullet immediately to avoid multi-hit and visual linger
+      if (b.active && !b._removed) {
+        b._removed = true;
+        try { if (b.body) b.body.enable = false; } catch (e) {}
+        try { b.setActive(false).setVisible(false); } catch (e) {}
+        try { b.disableBody?.(true, true); } catch (e) {}
+        this.time.delayedCall(0, () => { try { b.destroy(); } catch (e) {} });
+      }
+      // Check primary enemy death after damage
+      if (e.hp <= 0) { e.destroy(); this.gs.gold += 5; }
     });
 
-    this.physics.add.overlap(this.player, this.enemies.getChildren(), (p, e) => {
+    this.physics.add.overlap(this.player, this.enemies, (p, e) => {
       if (this.time.now < this.player.iframesUntil) return;
       this.gs.hp -= e.damage;
       this.player.iframesUntil = this.time.now + 600;
       if (this.gs.hp <= 0) {
         // For framework: respawn at hub
+        const eff = getPlayerEffects(this.gs);
+        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+        this.gs.nextScene = SceneKeys.Hub;
+        SaveManager.saveToLocal(this.gs);
+        this.scene.start(SceneKeys.Hub);
+      }
+    });
+
+    // Enemy bullets (for shooters)
+    this.enemyBullets = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 64,
+      runChildUpdate: true,
+    });
+    this.physics.add.overlap(this.player, this.enemyBullets, (p, b) => {
+      if (this.time.now < this.player.iframesUntil) return;
+      this.gs.hp -= 8; // shooter bullet damage
+      this.player.iframesUntil = this.time.now + 600;
+      b.destroy();
+      if (this.gs.hp <= 0) {
         this.gs.hp = this.gs.maxHp;
         this.gs.nextScene = SceneKeys.Hub;
         SaveManager.saveToLocal(this.gs);
@@ -84,12 +134,13 @@ export default class CombatScene extends Phaser.Scene {
     // Exit appears when all enemies dead
     this.exitActive = false;
     this.exitG = this.add.graphics();
-    this.prompt = this.add.text(width / 2, 20, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // Move in-game prompt down to avoid overlapping UI
+    this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
   }
 
   shoot() {
     const gs = this.gs;
-    const weapon = getWeaponById(gs.activeWeapon);
+    const weapon = getEffectiveWeapon(gs, gs.activeWeapon);
     const startX = this.player.x;
     const startY = this.player.y;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
@@ -106,7 +157,10 @@ export default class CombatScene extends Phaser.Scene {
       b.setActive(true).setVisible(true);
       b.setCircle(2).setOffset(-2, -2);
       b.setVelocity(vx, vy);
+      b.setTint(0xffffff); // player bullets are white
       b.damage = weapon.damage;
+      b._core = weapon._core || null;
+      if (b._core === 'pierce') { b._pierceLeft = 1; }
       b.update = () => {
         // Lifetime via camera view when walls are disabled
         const view = this.cameras?.main?.worldView;
@@ -119,6 +173,19 @@ export default class CombatScene extends Phaser.Scene {
   update() {
     // Update dash charge display for UI
     this.registry.set('dashCharges', this.dash.charges);
+    // Dash regen progress for UI (0..1) for the next slot
+    let prog = 0;
+    const eff = getPlayerEffects(this.gs);
+    if (this.dash.charges < this.gs.dashMaxCharges && this.dash.regen.length) {
+      const now = this.time.now;
+      const nextReady = Math.min(...this.dash.regen);
+      const remaining = Math.max(0, nextReady - now);
+      const denom = (eff.dashRegenMs || this.gs.dashRegenMs || 1000);
+      prog = 1 - Math.min(1, remaining / denom);
+    } else {
+      prog = 1;
+    }
+    this.registry.set('dashRegenProgress', prog);
 
     // Dash handling
     const now = this.time.now;
@@ -135,7 +202,7 @@ export default class CombatScene extends Phaser.Scene {
       this.player.iframesUntil = now + dur; // i-frames while dashing
       // consume charge and queue regen
       this.dash.charges -= 1;
-      this.dash.regen.push(now + this.gs.dashRegenMs);
+      this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
 
     if (this.dash.active && now < this.dash.until) {
@@ -143,7 +210,7 @@ export default class CombatScene extends Phaser.Scene {
     } else {
       this.dash.active = false;
       const mv = this.inputMgr.moveVec;
-      const speed = 200;
+      const speed = 200 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
 
@@ -158,7 +225,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Shooting with LMB per weapon fireRate
-    const weapon = getWeaponById(this.gs.activeWeapon);
+    const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
     if (this.inputMgr.isLMBDown && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
       this.shoot();
       this.lastShot = this.time.now;
@@ -166,21 +233,52 @@ export default class CombatScene extends Phaser.Scene {
 
     // Swap weapons with Q
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
-      const owned = this.gs.ownedWeapons;
-      if (owned && owned.length) {
-        const idx = Math.max(0, owned.indexOf(this.gs.activeWeapon));
-        const next = owned[(idx + 1) % owned.length];
-        this.gs.activeWeapon = next;
+      // Prefer swapping between equipped weapon slots
+      const slots = this.gs.equippedWeapons || [];
+      const a = this.gs.activeWeapon;
+      if (slots[0] && slots[1]) {
+        this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
+      } else {
+        const owned = this.gs.ownedWeapons;
+        if (owned && owned.length) {
+          const idx = Math.max(0, owned.indexOf(a));
+          const next = owned[(idx + 1) % owned.length];
+          this.gs.activeWeapon = next;
+        }
       }
     }
 
-    // Update enemies: simple chase
+    // Update enemies: melee chase; shooters chase gently and fire a single shot at intervals
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
       const len = Math.hypot(dx, dy) || 1;
-      e.body.setVelocity((dx / len) * e.speed, (dy / len) * e.speed);
+      const nx = dx / len;
+      const ny = dy / len;
+      const moveSpeed = e.isShooter ? e.speed * 0.8 : e.speed;
+      e.body.setVelocity(nx * moveSpeed, ny * moveSpeed);
+
+      if (e.isShooter) {
+        if (!e.lastShotAt) e.lastShotAt = 0;
+        if (this.time.now - e.lastShotAt > (e.fireRateMs || 900)) {
+          e.lastShotAt = this.time.now;
+          const angle = Math.atan2(dy, dx);
+          const vx = Math.cos(angle) * 240;
+          const vy = Math.sin(angle) * 240;
+          const b = this.enemyBullets.get(e.x, e.y, 'bullet');
+          if (b) {
+            b.setActive(true).setVisible(true);
+            b.setCircle(2).setOffset(-2, -2);
+            b.setVelocity(vx, vy);
+            b.setTint(0xffff00); // enemy bullets are yellow
+            b.update = () => {
+              const view = this.cameras?.main?.worldView;
+              if (view && !view.contains(b.x, b.y)) { b.destroy(); }
+            };
+          }
+        }
+      }
     });
 
     // Check clear

@@ -12,9 +12,16 @@ export function makeTextButton(scene, x, y, label, onClick) {
     g.clear();
     g.lineStyle(1, 0xffffff, 1);
     const b = text.getBounds();
-    g.strokeRect(b.x - 4, b.y - 4, b.width + 8, b.height + 8);
+    // Snap to pixel and offset by 0.5 for crisp 1px lines
+    const x = Math.floor(b.x) - 4 + 0.5;
+    const y = Math.floor(b.y) - 4 + 0.5;
+    const w = Math.ceil(b.width) + 8;
+    const h = Math.ceil(b.height) + 8;
+    g.strokeRect(x, y, w, h);
   };
   // Recompute after potential origin/position changes by callers
+  // Draw once immediately so the border is present on first frame
+  refreshBorder();
   scene.time.delayedCall(0, refreshBorder);
   text.on('destroy', () => g.destroy());
   return text;

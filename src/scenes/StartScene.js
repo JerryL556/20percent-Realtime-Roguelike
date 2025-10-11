@@ -7,12 +7,18 @@ export default class StartScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Start); }
 
   create() {
+    // Ensure in-game UI is not visible on the start menu
+    try { this.scene.stop(SceneKeys.UI); } catch (e) { /* ignore if not running */ }
     const { width, height } = this.scale;
     this.add.text(width / 2, height / 2 - 80, 'Roguelike Action', { fontFamily: 'monospace', fontSize: 28, color: '#ffffff' }).setOrigin(0.5);
 
     makeTextButton(this, width / 2, height / 2, 'New Run', () => {
+      // Respect previously chosen difficulty from registry or saved data
+      const saved = SaveManager.loadFromLocal();
+      const prev = saved || this.registry.get('gameState');
+      const chosenDiff = prev?.difficulty || Difficulty.Normal;
       const gs = new GameState();
-      gs.startNewRun(undefined, Difficulty.Normal);
+      gs.startNewRun(undefined, chosenDiff);
       // Default weapon loadout
       gs.ownedWeapons = ['pistol'];
       gs.activeWeapon = 'pistol';

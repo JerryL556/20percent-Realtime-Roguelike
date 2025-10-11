@@ -3,6 +3,7 @@ import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { drawPanel } from '../ui/Panels.js';
 import { makeTextButton } from '../ui/Buttons.js';
+import { getPlayerEffects } from '../core/Loadout.js';
 import { weaponDefs } from '../core/Weapons.js';
 
 export default class HubScene extends Phaser.Scene {
@@ -10,6 +11,8 @@ export default class HubScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Launch UI overlay for gameplay scenes
+    this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
 
@@ -25,6 +28,7 @@ export default class HubScene extends Phaser.Scene {
     this.dash = { active: false, until: 0, cooldownUntil: 0, vx: 0, vy: 0, charges: 0, regen: [] };
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
+    this.registry.set('dashRegenProgress', 1);
 
     // NPC vendor (static)
     this.npcZone = this.add.zone(width / 2, height / 2 - 20, 40, 40);
@@ -72,10 +76,18 @@ export default class HubScene extends Phaser.Scene {
     this.panel = drawPanel(this, width / 2 - 220, 70, 440, 260);
     const t = this.add.text(width / 2, 92, 'Shop', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
     const buy = makeTextButton(this, width / 2, 130, 'Buy potion for 20g (+30 HP)', () => {
-      if (this.gs.gold >= 20) { this.gs.gold -= 20; this.gs.hp = Math.min(this.gs.maxHp, this.gs.hp + 30); }
+      if (this.gs.gold >= 20) {
+        this.gs.gold -= 20;
+        const effMax = (this.gs.maxHp || 0) + ((getPlayerEffects(this.gs).bonusHp) || 0);
+        this.gs.hp = Math.min(effMax, this.gs.hp + 30);
+      }
     });
     const buyMax = makeTextButton(this, width / 2, 160, 'Increase Max HP +10 (40g)', () => {
-      if (this.gs.gold >= 40) { this.gs.gold -= 40; this.gs.maxHp += 10; this.gs.hp = Math.min(this.gs.maxHp, this.gs.hp + 10); }
+      if (this.gs.gold >= 40) {
+        this.gs.gold -= 40; this.gs.maxHp += 10;
+        const effMax = (this.gs.maxHp || 0) + ((getPlayerEffects(this.gs).bonusHp) || 0);
+        this.gs.hp = Math.min(effMax, this.gs.hp + 10);
+      }
     });
     const dashUp = makeTextButton(this, width / 2, 190, `Dash Slot +1 (100g) [Now: ${this.gs.dashMaxCharges}]`, () => {
       if (this.gs.dashMaxCharges >= 5) { dashUp.setText(`Dash Slots Maxed [${this.gs.dashMaxCharges}]`); return; }
@@ -101,16 +113,34 @@ export default class HubScene extends Phaser.Scene {
   }
 
   closePanel(extra = []) {
+    // Always destroy any extras tracked on the current panel
+    const extras = [
+      ...(Array.isArray(extra) ? extra : []),
+      ...(this.panel && Array.isArray(this.panel._extra) ? this.panel._extra : []),
+    ];
     if (this.panel) {
       this.panel.destroy();
       this.panel = null;
     }
-    extra.forEach((o) => o?.destroy());
+    extras.forEach((o) => o?.destroy());
   }
 
   update() {
     // Update dash charge display for UI
     this.registry.set('dashCharges', this.dash.charges);
+    // Dash regen progress for UI (0..1) for next slot
+    let prog = 0;
+    const eff = getPlayerEffects(this.gs);
+    if (this.dash.charges < this.gs.dashMaxCharges && this.dash.regen.length) {
+      const now = this.time.now;
+      const nextReady = Math.min(...this.dash.regen);
+      const remaining = Math.max(0, nextReady - now);
+      const denom = (eff.dashRegenMs || this.gs.dashRegenMs || 1000);
+      prog = 1 - Math.min(1, remaining / denom);
+    } else {
+      prog = 1;
+    }
+    this.registry.set('dashRegenProgress', prog);
 
     const mv = this.inputMgr.moveVec;
     const now = this.time.now;
@@ -121,13 +151,13 @@ export default class HubScene extends Phaser.Scene {
       this.dash.active = true; this.dash.until = now + dur; this.dash.cooldownUntil = now + 600;
       this.dash.vx = Math.cos(angle) * dashSpeed; this.dash.vy = Math.sin(angle) * dashSpeed;
       this.player.iframesUntil = now + dur;
-      this.dash.charges -= 1; this.dash.regen.push(now + this.gs.dashRegenMs);
+      this.dash.charges -= 1; this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
     if (this.dash.active && now < this.dash.until) {
       this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
-      const speed = 160;
+      const speed = 160 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
 
