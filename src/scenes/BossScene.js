@@ -34,7 +34,9 @@ export default class BossScene extends Phaser.Scene {
     const pistol = getWeaponById('pistol');
     const baseBossHp = Math.floor((pistol?.damage || 15) * 20);
     this.boss = createBoss(this, width / 2, 100, Math.floor(baseBossHp * (mods.enemyHp || 1)), Math.floor(20 * (mods.enemyDamage || 1)), 50);
-    // this.boss is already a physics sprite from createBoss; no need to add again
+    // Group the boss into a physics group for consistent overlap handling
+    this.bossGroup = this.physics.add.group();
+    this.bossGroup.add(this.boss);
     this._won = false;
 
     if (TEMP_BOSS_BOUND_GUARD) {
@@ -78,21 +80,14 @@ export default class BossScene extends Phaser.Scene {
       maxSize: 64,
       runChildUpdate: true,
     });
-    this.physics.add.overlap(this.bullets, this.boss, (b, boss) => {
-      if (this._won || !b.active || !boss.active) return;
-      if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
-      boss.hp -= b.damage || 12;
-      // Destroy bullet immediately to avoid multiple hits and visual linger
-      if (b.active && !b._removed) {
-        b._removed = true;
-        try { if (b.body) b.body.enable = false; } catch (e) {}
-        try { b.setActive(false).setVisible(false); } catch (e) {}
-        try { b.disableBody?.(true, true); } catch (e) {}
-        this.time.delayedCall(0, () => { try { b.destroy(); } catch (e) {} });
-      }
-      if (boss.hp <= 0) {
-        if (!this._won) { this._won = true; this.win(); boss.destroy(); }
-      }
+    this.physics.add.overlap(this.bullets, this.bossGroup, (b, e) => {
+      if (this._won || !b.active || !e.active) return;
+      if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
+      e.hp -= b.damage || 12;
+      // Destroy player bullet on hit (no penetration)
+      try { if (b.active) b.destroy(); } catch (_) {}
+      // Boss death check
+      if (e.hp <= 0) this.killBoss(e);
     });
 
     // Boss bullets (Arcade.Image pool)
@@ -102,17 +97,20 @@ export default class BossScene extends Phaser.Scene {
       runChildUpdate: true,
     });
     this.physics.add.overlap(this.player, this.bossBullets, (p, b) => {
-      if (this.time.now < this.player.iframesUntil) return;
-      this.gs.hp -= 10; // boss bullet damage
-      this.player.iframesUntil = this.time.now + 600;
-      b.destroy();
-      if (this.gs.hp <= 0) {
-        const eff = getPlayerEffects(this.gs);
-        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
-        this.gs.nextScene = SceneKeys.Hub;
-        SaveManager.saveToLocal(this.gs);
-        this.scene.start(SceneKeys.Hub);
+      const inIframes = this.time.now < this.player.iframesUntil;
+      if (!inIframes) {
+        this.gs.hp -= 10; // boss bullet damage
+        this.player.iframesUntil = this.time.now + 600;
+        if (this.gs.hp <= 0) {
+          const eff = getPlayerEffects(this.gs);
+          this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+          this.gs.nextScene = SceneKeys.Hub;
+          SaveManager.saveToLocal(this.gs);
+          this.scene.start(SceneKeys.Hub);
+        }
       }
+      // Always destroy boss bullet on contact, even during i-frames
+      try { b.destroy(); } catch (_) {}
     });
 
     // Text + Boss HP bar at bottom
@@ -138,6 +136,17 @@ export default class BossScene extends Phaser.Scene {
       SaveManager.saveToLocal(this.gs);
       this.scene.start(SceneKeys.Hub);
     });
+  }
+
+  // Centralized boss death to keep behavior tied to HP
+  killBoss(e) {
+    if (!e || !e.active) return;
+    try { if (typeof e.hp === 'number' && e.hp > 0) e.hp = 0; } catch (_) {}
+    if (!this._won) {
+      this._won = true;
+      try { this.win(); } catch (_) {}
+    }
+    try { e.destroy(); } catch (_) {}
   }
 
   shoot() {
@@ -188,8 +197,8 @@ export default class BossScene extends Phaser.Scene {
     }
     this.registry.set('dashRegenProgress', prog);
 
-    // Failsafe: if boss is gone or at 0 HP but win() not processed yet, trigger it
-    if (!this._won && this.boss && (!this.boss.active || this.boss.hp <= 0)) {
+    // Failsafe: only trigger win when HP <= 0 (avoid false positives on inactive)
+    if (!this._won && this.boss && (this.boss.hp <= 0)) {
       this._won = true;
       try { this.win(); } catch (e) { /* noop safeguard */ }
     }

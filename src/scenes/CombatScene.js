@@ -37,8 +37,8 @@ export default class CombatScene extends Phaser.Scene {
       runChildUpdate: true,
     });
 
-    // Enemies
-    this.enemies = this.add.group();
+    // Enemies (must be a physics group so overlaps work reliably)
+    this.enemies = this.physics.add.group();
     const mods = this.gs.getDifficultyMods();
     const room = generateRoom(this.gs.rng, this.gs.currentDepth);
     this.room = room;
@@ -65,7 +65,7 @@ export default class CombatScene extends Phaser.Scene {
     // Colliders
     if (this.walls) {
       this.physics.add.collider(this.player, this.walls);
-      this.physics.add.collider(this.enemies.getChildren(), this.walls);
+      this.physics.add.collider(this.enemies, this.walls);
     }
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
@@ -82,20 +82,14 @@ export default class CombatScene extends Phaser.Scene {
           if (dx * dx + dy * dy <= radius * radius) {
             if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
             other.hp -= Math.ceil((b.damage || 10) * 0.5);
-            if (other.hp <= 0) { other.destroy(); this.gs.gold += 5; }
+            if (other.hp <= 0) { this.killEnemy(other); }
           }
         });
       }
-      // Destroy bullet immediately to avoid multi-hit and visual linger
-      if (b.active && !b._removed) {
-        b._removed = true;
-        try { if (b.body) b.body.enable = false; } catch (e) {}
-        try { b.setActive(false).setVisible(false); } catch (e) {}
-        try { b.disableBody?.(true, true); } catch (e) {}
-        this.time.delayedCall(0, () => { try { b.destroy(); } catch (e) {} });
-      }
+      // Player bullet should not penetrate; destroy immediately on hit
+      try { if (b.active) b.destroy(); } catch (_) {}
       // Check primary enemy death after damage
-      if (e.hp <= 0) { e.destroy(); this.gs.gold += 5; }
+      if (e.hp <= 0) { this.killEnemy(e); }
     });
 
     this.physics.add.overlap(this.player, this.enemies, (p, e) => {
@@ -119,16 +113,19 @@ export default class CombatScene extends Phaser.Scene {
       runChildUpdate: true,
     });
     this.physics.add.overlap(this.player, this.enemyBullets, (p, b) => {
-      if (this.time.now < this.player.iframesUntil) return;
-      this.gs.hp -= 8; // shooter bullet damage
-      this.player.iframesUntil = this.time.now + 600;
-      b.destroy();
-      if (this.gs.hp <= 0) {
-        this.gs.hp = this.gs.maxHp;
-        this.gs.nextScene = SceneKeys.Hub;
-        SaveManager.saveToLocal(this.gs);
-        this.scene.start(SceneKeys.Hub);
+      const inIframes = this.time.now < this.player.iframesUntil;
+      if (!inIframes) {
+        this.gs.hp -= 8; // shooter bullet damage
+        this.player.iframesUntil = this.time.now + 600;
+        if (this.gs.hp <= 0) {
+          this.gs.hp = this.gs.maxHp;
+          this.gs.nextScene = SceneKeys.Hub;
+          SaveManager.saveToLocal(this.gs);
+          this.scene.start(SceneKeys.Hub);
+        }
       }
+      // Always destroy enemy bullet on contact, even during i-frames
+      try { b.destroy(); } catch (_) {}
     });
 
     // Exit appears when all enemies dead
@@ -136,6 +133,19 @@ export default class CombatScene extends Phaser.Scene {
     this.exitG = this.add.graphics();
     // Move in-game prompt down to avoid overlapping UI
     this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+  }
+
+  // Centralized enemy death handler to keep removal tied to HP system
+  killEnemy(e) {
+    if (!e || !e.active) return;
+    try {
+      // Ensure HP reflects death for any downstream logic
+      if (typeof e.hp === 'number' && e.hp > 0) e.hp = 0;
+    } catch (_) {}
+    // Reward gold per standard enemy kill
+    try { this.gs.gold += 5; } catch (_) {}
+    // Destroy the enemy sprite
+    try { e.destroy(); } catch (_) {}
   }
 
   shoot() {
@@ -281,8 +291,8 @@ export default class CombatScene extends Phaser.Scene {
       }
     });
 
-    // Check clear
-    const alive = this.enemies.getChildren().filter((e) => e.active).length;
+    // Check clear (count only enemies that are active AND have HP left)
+    const alive = this.enemies.getChildren().filter((e) => e.active && (typeof e.hp === 'number' ? e.hp > 0 : true)).length;
     if (alive === 0 && !this.exitActive) {
       this.exitActive = true;
       this.prompt.setText('Room clear! E to exit');
