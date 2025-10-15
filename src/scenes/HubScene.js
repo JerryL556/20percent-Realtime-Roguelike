@@ -64,6 +64,8 @@ export default class HubScene extends Phaser.Scene {
     if (this.panel) return;
     const { width } = this.scale;
     this.panel = drawPanel(this, width / 2 - 140, 80, 280, 120);
+    // Mark this panel as the lightweight conversation box (pre-shop)
+    this.panel._type = 'npcPrompt';
     const t = this.add.text(width / 2, 110, 'Open Shop?', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
     const yes = makeTextButton(this, width / 2 - 50, 150, 'Yes', () => { this.openShop(); });
     const no = makeTextButton(this, width / 2 + 50, 150, 'No', () => { this.closePanel([t, yes, no]); });
@@ -177,6 +179,17 @@ export default class HubScene extends Phaser.Scene {
     if (nearNpc) this.prompt.setText('E: Talk');
     else if (nearPortal) this.prompt.setText('E: Enter Combat');
     else this.prompt.setText('WASD move, E interact');
+
+    // Auto-close the conversation box if player moves away from NPC
+    if (this.panel && this.panel._type === 'npcPrompt') {
+      const dx = this.player.x - this.npcZone.x;
+      const dy = this.player.y - this.npcZone.y;
+      const dist = Math.hypot(dx, dy);
+      const closeDist = 100; // pixels threshold to auto-close
+      if (dist > closeDist) {
+        this.closePanel();
+      }
+    }
 
     if (this.inputMgr.pressedInteract) {
       if (nearNpc) this.openNpcPanel();
