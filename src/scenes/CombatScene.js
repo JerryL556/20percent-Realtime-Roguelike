@@ -4,6 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
+import { impactBurst } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
@@ -79,6 +80,13 @@ export default class CombatScene extends Phaser.Scene {
       if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
       // Apply damage
       e.hp -= b.damage || 10;
+      // Visual impact effect by core type (small unless blast)
+      try {
+        const core = b._core || null;
+        if (core === 'blast') impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large' });
+        else if (core === 'pierce') impactBurst(this, b.x, b.y, { color: 0x66aaff, size: 'small' });
+        else impactBurst(this, b.x, b.y, { color: 0xffffff, size: 'small' });
+      } catch (_) {}
       // Apply blast splash before removing the bullet
       if (b._core === 'blast') {
         const radius = 40;

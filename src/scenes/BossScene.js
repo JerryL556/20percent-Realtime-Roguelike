@@ -4,6 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
+import { impactBurst } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
@@ -90,6 +91,13 @@ export default class BossScene extends Phaser.Scene {
       }
       if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
       e.hp -= b.damage || 12;
+      // Visual impact effect by core type
+      try {
+        const core = b._core || null;
+        if (core === 'blast') impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large' });
+        else if (core === 'pierce') impactBurst(this, b.x, b.y, { color: 0x66aaff, size: 'small' });
+        else impactBurst(this, b.x, b.y, { color: 0xffffff, size: 'small' });
+      } catch (_) {}
       // Handle pierce core: allow one extra target without removing the bullet
       if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
         b._pierceLeft -= 1;
