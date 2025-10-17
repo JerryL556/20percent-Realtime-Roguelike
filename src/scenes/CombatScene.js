@@ -52,22 +52,21 @@ export default class CombatScene extends Phaser.Scene {
       this.walls = null;
     }
     room.spawnPoints.forEach((p) => {
-      // Spawn composition: balanced among sniper, shooter, melee
+      // Spawn composition (normal level): Sniper 10%, Shooter 30%, Runner 20%, Melee 40%
       const roll = this.gs.rng.next();
       let e;
-      if (roll < 0.33) {
+      if (roll < 0.10) {
         e = createSniperEnemy(this, p.x, p.y, Math.floor(80 * mods.enemyHp), Math.floor(18 * mods.enemyDamage), 40);
-      } else if (roll < 0.66) {
+      } else if (roll < 0.40) {
         e = createShooterEnemy(this, p.x, p.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
-      } else {
-        // Melee enemies deal more damage globally
+      } else if (roll < 0.60) {
+        // Melee runner (fast)
         const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
-        // 50% chance of runner vs normal melee
-        if (this.gs.rng.next() < 0.5) {
-          e = createRunnerEnemy(this, p.x, p.y, Math.floor(42 * mods.enemyHp), meleeDmg, 120);
-        } else {
-          e = createEnemy(this, p.x, p.y, Math.floor(60 * mods.enemyHp), meleeDmg, 60);
-        }
+        e = createRunnerEnemy(this, p.x, p.y, Math.floor(42 * mods.enemyHp), meleeDmg, 120);
+      } else {
+        // Melee normal
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        e = createEnemy(this, p.x, p.y, Math.floor(60 * mods.enemyHp), meleeDmg, 60);
       }
       this.enemies.add(e);
     });
