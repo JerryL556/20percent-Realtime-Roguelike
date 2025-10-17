@@ -2,8 +2,10 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom } from '../systems/ProceduralGen.js';
-import { createEnemy } from '../systems/EnemyFactory.js';
-import { getWeaponById, weaponDefs } from '../core/Weapons.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy } from '../systems/EnemyFactory.js';
+import { weaponDefs } from '../core/Weapons.js';
+import { impactBurst } from '../systems/Effects.js';
+import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
 
@@ -12,6 +14,8 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Ensure UI overlay is active during combat
+    this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
 
@@ -25,16 +29,17 @@ export default class CombatScene extends Phaser.Scene {
     this.dash = { active: false, until: 0, cooldownUntil: 0, vx: 0, vy: 0, charges: 0, regen: [] };
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
+    this.registry.set('dashRegenProgress', 1);
 
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
-      maxSize: 64,
+      maxSize: 256,
       runChildUpdate: true,
     });
 
-    // Enemies
-    this.enemies = this.add.group();
+    // Enemies (must be a physics group so overlaps work reliably)
+    this.enemies = this.physics.add.group();
     const mods = this.gs.getDifficultyMods();
     const room = generateRoom(this.gs.rng, this.gs.currentDepth);
     this.room = room;
@@ -47,49 +52,133 @@ export default class CombatScene extends Phaser.Scene {
       this.walls = null;
     }
     room.spawnPoints.forEach((p) => {
-      const e = createEnemy(this, p.x, p.y, Math.floor(20 * mods.enemyHp), Math.floor(10 * mods.enemyDamage), 60);
+      // 40% chance to spawn a shooter enemy instead of melee
+      const roll = this.gs.rng.next();
+      let e;
+      if (roll < 0.4) {
+        e = createShooterEnemy(this, p.x, p.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
+      } else {
+        // Melee enemies deal more damage globally
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        // 50% chance of runner vs normal melee
+        if (this.gs.rng.next() < 0.5) {
+          e = createRunnerEnemy(this, p.x, p.y, Math.floor(42 * mods.enemyHp), meleeDmg, 120);
+        } else {
+          e = createEnemy(this, p.x, p.y, Math.floor(60 * mods.enemyHp), meleeDmg, 60);
+        }
+      }
       this.enemies.add(e);
     });
 
     // Colliders
     if (this.walls) {
       this.physics.add.collider(this.player, this.walls);
-      this.physics.add.collider(this.enemies.getChildren(), this.walls);
+      this.physics.add.collider(this.enemies, this.walls);
     }
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
-      e.hp -= b.damage || 10;
-      b.destroy();
-      if (e.hp <= 0) {
-        e.destroy();
-        // coin drop
-        this.gs.gold += 5;
+      // Only track per-target hits for piercing bullets to allow shotgun pellets to stack normally
+      if (b._core === 'pierce') {
+        if (!b._hitSet) b._hitSet = new Set();
+        if (b._hitSet.has(e)) return;
+        b._hitSet.add(e);
       }
+      if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+      // Apply damage
+      e.hp -= b.damage || 10;
+      // Visual impact effect by core type (small unless blast)
+      try {
+        const core = b._core || null;
+        if (core === 'blast') impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large' });
+        else if (core === 'pierce') impactBurst(this, b.x, b.y, { color: 0x66aaff, size: 'small' });
+        else impactBurst(this, b.x, b.y, { color: 0xffffff, size: 'small' });
+      } catch (_) {}
+      // Apply blast splash before removing the bullet
+      if (b._core === 'blast') {
+        const radius = 40;
+        this.enemies.getChildren().forEach((other) => {
+          if (!other.active || other === e) return;
+          const dx = other.x - b.x; const dy = other.y - b.y;
+          if (dx * dx + dy * dy <= radius * radius) {
+            if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
+            other.hp -= Math.ceil((b.damage || 10) * 0.5);
+            if (other.hp <= 0) { this.killEnemy(other); }
+          }
+        });
+      }
+      // Handle pierce core: allow one extra target without removing the bullet
+      if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
+        b._pierceLeft -= 1;
+      } else {
+        // Defer removal to end of tick to avoid skipping other overlaps this frame
+        try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+        try { b.setActive(false).setVisible(false); } catch (_) {}
+        this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+      }
+      // Check primary enemy death after damage
+      if (e.hp <= 0) { this.killEnemy(e); }
     });
 
-    this.physics.add.overlap(this.player, this.enemies.getChildren(), (p, e) => {
+    this.physics.add.overlap(this.player, this.enemies, (p, e) => {
       if (this.time.now < this.player.iframesUntil) return;
       this.gs.hp -= e.damage;
       this.player.iframesUntil = this.time.now + 600;
       if (this.gs.hp <= 0) {
         // For framework: respawn at hub
-        this.gs.hp = this.gs.maxHp;
+        const eff = getPlayerEffects(this.gs);
+        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
         this.gs.nextScene = SceneKeys.Hub;
         SaveManager.saveToLocal(this.gs);
         this.scene.start(SceneKeys.Hub);
       }
     });
 
+    // Enemy bullets (for shooters)
+    this.enemyBullets = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 64,
+      runChildUpdate: true,
+    });
+    this.physics.add.overlap(this.player, this.enemyBullets, (p, b) => {
+      const inIframes = this.time.now < this.player.iframesUntil;
+      if (!inIframes) {
+        this.gs.hp -= 8; // shooter bullet damage
+        this.player.iframesUntil = this.time.now + 600;
+        if (this.gs.hp <= 0) {
+          this.gs.hp = this.gs.maxHp;
+          this.gs.nextScene = SceneKeys.Hub;
+          SaveManager.saveToLocal(this.gs);
+          this.scene.start(SceneKeys.Hub);
+        }
+      }
+      // Always destroy enemy bullet on contact, even during i-frames
+      try { b.destroy(); } catch (_) {}
+    });
+
     // Exit appears when all enemies dead
     this.exitActive = false;
     this.exitG = this.add.graphics();
-    this.prompt = this.add.text(width / 2, 20, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // Move in-game prompt down to avoid overlapping UI
+    this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+  }
+
+  // Centralized enemy death handler to keep removal tied to HP system
+  killEnemy(e) {
+    if (!e || !e.active) return;
+    try {
+      // Ensure HP reflects death for any downstream logic
+      if (typeof e.hp === 'number' && e.hp > 0) e.hp = 0;
+    } catch (_) {}
+    // Reward gold per standard enemy kill
+    try { this.gs.gold += 5; } catch (_) {}
+    // Destroy the enemy sprite
+    try { e.destroy(); } catch (_) {}
   }
 
   shoot() {
     const gs = this.gs;
-    const weapon = getWeaponById(gs.activeWeapon);
+    const weapon = getEffectiveWeapon(gs, gs.activeWeapon);
     const startX = this.player.x;
     const startY = this.player.y;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
@@ -106,7 +195,10 @@ export default class CombatScene extends Phaser.Scene {
       b.setActive(true).setVisible(true);
       b.setCircle(2).setOffset(-2, -2);
       b.setVelocity(vx, vy);
+      b.setTint(0xffffff); // player bullets are white
       b.damage = weapon.damage;
+      b._core = weapon._core || null;
+      if (b._core === 'pierce') { b._pierceLeft = 1; }
       b.update = () => {
         // Lifetime via camera view when walls are disabled
         const view = this.cameras?.main?.worldView;
@@ -119,6 +211,19 @@ export default class CombatScene extends Phaser.Scene {
   update() {
     // Update dash charge display for UI
     this.registry.set('dashCharges', this.dash.charges);
+    // Dash regen progress for UI (0..1) for the next slot
+    let prog = 0;
+    const eff = getPlayerEffects(this.gs);
+    if (this.dash.charges < this.gs.dashMaxCharges && this.dash.regen.length) {
+      const now = this.time.now;
+      const nextReady = Math.min(...this.dash.regen);
+      const remaining = Math.max(0, nextReady - now);
+      const denom = (eff.dashRegenMs || this.gs.dashRegenMs || 1000);
+      prog = 1 - Math.min(1, remaining / denom);
+    } else {
+      prog = 1;
+    }
+    this.registry.set('dashRegenProgress', prog);
 
     // Dash handling
     const now = this.time.now;
@@ -135,7 +240,7 @@ export default class CombatScene extends Phaser.Scene {
       this.player.iframesUntil = now + dur; // i-frames while dashing
       // consume charge and queue regen
       this.dash.charges -= 1;
-      this.dash.regen.push(now + this.gs.dashRegenMs);
+      this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
 
     if (this.dash.active && now < this.dash.until) {
@@ -143,7 +248,7 @@ export default class CombatScene extends Phaser.Scene {
     } else {
       this.dash.active = false;
       const mv = this.inputMgr.moveVec;
-      const speed = 200;
+      const speed = 200 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
 
@@ -158,7 +263,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Shooting with LMB per weapon fireRate
-    const weapon = getWeaponById(this.gs.activeWeapon);
+    const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
     if (this.inputMgr.isLMBDown && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
       this.shoot();
       this.lastShot = this.time.now;
@@ -166,25 +271,56 @@ export default class CombatScene extends Phaser.Scene {
 
     // Swap weapons with Q
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
-      const owned = this.gs.ownedWeapons;
-      if (owned && owned.length) {
-        const idx = Math.max(0, owned.indexOf(this.gs.activeWeapon));
-        const next = owned[(idx + 1) % owned.length];
-        this.gs.activeWeapon = next;
+      // Prefer swapping between equipped weapon slots
+      const slots = this.gs.equippedWeapons || [];
+      const a = this.gs.activeWeapon;
+      if (slots[0] && slots[1]) {
+        this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
+      } else {
+        const owned = this.gs.ownedWeapons;
+        if (owned && owned.length) {
+          const idx = Math.max(0, owned.indexOf(a));
+          const next = owned[(idx + 1) % owned.length];
+          this.gs.activeWeapon = next;
+        }
       }
     }
 
-    // Update enemies: simple chase
+    // Update enemies: melee chase; shooters chase gently and fire a single shot at intervals
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
       const len = Math.hypot(dx, dy) || 1;
-      e.body.setVelocity((dx / len) * e.speed, (dy / len) * e.speed);
+      const nx = dx / len;
+      const ny = dy / len;
+      const moveSpeed = e.isShooter ? e.speed * 0.8 : e.speed;
+      e.body.setVelocity(nx * moveSpeed, ny * moveSpeed);
+
+      if (e.isShooter) {
+        if (!e.lastShotAt) e.lastShotAt = 0;
+        if (this.time.now - e.lastShotAt > (e.fireRateMs || 900)) {
+          e.lastShotAt = this.time.now;
+          const angle = Math.atan2(dy, dx);
+          const vx = Math.cos(angle) * 240;
+          const vy = Math.sin(angle) * 240;
+          const b = this.enemyBullets.get(e.x, e.y, 'bullet');
+          if (b) {
+            b.setActive(true).setVisible(true);
+            b.setCircle(2).setOffset(-2, -2);
+            b.setVelocity(vx, vy);
+            b.setTint(0xffff00); // enemy bullets are yellow
+            b.update = () => {
+              const view = this.cameras?.main?.worldView;
+              if (view && !view.contains(b.x, b.y)) { b.destroy(); }
+            };
+          }
+        }
+      }
     });
 
-    // Check clear
-    const alive = this.enemies.getChildren().filter((e) => e.active).length;
+    // Check clear (count only enemies that are active AND have HP left)
+    const alive = this.enemies.getChildren().filter((e) => e.active && (typeof e.hp === 'number' ? e.hp > 0 : true)).length;
     if (alive === 0 && !this.exitActive) {
       this.exitActive = true;
       this.prompt.setText('Room clear! E to exit');

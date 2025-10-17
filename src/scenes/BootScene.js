@@ -24,6 +24,5 @@ export default class BootScene extends Phaser.Scene {
   }
   create() {
     this.scene.start(SceneKeys.Start);
-    this.scene.launch(SceneKeys.UI);
   }
 }

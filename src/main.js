@@ -39,4 +39,3 @@ const gameConfig = {
 
 // eslint-disable-next-line no-new
 new Phaser.Game(gameConfig);
-
