@@ -13,12 +13,21 @@ export default class UIScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     // Place combat UI along the bottom
-    this.hpBar = new HpBar(this, 16, Math.max(12, height - 28), 180, 16);
+    const uiHpY = Math.max(12, height - 28);
+    const uiDashY = Math.max(8, height - 22);
+    const dashXStart = 16 + 180 + 20;
+    this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
-    this.weaponText = this.add.text(width / 2, Math.max(8, height - 32), 'Weapon: -', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5, 0);
-    this.dashBar = new DashBar(this, 16 + 180 + 20, Math.max(8, height - 22), 14, 4);
-    // Hint to open loadout with Tab (left side)
-    this.loadoutHint = this.add.text(12, height * 0.5, 'Loadout (TAB)', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0.5).setAlpha(0.9);
+    this.dashBar = new DashBar(this, dashXStart, uiDashY, 14, 4);
+    // Weapon label positioned to the right of the dash bar; will be refined in update()
+    const gs0 = this.registry.get('gameState');
+    const maxC0 = gs0?.dashMaxCharges ?? 3;
+    const dashWidth0 = maxC0 * (this.dashBar.size + this.dashBar.gap);
+    const weaponX0 = dashXStart + dashWidth0 + 20;
+    const uiTextY = Math.max(8, height - 32);
+    this.weaponText = this.add.text(weaponX0, uiTextY, 'Weapon: -', { fontFamily: 'monospace', fontSize: 18, color: '#ffff66' }).setOrigin(0, 0);
+    // Hint to open loadout with Tab (top-left)
+    this.loadoutHint = this.add.text(12, 12, 'Loadout (TAB)', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0).setAlpha(0.9);
     
 
     let x = width - 240;
@@ -64,6 +73,11 @@ export default class UIScene extends Phaser.Scene {
       const maxC = gs.dashMaxCharges ?? 3;
       const c = (charges === undefined || charges === null) ? maxC : charges;
       this.dashBar.draw(c, maxC, progress);
+      // Keep the weapon label visually next to the dash bar and at the bottom
+      const dashX = 16 + 180 + 20;
+      const dashWidth = maxC * (this.dashBar.size + this.dashBar.gap);
+      const uiTextY = Math.max(8, this.scale.height - 32);
+      this.weaponText.setPosition(dashX + dashWidth + 20, uiTextY);
       // Keep highlights in sync: each mod line yellow if that slot has a mod; core line if core equipped;
       // weapon slots if equipped; armour equip + armour mods similarly.
       if (this.loadout?.panel && (this.loadout.modLabels || this.loadout.weaponLabels || this.loadout.armourLabel || this.loadout.armourModLabels)) {
