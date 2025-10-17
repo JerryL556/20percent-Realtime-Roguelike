@@ -84,8 +84,15 @@ export default class BossScene extends Phaser.Scene {
       if (this._won || !b.active || !e.active) return;
       if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
       e.hp -= b.damage || 12;
-      // Destroy player bullet on hit (no penetration)
-      try { if (b.active) b.destroy(); } catch (_) {}
+      // Handle pierce core: allow one extra target without removing the bullet
+      if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
+        b._pierceLeft -= 1;
+      } else {
+        // Defer removal to end of tick to avoid skipping other overlaps this frame
+        try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+        try { b.setActive(false).setVisible(false); } catch (_) {}
+        this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+      }
       // Boss death check
       if (e.hp <= 0) this.killBoss(e);
     });

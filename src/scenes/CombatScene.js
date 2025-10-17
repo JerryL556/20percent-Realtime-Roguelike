@@ -73,7 +73,7 @@ export default class CombatScene extends Phaser.Scene {
       if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
       // Apply damage
       e.hp -= b.damage || 10;
-      // Apply blast splash before destroying the bullet
+      // Apply blast splash before removing the bullet
       if (b._core === 'blast') {
         const radius = 40;
         this.enemies.getChildren().forEach((other) => {
@@ -86,8 +86,15 @@ export default class CombatScene extends Phaser.Scene {
           }
         });
       }
-      // Player bullet should not penetrate; destroy immediately on hit
-      try { if (b.active) b.destroy(); } catch (_) {}
+      // Handle pierce core: allow one extra target without removing the bullet
+      if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
+        b._pierceLeft -= 1;
+      } else {
+        // Defer removal to end of tick to avoid skipping other overlaps this frame
+        try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+        try { b.setActive(false).setVisible(false); } catch (_) {}
+        this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+      }
       // Check primary enemy death after damage
       if (e.hp <= 0) { this.killEnemy(e); }
     });
