@@ -52,6 +52,18 @@ export default class HubScene extends Phaser.Scene {
 
     // UI prompt (top, consistent with Combat "Clear enemies")
     this.prompt = this.add.text(width / 2, 40, 'WASD move, E interact', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // Keybinds hint (bottom-right, small font)
+    const binds = [
+      'W/A/S/D: Move',
+      'Space: Dash',
+      'E: Interact',
+      'LMB: Shoot',
+      'Q: Swap Weapon',
+      'Tab: Loadout',
+    ].join('\n');
+    this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
+      .setOrigin(1, 1)
+      .setAlpha(0.9);
 
     // Dialogue/Shop panel hidden
     this.panel = null;
