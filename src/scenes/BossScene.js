@@ -134,10 +134,11 @@ export default class BossScene extends Phaser.Scene {
       try { b.destroy(); } catch (_) {}
     });
 
-    // Text + Boss HP bar at bottom
-    // Move in-game prompt down to avoid overlapping UI
+    // Text + Boss HP bar at top (shorter to avoid UI overlap)
     this.prompt = this.add.text(width / 2, 40, 'Defeat the Boss', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
-    this.bossHpBar = new HpBar(this, 16, height - 24, width - 32, 12);
+    const barW = Math.min(420, Math.max(200, width - 220));
+    const barX = Math.floor((width - barW) / 2);
+    this.bossHpBar = new HpBar(this, barX, 16, barW, 10);
     this.exitRect = null;
     this.exitG = this.add.graphics();
   }
