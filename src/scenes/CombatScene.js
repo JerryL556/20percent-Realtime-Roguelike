@@ -16,6 +16,7 @@ export default class CombatScene extends Phaser.Scene {
     const { width, height } = this.scale;
     // Ensure physics world bounds match the visible area so enemies can't leave the screen
     this.physics.world.setBounds(0, 0, width, height);
+    try { this.physics.world.setBoundsCollision(true, true, true, true); } catch (_) {}
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
@@ -314,6 +315,13 @@ export default class CombatScene extends Phaser.Scene {
       const ny = dy / len;
       const moveSpeed = e.isShooter ? e.speed * 0.8 : e.speed;
       e.body.setVelocity(nx * moveSpeed, ny * moveSpeed);
+      // Clamp enemies to screen bounds as a failsafe
+      try {
+        const pad = (e.body?.halfWidth || 6);
+        const w = this.scale.width, h = this.scale.height;
+        e.x = Phaser.Math.Clamp(e.x, pad, w - pad);
+        e.y = Phaser.Math.Clamp(e.y, pad, h - pad);
+      } catch (_) {}
 
       if (e.isShooter) {
         if (!e.lastShotAt) e.lastShotAt = 0;
