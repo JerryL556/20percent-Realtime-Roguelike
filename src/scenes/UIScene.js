@@ -16,8 +16,7 @@ export default class UIScene extends Phaser.Scene {
     this.goldText = this.add.text(210, 8, 'Gold: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     this.weaponText = this.add.text(310, 8, 'Weapon: -', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     this.dashBar = new DashBar(this, 460, 8, 14, 4);
-    // Spawn rates display (normal level)
-    this.spawnText = this.add.text(16, 32, '', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0);
+    
 
     let x = width - 240;
     makeTextButton(this, x, 16, 'Save', () => {
@@ -89,21 +88,7 @@ export default class UIScene extends Phaser.Scene {
       }
     }
 
-    // Update spawn rate info if available
-    const rates = this.registry.get('spawnRates');
-    if (rates) {
-      const pct = (v) => `${Math.round((v || 0) * 100)}%`;
-      const lines = [
-        'Spawns:',
-        `- Sniper: ${pct(rates.sniper)}`,
-        `- Shooter: ${pct(rates.shooter)}`,
-        `- Melee: ${pct(rates.melee)}`,
-        `- Runner: ${pct(rates.runner)}`,
-      ].join('\n');
-      this.spawnText.setText(lines).setAlpha(0.9);
-    } else {
-      this.spawnText.setText('');
-    }
+    
 
     // Toggle loadout overlay with Tab
     if (Phaser.Input.Keyboard.JustDown(this.keys.tab)) {

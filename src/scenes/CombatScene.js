@@ -165,10 +165,7 @@ export default class CombatScene extends Phaser.Scene {
     // Move in-game prompt down to avoid overlapping UI
     this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
 
-    // Advertise spawn rates for UI (normal level)
-    const sniperP = 0.33; const shooterP = 0.33; const meleePool = 1 - (sniperP + shooterP);
-    const runnerP = meleePool * 0.5; const meleeP = meleePool * 0.5;
-    this.registry.set('spawnRates', { sniper: sniperP, shooter: shooterP, melee: meleeP, runner: runnerP });
+    
   }
 
   // Centralized enemy death handler to keep removal tied to HP system
