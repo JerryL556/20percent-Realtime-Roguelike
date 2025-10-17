@@ -339,8 +339,8 @@ export default class CombatScene extends Phaser.Scene {
           if (now - (e.aimStartedAt || 0) >= (e.aimDurationMs || 1000)) {
             // Fire a high-speed, high-damage shot
             const angle = Math.atan2(dy, dx);
-            const vx = Math.cos(angle) * 5000;
-            const vy = Math.sin(angle) * 5000;
+            const vx = Math.cos(angle) * 10000;
+            const vy = Math.sin(angle) * 10000;
             const b = this.enemyBullets.get(e.x, e.y, 'bullet');
             if (b) {
               b.setActive(true).setVisible(true);
@@ -349,9 +349,36 @@ export default class CombatScene extends Phaser.Scene {
               b.setVelocity(vx, vy);
               b.damage = Math.max(35, Math.floor((e.damage || 20) * 2.0)); // higher sniper damage
               b.setTint(0xff3333);
+              b._sniper = true;
+              b._px = b.x; b._py = b.y;
               b.update = () => {
+                // Manual ray-style collision to prevent tunneling at extreme speed
+                try {
+                  const line = new Phaser.Geom.Line(b._px || b.x, b._py || b.y, b.x, b.y);
+                  const playerRect = this.player.getBounds();
+                  if (Phaser.Geom.Intersects.LineToRectangle(line, playerRect)) {
+                    const inIframes = this.time.now < this.player.iframesUntil;
+                    if (!inIframes) {
+                      const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
+                      this.gs.hp -= dmg;
+                      this.player.iframesUntil = this.time.now + 600;
+                      if (this.gs.hp <= 0) {
+                        const eff = getPlayerEffects(this.gs);
+                        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                        this.gs.nextScene = SceneKeys.Hub;
+                        SaveManager.saveToLocal(this.gs);
+                        this.scene.start(SceneKeys.Hub);
+                      }
+                    }
+                    try { b.destroy(); } catch (_) {}
+                    return;
+                  }
+                } catch (_) {}
+                // Lifetime via camera view when walls are disabled
                 const view = this.cameras?.main?.worldView;
-                if (view && !view.contains(b.x, b.y)) { b.destroy(); }
+                if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
+                // Update previous position for next frame
+                b._px = b.x; b._py = b.y;
               };
             }
             // End aiming and start cooldown; remove laser
