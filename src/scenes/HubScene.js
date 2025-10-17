@@ -50,8 +50,8 @@ export default class HubScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.npcZone);
     this.physics.add.overlap(this.player, this.portalZone);
 
-    // UI prompt
-    this.prompt = this.add.text(width / 2, height - 30, 'WASD move, E interact', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // UI prompt (top, consistent with Combat "Clear enemies")
+    this.prompt = this.add.text(width / 2, 40, 'WASD move, E interact', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
 
     // Dialogue/Shop panel hidden
     this.panel = null;
