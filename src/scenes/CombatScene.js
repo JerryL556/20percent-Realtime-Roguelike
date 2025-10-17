@@ -52,12 +52,12 @@ export default class CombatScene extends Phaser.Scene {
       this.walls = null;
     }
     room.spawnPoints.forEach((p) => {
-      // Spawn composition: 10% sniper, 40% shooter, else melee (runner or normal)
+      // Spawn composition: balanced among sniper, shooter, melee
       const roll = this.gs.rng.next();
       let e;
-      if (roll < 0.10) {
+      if (roll < 0.33) {
         e = createSniperEnemy(this, p.x, p.y, Math.floor(80 * mods.enemyHp), Math.floor(18 * mods.enemyDamage), 40);
-      } else if (roll < 0.50) {
+      } else if (roll < 0.66) {
         e = createShooterEnemy(this, p.x, p.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
       } else {
         // Melee enemies deal more damage globally
@@ -339,8 +339,8 @@ export default class CombatScene extends Phaser.Scene {
           if (now - (e.aimStartedAt || 0) >= (e.aimDurationMs || 1000)) {
             // Fire a high-speed, high-damage shot
             const angle = Math.atan2(dy, dx);
-            const vx = Math.cos(angle) * 2000;
-            const vy = Math.sin(angle) * 2000;
+            const vx = Math.cos(angle) * 3000;
+            const vy = Math.sin(angle) * 3000;
             const b = this.enemyBullets.get(e.x, e.y, 'bullet');
             if (b) {
               b.setActive(true).setVisible(true);
