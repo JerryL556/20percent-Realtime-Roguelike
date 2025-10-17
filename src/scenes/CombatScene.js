@@ -339,14 +339,14 @@ export default class CombatScene extends Phaser.Scene {
           if (now - (e.aimStartedAt || 0) >= (e.aimDurationMs || 1000)) {
             // Fire a high-speed, high-damage shot
             const angle = Math.atan2(dy, dx);
-            const vx = Math.cos(angle) * 720;
-            const vy = Math.sin(angle) * 720;
+            const vx = Math.cos(angle) * 1400;
+            const vy = Math.sin(angle) * 1400;
             const b = this.enemyBullets.get(e.x, e.y, 'bullet');
             if (b) {
               b.setActive(true).setVisible(true);
               b.setCircle(2).setOffset(-2, -2);
               b.setVelocity(vx, vy);
-              b.damage = Math.max(12, e.damage || 20); // snipe damage
+              b.damage = Math.max(35, Math.floor((e.damage || 20) * 2.0)); // higher sniper damage
               b.setTint(0xff3333);
               b.update = () => {
                 const view = this.cameras?.main?.worldView;
