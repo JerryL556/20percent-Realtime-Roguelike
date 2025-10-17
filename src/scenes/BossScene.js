@@ -78,7 +78,7 @@ export default class BossScene extends Phaser.Scene {
     // Player bullets (Arcade.Image pool)
     this.bullets = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
-      maxSize: 64,
+      maxSize: 256,
       runChildUpdate: true,
     });
     this.physics.add.overlap(this.bullets, this.bossGroup, (b, e) => {

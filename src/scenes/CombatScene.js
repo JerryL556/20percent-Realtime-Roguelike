@@ -34,7 +34,7 @@ export default class CombatScene extends Phaser.Scene {
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
-      maxSize: 64,
+      maxSize: 256,
       runChildUpdate: true,
     });
 

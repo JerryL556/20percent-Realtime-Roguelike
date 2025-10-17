@@ -18,13 +18,13 @@ export const weaponCores = [
     id: 'core_lead_storm',
     name: 'Lead Storm',
     onlyFor: 'shotgun',
-    desc: 'Shotgun only\n+200% fire rate\nPellets: 10\n-30% damage\n-30% spread',
+    desc: 'Shotgun only\n+200% fire rate\nPellets: 10\n-30% damage\n+50% spread',
     apply: (w) => {
       // Apply only when the weapon matches the required id
       if (!w || w.id !== 'shotgun') return w;
       const faster = Math.max(60, Math.floor((w.fireRateMs || 300) / 3));
       const newDmg = Math.max(1, Math.floor((w.damage || 1) * 0.7));
-      const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 0.7));
+      const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 1.5));
       return { ...w, fireRateMs: faster, pelletCount: 10, damage: newDmg, spreadDeg: newSpread };
     },
   },
