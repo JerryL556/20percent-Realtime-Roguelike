@@ -1,5 +1,7 @@
 # 25percent-Project
 
+Play in browser: https://jerryl556.github.io/20percent-Realtime-Roguelike/
+
 ## Current Status
 Early prototype. Core scenes and systems are scaffolded (Boot, Start, Menu, Hub, Combat, Boss, UI) and placeholder graphics are generated at runtime. Expect incomplete features and occasional bugs while gameplay, art, and balance are still in progress.
 
