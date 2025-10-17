@@ -73,7 +73,8 @@ export function createSniperEnemy(scene, x, y, hp = 80, damage = 24, speed = 40)
   sn._wanderChangeAt = 0;
   sn._wanderVX = 0;
   sn._wanderVY = 0;
-  sn.setTint(0xff2222);
+  // Purple tint to distinguish snipers clearly
+  sn.setTint(0xaa00ff);
   sn.on('destroy', () => {
     try { sn._aimG?.destroy(); } catch (_) {}
     try { sn._g?.destroy(); } catch (_) {}
