@@ -14,6 +14,20 @@ export const weaponCores = [
   { id: null, name: 'No Core', desc: 'No special effect', apply: (w) => w },
   { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', apply: (w) => ({ ...w, _core: 'pierce' }) },
   { id: 'core_blast', name: 'Explosive Core', desc: '+Small explosion on hit', apply: (w) => ({ ...w, _core: 'blast' }) },
+  {
+    id: 'core_lead_storm',
+    name: 'Lead Storm',
+    onlyFor: 'shotgun',
+    desc: 'Shotgun only\n+200% fire rate\nPellets: 10\n-30% damage\n-30% spread',
+    apply: (w) => {
+      // Apply only when the weapon matches the required id
+      if (!w || w.id !== 'shotgun') return w;
+      const faster = Math.max(60, Math.floor((w.fireRateMs || 300) / 3));
+      const newDmg = Math.max(1, Math.floor((w.damage || 1) * 0.7));
+      const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 0.7));
+      return { ...w, fireRateMs: faster, pelletCount: 10, damage: newDmg, spreadDeg: newSpread };
+    },
+  },
 ];
 
 // Armour mods (2 slots)

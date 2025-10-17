@@ -187,7 +187,10 @@ export default class UIScene extends Phaser.Scene {
     const coreLabel = this.add.text(col2X, coreWy, `Core: ${(weaponCores.find((c) => c.id === (gs.weaponBuilds[gs.activeWeapon].core || null)) || weaponCores[0]).name}`, { fontFamily: 'monospace', fontSize: 14, color: (!!gs.weaponBuilds[gs.activeWeapon].core) ? '#ffff33' : '#cccccc' }); nodes.push(coreLabel); this.loadout.coreLabel = coreLabel;
     const coreBtn = makeTextButton(this, col2X + 210, coreWy + 8, 'Choose…', () => {
       ensureBuild();
-      const opts = weaponCores.map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
+      const activeId = gs.activeWeapon;
+      const opts = weaponCores
+        .filter((c) => !c.onlyFor || c.onlyFor === activeId)
+        .map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
         gs.weaponBuilds[gs.activeWeapon].core = chosenId;
         const picked = (weaponCores.find((c) => c.id === chosenId) || weaponCores[0]);
