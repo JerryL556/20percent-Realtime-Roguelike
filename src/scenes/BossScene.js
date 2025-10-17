@@ -82,10 +82,12 @@ export default class BossScene extends Phaser.Scene {
     });
     this.physics.add.overlap(this.bullets, this.bossGroup, (b, e) => {
       if (this._won || !b.active || !e.active) return;
-      // Prevent multi-hit on the same boss entity from the same bullet across frames
-      if (!b._hitSet) b._hitSet = new Set();
-      if (b._hitSet.has(e)) return;
-      b._hitSet.add(e);
+      // Only track per-target hits for piercing bullets to allow shotgun pellets to stack normally
+      if (b._core === 'pierce') {
+        if (!b._hitSet) b._hitSet = new Set();
+        if (b._hitSet.has(e)) return;
+        b._hitSet.add(e);
+      }
       if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
       e.hp -= b.damage || 12;
       // Handle pierce core: allow one extra target without removing the bullet
