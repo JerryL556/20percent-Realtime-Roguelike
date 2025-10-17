@@ -10,6 +10,21 @@ export function createEnemy(scene, x, y, hp = 60, damage = 10, speed = 60) {
   return e;
 }
 
+// Fast melee "runner" enemy: 2x speed, ~30% less HP
+export function createRunnerEnemy(scene, x, y, hp = 42, damage = 10, speed = 120) {
+  const r = scene.physics.add.sprite(x, y, 'enemy_square');
+  r.setSize(12, 12).setOffset(0, 0);
+  r.hp = hp;
+  r.maxHp = hp;
+  r.damage = damage;
+  r.speed = speed;
+  r.isEnemy = true;
+  r.isRunner = true;
+  r.setTint(0xff6666);
+  r.on('destroy', () => r._g?.destroy());
+  return r;
+}
+
 export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50) {
   const b = scene.physics.add.sprite(x, y, 'enemy_square');
   b.setSize(24, 24).setOffset(0, 0);

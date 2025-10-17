@@ -2,7 +2,7 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom } from '../systems/ProceduralGen.js';
-import { createEnemy, createShooterEnemy } from '../systems/EnemyFactory.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
@@ -58,7 +58,14 @@ export default class CombatScene extends Phaser.Scene {
       if (roll < 0.4) {
         e = createShooterEnemy(this, p.x, p.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
       } else {
-        e = createEnemy(this, p.x, p.y, Math.floor(60 * mods.enemyHp), Math.floor(10 * mods.enemyDamage), 60);
+        // Melee enemies deal more damage globally
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        // 50% chance of runner vs normal melee
+        if (this.gs.rng.next() < 0.5) {
+          e = createRunnerEnemy(this, p.x, p.y, Math.floor(42 * mods.enemyHp), meleeDmg, 120);
+        } else {
+          e = createEnemy(this, p.x, p.y, Math.floor(60 * mods.enemyHp), meleeDmg, 60);
+        }
       }
       this.enemies.add(e);
     });
