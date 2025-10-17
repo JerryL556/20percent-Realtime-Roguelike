@@ -2,7 +2,7 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom } from '../systems/ProceduralGen.js';
-import { createEnemy, createShooterEnemy, createRunnerEnemy } from '../systems/EnemyFactory.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
@@ -52,10 +52,12 @@ export default class CombatScene extends Phaser.Scene {
       this.walls = null;
     }
     room.spawnPoints.forEach((p) => {
-      // 40% chance to spawn a shooter enemy instead of melee
+      // Spawn composition: 10% sniper, 40% shooter, else melee (runner or normal)
       const roll = this.gs.rng.next();
       let e;
-      if (roll < 0.4) {
+      if (roll < 0.10) {
+        e = createSniperEnemy(this, p.x, p.y, Math.floor(80 * mods.enemyHp), Math.floor(18 * mods.enemyDamage), 40);
+      } else if (roll < 0.50) {
         e = createShooterEnemy(this, p.x, p.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
       } else {
         // Melee enemies deal more damage globally
@@ -143,7 +145,8 @@ export default class CombatScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemyBullets, (p, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
       if (!inIframes) {
-        this.gs.hp -= 8; // shooter bullet damage
+        const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; // default shooter damage
+        this.gs.hp -= dmg;
         this.player.iframesUntil = this.time.now + 600;
         if (this.gs.hp <= 0) {
           this.gs.hp = this.gs.maxHp;
@@ -286,7 +289,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Update enemies: melee chase; shooters chase gently and fire a single shot at intervals
+    // Update enemies: melee chase; shooters chase gently and fire at intervals; snipers aim then fire
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
       const dx = this.player.x - e.x;
@@ -314,6 +317,62 @@ export default class CombatScene extends Phaser.Scene {
               const view = this.cameras?.main?.worldView;
               if (view && !view.contains(b.x, b.y)) { b.destroy(); }
             };
+          }
+        }
+      }
+
+      // Sniper behavior
+      if (e.isSniper) {
+        const now = this.time.now;
+        // If aiming, freeze movement and draw/update red aim line
+        if (e.aiming) {
+          e.body.setVelocity(0, 0);
+          if (!e._aimG) e._aimG = this.add.graphics();
+          try {
+            e._aimG.clear();
+            e._aimG.lineStyle(2, 0xff2222, 1);
+            e._aimG.beginPath();
+            e._aimG.moveTo(e.x, e.y);
+            e._aimG.lineTo(this.player.x, this.player.y);
+            e._aimG.strokePath();
+          } catch (_) {}
+          if (now - (e.aimStartedAt || 0) >= (e.aimDurationMs || 1000)) {
+            // Fire a high-speed, high-damage shot
+            const angle = Math.atan2(dy, dx);
+            const vx = Math.cos(angle) * 720;
+            const vy = Math.sin(angle) * 720;
+            const b = this.enemyBullets.get(e.x, e.y, 'bullet');
+            if (b) {
+              b.setActive(true).setVisible(true);
+              b.setCircle(2).setOffset(-2, -2);
+              b.setVelocity(vx, vy);
+              b.damage = Math.max(12, e.damage || 20); // snipe damage
+              b.setTint(0xff3333);
+              b.update = () => {
+                const view = this.cameras?.main?.worldView;
+                if (view && !view.contains(b.x, b.y)) { b.destroy(); }
+              };
+            }
+            // End aiming and start cooldown; remove laser
+            e.aiming = false;
+            e.lastShotAt = now;
+            try { e._aimG?.clear(); e._aimG?.destroy(); e._aimG = null; } catch (_) {}
+          }
+        } else {
+          // Not aiming: wander randomly, do not chase player
+          if (!e._wanderChangeAt || now >= e._wanderChangeAt) {
+            const ang = this.gs.rng.next() * Math.PI * 2;
+            const mag = e.speed * 0.9;
+            e._wanderVX = Math.cos(ang) * mag;
+            e._wanderVY = Math.sin(ang) * mag;
+            e._wanderChangeAt = now + 800 + Math.floor(this.gs.rng.next() * 800);
+          }
+          e.body.setVelocity(e._wanderVX || 0, e._wanderVY || 0);
+          // Start aiming if cooldown passed
+          if (!e.lastShotAt) e.lastShotAt = 0;
+          if (now - e.lastShotAt >= (e.cooldownMs || 2000)) {
+            e.aiming = true;
+            e.aimStartedAt = now;
           }
         }
       }

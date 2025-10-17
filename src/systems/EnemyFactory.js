@@ -54,3 +54,29 @@ export function createShooterEnemy(scene, x, y, hp = 90, damage = 10, speed = 45
   s.on('destroy', () => s._g?.destroy());
   return s;
 }
+
+// Sniper enemy: aims with a red laser for 1s, then fires a high-speed, high-damage shot.
+export function createSniperEnemy(scene, x, y, hp = 80, damage = 24, speed = 40) {
+  const sn = scene.physics.add.sprite(x, y, 'enemy_square');
+  sn.setSize(12, 12).setOffset(0, 0);
+  sn.hp = hp;
+  sn.maxHp = hp;
+  sn.damage = damage;
+  sn.speed = speed;
+  sn.isEnemy = true;
+  sn.isSniper = true;
+  sn.aiming = false;
+  sn.aimStartedAt = 0;
+  sn.lastShotAt = 0;
+  sn.aimDurationMs = 1000;
+  sn.cooldownMs = 2000; // after shot
+  sn._wanderChangeAt = 0;
+  sn._wanderVX = 0;
+  sn._wanderVY = 0;
+  sn.setTint(0xff2222);
+  sn.on('destroy', () => {
+    try { sn._aimG?.destroy(); } catch (_) {}
+    try { sn._g?.destroy(); } catch (_) {}
+  });
+  return sn;
+}
