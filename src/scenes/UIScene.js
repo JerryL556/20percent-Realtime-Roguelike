@@ -11,11 +11,14 @@ export default class UIScene extends Phaser.Scene {
   constructor() { super(SceneKeys.UI); }
 
   create() {
-    const { width } = this.scale;
-    this.hpBar = new HpBar(this, 16, 12, 180, 16);
+    const { width, height } = this.scale;
+    // Place combat UI along the bottom
+    this.hpBar = new HpBar(this, 16, Math.max(12, height - 28), 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
-    this.weaponText = this.add.text(310, 8, 'Weapon: -', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
-    this.dashBar = new DashBar(this, 460, 8, 14, 4);
+    this.weaponText = this.add.text(width / 2, Math.max(8, height - 32), 'Weapon: -', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5, 0);
+    this.dashBar = new DashBar(this, 16 + 180 + 20, Math.max(8, height - 22), 14, 4);
+    // Hint to open loadout with Tab (left side)
+    this.loadoutHint = this.add.text(12, height * 0.5, 'Loadout (TAB)', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0.5).setAlpha(0.9);
     
 
     let x = width - 240;
