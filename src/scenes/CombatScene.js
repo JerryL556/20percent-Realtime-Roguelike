@@ -70,6 +70,10 @@ export default class CombatScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
+      // Prevent multi-hit on the same enemy from the same bullet across frames
+      if (!b._hitSet) b._hitSet = new Set();
+      if (b._hitSet.has(e)) return;
+      b._hitSet.add(e);
       if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
       // Apply damage
       e.hp -= b.damage || 10;
