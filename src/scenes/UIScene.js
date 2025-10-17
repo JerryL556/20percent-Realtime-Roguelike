@@ -296,8 +296,10 @@ export default class UIScene extends Phaser.Scene {
           const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
           const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
           const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+          const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
           if (t.startsWith('+')) {
-            color = '#66ff66';
+            const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
+            color = isHarmfulPos ? '#ff6666' : '#66ff66';
           } else if (t.startsWith('-')) {
             // Some negatives are beneficial (e.g., -spread)
             const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) || lower.includes('less') || lower.includes('reduced');
