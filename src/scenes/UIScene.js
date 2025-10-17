@@ -148,6 +148,8 @@ export default class UIScene extends Phaser.Scene {
         gs.activeWeapon = chosenId;
         makeActive.setText(`Active: ${(getWeaponById(gs.activeWeapon)?.name || gs.activeWeapon)}`);
         SaveManager.saveToLocal(gs);
+        // Rebuild mods/core section to reflect the newly active weapon
+        try { this.time.delayedCall(0, () => { this.reopenLoadout?.(); }); } catch (e) { try { this.reopenLoadout?.(); } catch (_) {} }
       });
     }).setOrigin(0, 0.5);
     nodes.push(makeActive);
@@ -252,6 +254,12 @@ export default class UIScene extends Phaser.Scene {
     this.loadout.modLabels = [];
     this.loadout.coreLabel = null;
     this.closeChoicePopup();
+  }
+
+  // Helper to refresh the loadout overlay without the user having to toggle Tab
+  reopenLoadout() {
+    this.closeLoadout();
+    this.openLoadout();
   }
 
   openChoicePopup(title, options, currentId, onChoose) {
