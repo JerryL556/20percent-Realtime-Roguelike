@@ -14,6 +14,8 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Ensure physics world bounds match the visible area so enemies can't leave the screen
+    this.physics.world.setBounds(0, 0, width, height);
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');

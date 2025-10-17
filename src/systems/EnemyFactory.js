@@ -1,6 +1,6 @@
 export function createEnemy(scene, x, y, hp = 60, damage = 10, speed = 60) {
   const e = scene.physics.add.sprite(x, y, 'enemy_square');
-  e.setSize(12, 12).setOffset(0, 0);
+  e.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   e.hp = hp;
   e.maxHp = hp;
   e.damage = damage;
@@ -13,7 +13,7 @@ export function createEnemy(scene, x, y, hp = 60, damage = 10, speed = 60) {
 // Fast melee "runner" enemy: 2x speed, ~30% less HP
 export function createRunnerEnemy(scene, x, y, hp = 42, damage = 10, speed = 120) {
   const r = scene.physics.add.sprite(x, y, 'enemy_square');
-  r.setSize(12, 12).setOffset(0, 0);
+  r.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   r.hp = hp;
   r.maxHp = hp;
   r.damage = damage;
@@ -27,7 +27,7 @@ export function createRunnerEnemy(scene, x, y, hp = 42, damage = 10, speed = 120
 
 export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50) {
   const b = scene.physics.add.sprite(x, y, 'enemy_square');
-  b.setSize(24, 24).setOffset(0, 0);
+  b.setSize(24, 24).setOffset(0, 0).setCollideWorldBounds(true);
   b.hp = hp;
   b.maxHp = hp;
   b.damage = damage;
@@ -41,7 +41,7 @@ export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50) {
 // Ranged shooter enemy: fires single bullets at intervals
 export function createShooterEnemy(scene, x, y, hp = 90, damage = 10, speed = 45, fireRateMs = 900) {
   const s = scene.physics.add.sprite(x, y, 'enemy_square');
-  s.setSize(12, 12).setOffset(0, 0);
+  s.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   s.hp = hp;
   s.maxHp = hp;
   s.damage = damage;
@@ -58,7 +58,7 @@ export function createShooterEnemy(scene, x, y, hp = 90, damage = 10, speed = 45
 // Sniper enemy: aims with a red laser for 1s, then fires a high-speed, high-damage shot.
 export function createSniperEnemy(scene, x, y, hp = 80, damage = 24, speed = 40) {
   const sn = scene.physics.add.sprite(x, y, 'enemy_square');
-  sn.setSize(12, 12).setOffset(0, 0);
+  sn.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   sn.hp = hp;
   sn.maxHp = hp;
   sn.damage = damage;
