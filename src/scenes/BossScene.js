@@ -94,7 +94,10 @@ export default class BossScene extends Phaser.Scene {
       // Visual impact effect by core type
       try {
         const core = b._core || null;
-        if (core === 'blast') impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large' });
+        if (core === 'blast') {
+          const radius = b._blastRadius || 40;
+          impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large', radius });
+        }
         else if (core === 'pierce') impactBurst(this, b.x, b.y, { color: 0x66aaff, size: 'small' });
         else impactBurst(this, b.x, b.y, { color: 0xffffff, size: 'small' });
       } catch (_) {}
@@ -180,12 +183,75 @@ export default class BossScene extends Phaser.Scene {
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
     this.playerFacing = baseAngle;
     const pellets = weapon.pelletCount || 1;
-    const spread = Phaser.Math.DegToRad(weapon.spreadDeg || 0);
-    for (let i = 0; i < pellets; i += 1) {
-      const t = pellets === 1 ? 0 : (i / (pellets - 1) - 0.5);
-      const angle = baseAngle + t * spread;
+    // Dynamic spread similar to Combat
+    const heat = this._spreadHeat || 0;
+    const maxExtra = (typeof weapon.maxSpreadDeg === 'number') ? weapon.maxSpreadDeg : 20;
+    const extraDeg = weapon.singleFire ? 0 : (maxExtra * heat);
+    const totalSpreadRad = Phaser.Math.DegToRad((weapon.spreadDeg || 0) + extraDeg);
+    // Rocket projectile for boss scene too
+    if (weapon.projectile === 'rocket') {
+      const targetX = this.inputMgr.pointer.worldX;
+      const targetY = this.inputMgr.pointer.worldY;
+      const angle = baseAngle;
       const vx = Math.cos(angle) * weapon.bulletSpeed;
       const vy = Math.sin(angle) * weapon.bulletSpeed;
+      const b = this.bullets.get(startX, startY, 'bullet');
+      if (b) {
+        b.setActive(true).setVisible(true);
+        // Larger rocket visual + hitbox
+        b.setCircle(6).setOffset(-6, -6);
+        try { b.setScale(1.8); } catch (_) {}
+        b.setVelocity(vx, vy);
+        b.setTint(weapon.color || 0xff5533);
+        b.damage = weapon.damage;
+        b._core = 'blast';
+        b._blastRadius = weapon.blastRadius || 70;
+        b._rocket = true;
+        b._startX = startX; b._startY = startY;
+        b._targetX = targetX; b._targetY = targetY;
+        const sx = targetX - startX; const sy = targetY - startY;
+        b._targetLen2 = sx * sx + sy * sy;
+        b.update = () => {
+          const view = this.cameras?.main?.worldView;
+          if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+          const dxs = (b.x - b._startX); const dys = (b.y - b._startY);
+          const prog = dxs * (sx) + dys * (sy);
+          const dx = b.x - b._targetX; const dy = b.y - b._targetY;
+          const nearTarget = (dx * dx + dy * dy) <= 64;
+          const passed = prog >= b._targetLen2 - 1;
+          if (nearTarget || passed) {
+            const ex = b.x; const ey = b.y;
+            try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large' }); } catch (_) {}
+            const radius = b._blastRadius || 70; const r2 = radius * radius;
+            // Damage boss if in radius
+            if (this.boss && this.boss.active) {
+              const ddx = this.boss.x - ex; const ddy = this.boss.y - ey;
+              if ((ddx * ddx + ddy * ddy) <= r2) {
+                if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300;
+                this.boss.hp -= b.damage || 12;
+                if (this.boss.hp <= 0) this.killBoss(this.boss);
+              }
+            }
+            try { b.destroy(); } catch (_) {}
+          }
+        };
+        b.on('destroy', () => b._g?.destroy());
+      }
+      return;
+    }
+    for (let i = 0; i < pellets; i += 1) {
+      let angle = baseAngle;
+      if (pellets === 1) {
+        const off = Phaser.Math.FloatBetween(-0.5, 0.5) * totalSpreadRad;
+        angle += off;
+      } else {
+        const t = (i / (pellets - 1)) - 0.5;
+        angle += t * totalSpreadRad;
+        if (totalSpreadRad > 0) angle += Phaser.Math.FloatBetween(-0.1, 0.1) * totalSpreadRad;
+      }
+      const effSpeed = (weapon.projectile === 'rocket') ? weapon.bulletSpeed : Math.floor((weapon.bulletSpeed || 0) * 1.25);
+      const vx = Math.cos(angle) * effSpeed;
+      const vy = Math.sin(angle) * effSpeed;
       const b = this.bullets.get(startX, startY, 'bullet');
       if (!b) continue;
       b.setActive(true).setVisible(true);
@@ -263,10 +329,26 @@ export default class BossScene extends Phaser.Scene {
 
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
-    if (this.inputMgr.isLMBDown && (!this.lastShot || time - this.lastShot > weapon.fireRateMs)) {
+    // Update spread heat each frame
+    const dt = (this.game?.loop?.delta || 16.7) / 1000;
+    if (this._spreadHeat === undefined) this._spreadHeat = 0;
+    const rampPerSec = 0.7;
+    const coolPerSec = 1.2;
+    if (this.inputMgr.isLMBDown && !weapon.singleFire) {
+      this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
+    } else {
+      this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
+    }
+    const ptr = this.inputMgr.pointer;
+    if (this._lmbWasDown === undefined) this._lmbWasDown = false;
+    const edgeDown = (!this._lmbWasDown) && !!ptr.isDown && ((ptr.buttons & 1) === 1);
+    const wantsClick = !!ptr.justDown || edgeDown;
+    const wantsShot = weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown;
+    if (wantsShot && (!this.lastShot || time - this.lastShot > weapon.fireRateMs)) {
       this.shoot();
       this.lastShot = time;
     }
+    this._lmbWasDown = !!ptr.isDown;
 
     // Boss simple pattern: drift toward player with sine offset
     if (this.boss && this.boss.active) {

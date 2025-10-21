@@ -9,6 +9,7 @@ export const weaponDefs = [
     bulletSpeed: 360,
     pelletCount: 1,
     spreadDeg: 0,
+    maxSpreadDeg: 12,
     color: 0xffff66,
     price: 0,
   },
@@ -20,6 +21,7 @@ export const weaponDefs = [
     bulletSpeed: 440,
     pelletCount: 1,
     spreadDeg: 0,
+    maxSpreadDeg: 8,
     color: 0x66ccff,
     price: 60,
   },
@@ -31,8 +33,35 @@ export const weaponDefs = [
     bulletSpeed: 340,
     pelletCount: 5,
     spreadDeg: 18,
+    maxSpreadDeg: 8,
     color: 0xffaa66,
     price: 80,
+  },
+  {
+    id: 'smg',
+    name: 'SMG',
+    damage: 5,
+    fireRateMs: 65,
+    bulletSpeed: 420,
+    pelletCount: 1,
+    spreadDeg: 1,
+    maxSpreadDeg: 24,
+    color: 0x99ff99,
+    price: 90,
+  },
+  {
+    id: 'rocket',
+    name: 'Rocket Launcher',
+    damage: 40,
+    fireRateMs: 700,
+    bulletSpeed: 300,
+    pelletCount: 1,
+    spreadDeg: 0,
+    color: 0xff5533,
+    price: 120,
+    singleFire: true,
+    projectile: 'rocket',
+    blastRadius: 70,
   },
 ];
 
@@ -41,4 +70,3 @@ export const defaultWeaponId = 'pistol';
 export function getWeaponById(id) {
   return weaponDefs.find((w) => w.id === id) || weaponDefs[0];
 }
-

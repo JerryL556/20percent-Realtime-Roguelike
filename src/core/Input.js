@@ -21,4 +21,5 @@ export class InputManager {
   get pressedDash() { return Phaser.Input.Keyboard.JustDown(this.keys.dash); }
   get pressedTab() { return Phaser.Input.Keyboard.JustDown(this.keys.tab); }
   get isLMBDown() { return this.pointer.isDown && this.pointer.buttons === 1; }
+  get pressedLMB() { return !!this.pointer.justDown && this.pointer.buttons === 1; }
 }

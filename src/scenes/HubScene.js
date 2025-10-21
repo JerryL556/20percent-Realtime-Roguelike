@@ -85,48 +85,115 @@ export default class HubScene extends Phaser.Scene {
   }
 
   openShop() {
+    // Ensure any previous shop wheel handler is removed
+    try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
     this.closePanel();
     const { width } = this.scale;
-    this.panel = drawPanel(this, width / 2 - 220, 70, 440, 260);
-    const t = this.add.text(width / 2, 92, 'Shop', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
-    const buy = makeTextButton(this, width / 2, 130, 'Buy potion for 20g (+30 HP)', () => {
+    // Larger panel to host a scrollable list
+    const panelX = width / 2 - 260;
+    const panelY = 60;
+    const panelW = 520;
+    const panelH = 420;
+    this.panel = drawPanel(this, panelX, panelY, panelW, panelH);
+    const t = this.add.text(width / 2, panelY + 22, 'Shop', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
+    const buy = makeTextButton(this, width / 2, panelY + 60, 'Buy potion for 20g (+30 HP)', () => {
       if (this.gs.gold >= 20) {
         this.gs.gold -= 20;
         const effMax = (this.gs.maxHp || 0) + ((getPlayerEffects(this.gs).bonusHp) || 0);
         this.gs.hp = Math.min(effMax, this.gs.hp + 30);
       }
     });
-    const buyMax = makeTextButton(this, width / 2, 160, 'Increase Max HP +10 (40g)', () => {
+    const buyMax = makeTextButton(this, width / 2, panelY + 90, 'Increase Max HP +10 (40g)', () => {
       if (this.gs.gold >= 40) {
         this.gs.gold -= 40; this.gs.maxHp += 10;
         const effMax = (this.gs.maxHp || 0) + ((getPlayerEffects(this.gs).bonusHp) || 0);
         this.gs.hp = Math.min(effMax, this.gs.hp + 10);
       }
     });
-    const dashUp = makeTextButton(this, width / 2, 190, `Dash Slot +1 (100g) [Now: ${this.gs.dashMaxCharges}]`, () => {
+    const dashUp = makeTextButton(this, width / 2, panelY + 120, `Dash Slot +1 (100g) [Now: ${this.gs.dashMaxCharges}]`, () => {
       if (this.gs.dashMaxCharges >= 5) { dashUp.setText(`Dash Slots Maxed [${this.gs.dashMaxCharges}]`); return; }
       if (this.gs.gold >= 100) {
         this.gs.gold -= 100; this.gs.dashMaxCharges = Math.min(5, this.gs.dashMaxCharges + 1);
         dashUp.setText(this.gs.dashMaxCharges >= 5 ? `Dash Slots Maxed [${this.gs.dashMaxCharges}]` : `Dash Slot +1 (100g) [Now: ${this.gs.dashMaxCharges}]`);
       }
     });
+    // Scrollable list area for items (weapons / future cores/mods)
+    const viewport = { x: panelX + 20, y: panelY + 160, w: panelW - 40, h: panelH - 210 };
+    // Dark background behind the scroll area for readability
+    const listBgG = this.add.graphics();
+    listBgG.fillStyle(0x111111, 0.92).fillRect(viewport.x, viewport.y, viewport.w, viewport.h);
+    // Geometry mask shape (hidden) used to clip the scroll list
+    const listMaskG = this.add.graphics();
+    listMaskG.fillStyle(0xffffff, 1).fillRect(viewport.x, viewport.y, viewport.w, viewport.h);
+    const listMask = listMaskG.createGeometryMask();
+    try { listMaskG.setVisible(false); } catch (_) {}
+    const list = this.add.container(viewport.x, viewport.y);
+    list.setMask(listMask);
 
-    // Auto-list unowned weapons from config
-    const startY = 220; let y = startY; const nodes = [];
+    const nodes = [];
+    // Section header
+    const header = this.add.text(viewport.x + 8, viewport.y - 22, 'Weapons', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0, 0.5);
+    nodes.push(header);
+
+    // Populate weapons into the scroll container
+    let ly = 0;
+    const lineGap = 34;
     weaponDefs.forEach((w) => {
       if (!this.gs.ownedWeapons.includes(w.id) && w.price > 0) {
-        const btn = makeTextButton(this, width / 2, y, `Buy ${w.name} (${w.price}g)`, () => {
-          if (this.gs.gold >= w.price) { this.gs.gold -= w.price; this.gs.ownedWeapons.push(w.id); btn.setText(`${w.name} (Owned)`); }
-        });
-        nodes.push(btn); y += 28;
+        const row = this.add.container(0, ly);
+        const label = this.add.text(viewport.w / 2, 0, `Buy ${w.name} (${w.price}g)`, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5, 0);
+        const border = this.add.graphics();
+        const refreshBorder = () => {
+          border.clear(); border.lineStyle(1, 0xffffff, 1);
+          const b = label.getBounds();
+          const bx = Math.floor(viewport.w / 2 - b.width / 2) - 6 + 0.5;
+          const by = Math.floor(0) - 4 + 0.5;
+          const bw = Math.ceil(b.width) + 12; const bh = Math.ceil(b.height) + 8;
+          border.strokeRect(bx, by, bw, bh);
+        };
+        refreshBorder();
+        row.add(border); row.add(label);
+        label.setInteractive({ useHandCursor: true })
+          .on('pointerover', () => { label.setStyle({ color: '#ffff66' }); refreshBorder(); })
+          .on('pointerout', () => { label.setStyle({ color: '#ffffff' }); refreshBorder(); })
+          .on('pointerdown', () => {
+            if (this.gs.gold >= w.price) {
+              this.gs.gold -= w.price; this.gs.ownedWeapons.push(w.id);
+              label.setText(`${w.name} (Owned)`); refreshBorder();
+            }
+          });
+        list.add(row);
+        nodes.push(row);
+        ly += lineGap;
       }
     });
+    const listContentHeight = Math.max(ly, viewport.h);
 
-    const close = makeTextButton(this, width / 2, y + 10, 'Close', () => { this.closePanel([t, buy, buyMax, dashUp, ...nodes, close]); });
-    this.panel._extra = [t, buy, buyMax, dashUp, ...nodes, close];
+    // Scroll behavior (mouse wheel within viewport)
+    let minY = viewport.y - (listContentHeight - viewport.h);
+    let maxY = viewport.y;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const onWheel = (pointer, gameObjects, dx, dy) => {
+      const px = pointer.worldX ?? pointer.x; const py = pointer.worldY ?? pointer.y;
+      if (px >= viewport.x && px <= viewport.x + viewport.w && py >= viewport.y && py <= viewport.y + viewport.h) {
+        list.y = clamp(list.y - dy * 0.5, minY, maxY);
+      }
+    };
+    this.input.on('wheel', onWheel);
+    this._shopWheelHandler = onWheel;
+
+    // Close button stays anchored to bottom of panel
+    const close = makeTextButton(this, width / 2, panelY + panelH - 20, 'Close', () => {
+      this.closePanel([t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, close]);
+      try { this.input.off('wheel', onWheel); this._shopWheelHandler = null; } catch (_) {}
+    });
+    // Track all extras for cleanup on generic close
+    this.panel._extra = [t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, close];
   }
 
   closePanel(extra = []) {
+    // Detach shop wheel handler if active
+    try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
     // Always destroy any extras tracked on the current panel
     const extras = [
       ...(Array.isArray(extra) ? extra : []),

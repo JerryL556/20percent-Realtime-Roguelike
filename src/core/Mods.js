@@ -5,7 +5,17 @@ export const weaponMods = [
   { id: null, name: 'Empty', desc: 'No changes', apply: (w) => w },
   { id: 'w_dmg_up', name: 'FMJ Rounds', desc: '+10% damage', apply: (w) => ({ ...w, damage: Math.floor(w.damage * 1.1) }) },
   { id: 'w_firerate_up', name: 'Custom Trigger', desc: '+12% fire rate', apply: (w) => ({ ...w, fireRateMs: Math.max(60, Math.floor(w.fireRateMs * 0.88)) }) },
-  { id: 'w_spread_down', name: 'Muzzle Brake', desc: '-20% spread angle', apply: (w) => ({ ...w, spreadDeg: Math.max(0, Math.floor(w.spreadDeg * 0.8)) }) },
+  {
+    id: 'w_spread_down',
+    name: 'Muzzle Brake',
+    desc: '-20% spread angle & bloom cap',
+    apply: (w) => {
+      const newBase = Math.max(0, Math.floor((w.spreadDeg || 0) * 0.8));
+      const hasMax = typeof w.maxSpreadDeg === 'number';
+      const newMax = hasMax ? Math.max(0, Math.floor(w.maxSpreadDeg * 0.8)) : undefined;
+      return hasMax ? { ...w, spreadDeg: newBase, maxSpreadDeg: newMax } : { ...w, spreadDeg: newBase };
+    },
+  },
   { id: 'w_speed_up', name: 'Advanced Propellant', desc: '+15% bullet speed', apply: (w) => ({ ...w, bulletSpeed: Math.floor(w.bulletSpeed * 1.15) }) },
 ];
 

@@ -94,13 +94,15 @@ export default class CombatScene extends Phaser.Scene {
       // Visual impact effect by core type (small unless blast)
       try {
         const core = b._core || null;
-        if (core === 'blast') impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large' });
-        else if (core === 'pierce') impactBurst(this, b.x, b.y, { color: 0x66aaff, size: 'small' });
+        if (core === 'blast') {
+          const radius = b._blastRadius || 40;
+          impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large', radius });
+        } else if (core === 'pierce') impactBurst(this, b.x, b.y, { color: 0x66aaff, size: 'small' });
         else impactBurst(this, b.x, b.y, { color: 0xffffff, size: 'small' });
       } catch (_) {}
       // Apply blast splash before removing the bullet
       if (b._core === 'blast') {
-        const radius = 40;
+        const radius = b._blastRadius || 40;
         this.enemies.getChildren().forEach((other) => {
           if (!other.active || other === e) return;
           const dx = other.x - b.x; const dy = other.y - b.y;
@@ -203,12 +205,81 @@ export default class CombatScene extends Phaser.Scene {
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
     this.playerFacing = baseAngle;
     const pellets = weapon.pelletCount || 1;
-    const spread = Phaser.Math.DegToRad(weapon.spreadDeg || 0);
-    for (let i = 0; i < pellets; i += 1) {
-      const t = pellets === 1 ? 0 : (i / (pellets - 1) - 0.5);
-      const angle = baseAngle + t * spread;
+    // Dynamic spread: increases while holding fire, recovers when released
+    const heat = this._spreadHeat || 0;
+    const maxExtra = (typeof weapon.maxSpreadDeg === 'number') ? weapon.maxSpreadDeg : 20;
+    const extraDeg = weapon.singleFire ? 0 : (maxExtra * heat);
+    const totalSpreadRad = Phaser.Math.DegToRad((weapon.spreadDeg || 0) + extraDeg);
+    // Rocket projectile: explode on hit or when reaching click position
+    if (weapon.projectile === 'rocket') {
+      const targetX = this.inputMgr.pointer.worldX;
+      const targetY = this.inputMgr.pointer.worldY;
+      const angle = baseAngle;
       const vx = Math.cos(angle) * weapon.bulletSpeed;
       const vy = Math.sin(angle) * weapon.bulletSpeed;
+      const b = this.bullets.get(startX, startY, 'bullet');
+      if (b) {
+        b.setActive(true).setVisible(true);
+        // Larger rocket visual + hitbox
+        b.setCircle(6).setOffset(-6, -6);
+        try { b.setScale(1.8); } catch (_) {}
+        b.setVelocity(vx, vy);
+        b.setTint(weapon.color || 0xff5533);
+        b.damage = weapon.damage;
+        b._core = 'blast';
+        b._blastRadius = weapon.blastRadius || 70;
+        b._rocket = true;
+        b._startX = startX; b._startY = startY;
+        b._targetX = targetX; b._targetY = targetY;
+        const sx = targetX - startX; const sy = targetY - startY;
+        b._targetLen2 = sx * sx + sy * sy;
+        b.update = () => {
+          // Lifetime via camera view when walls are disabled
+          const view = this.cameras?.main?.worldView;
+          if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+          // Check if reached or passed target point
+          const dxs = (b.x - b._startX); const dys = (b.y - b._startY);
+          const prog = dxs * (sx) + dys * (sy);
+          const dx = b.x - b._targetX; const dy = b.y - b._targetY;
+          const nearTarget = (dx * dx + dy * dy) <= 64; // within 8px
+          const passed = prog >= b._targetLen2 - 1;
+          if (nearTarget || passed) {
+            // Explode at target/current pos
+            const ex = b.x; const ey = b.y;
+            try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: b._blastRadius || 40 }); } catch (_) {}
+            const radius = b._blastRadius || 70; const r2 = radius * radius;
+            this.enemies.getChildren().forEach((other) => {
+              if (!other.active) return;
+              const ddx = other.x - ex; const ddy = other.y - ey;
+              if ((ddx * ddx + ddy * ddy) <= r2) {
+                if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
+                other.hp -= b.damage || 10;
+                if (other.hp <= 0) { this.killEnemy(other); }
+              }
+            });
+            try { b.destroy(); } catch (_) {}
+          }
+        };
+        b.on('destroy', () => b._g?.destroy());
+      }
+      return;
+    }
+    for (let i = 0; i < pellets; i += 1) {
+      let angle = baseAngle;
+      if (pellets === 1) {
+        // Single bullet: apply random deviation within the total spread cone
+        const off = Phaser.Math.FloatBetween(-0.5, 0.5) * totalSpreadRad;
+        angle += off;
+      } else {
+        // Multi-pellet: distribute across the total spread with slight jitter
+        const t = (i / (pellets - 1)) - 0.5;
+        angle += t * totalSpreadRad;
+        if (totalSpreadRad > 0) angle += Phaser.Math.FloatBetween(-0.1, 0.1) * totalSpreadRad;
+      }
+      // Increase bullet speed for all non-rocket projectiles
+      const effSpeed = (weapon.projectile === 'rocket') ? weapon.bulletSpeed : Math.floor((weapon.bulletSpeed || 0) * 1.25);
+      const vx = Math.cos(angle) * effSpeed;
+      const vy = Math.sin(angle) * effSpeed;
       const b = this.bullets.get(startX, startY, 'bullet');
       if (!b) continue;
       b.setActive(true).setVisible(true);
@@ -283,10 +354,27 @@ export default class CombatScene extends Phaser.Scene {
 
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
-    if (this.inputMgr.isLMBDown && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
+    // Update spread heat each frame based on whether player is holding fire
+    const dt = (this.game?.loop?.delta || 16.7) / 1000;
+    if (this._spreadHeat === undefined) this._spreadHeat = 0;
+    const rampPerSec = 0.7; // time to max ~1.4s holding
+    const coolPerSec = 1.2; // cool to 0 in ~0.8s
+    if (this.inputMgr.isLMBDown && !weapon.singleFire) {
+      this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
+    } else {
+      this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
+    }
+    // Robust single-click detect: Phaser pointer.justDown or edge from previous frame
+    const ptr = this.inputMgr.pointer;
+    if (this._lmbWasDown === undefined) this._lmbWasDown = false;
+    const edgeDown = (!this._lmbWasDown) && !!ptr.isDown && ((ptr.buttons & 1) === 1);
+    const wantsClick = !!ptr.justDown || edgeDown;
+    const wantsShot = weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown;
+    if (wantsShot && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
       this.shoot();
       this.lastShot = this.time.now;
     }
+    this._lmbWasDown = !!ptr.isDown;
 
     // Swap weapons with Q
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
@@ -360,10 +448,11 @@ export default class CombatScene extends Phaser.Scene {
             e._aimG.strokePath();
           } catch (_) {}
           if (now - (e.aimStartedAt || 0) >= (e.aimDurationMs || 1000)) {
-            // Fire a high-speed, high-damage shot
+            // Fire a slower, high-damage shot
             const angle = Math.atan2(dy, dx);
-            const vx = Math.cos(angle) * 10000;
-            const vy = Math.sin(angle) * 10000;
+            const snipeSpeed = 1200;
+            const vx = Math.cos(angle) * snipeSpeed;
+            const vy = Math.sin(angle) * snipeSpeed;
             const b = this.enemyBullets.get(e.x, e.y, 'bullet');
             if (b) {
               b.setActive(true).setVisible(true);
