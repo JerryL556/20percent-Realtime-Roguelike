@@ -1,11 +1,12 @@
 import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
-import { generateRoom } from '../systems/ProceduralGen.js';
+import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
+import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
 
@@ -34,6 +35,17 @@ export default class CombatScene extends Phaser.Scene {
     this.registry.set('dashCharges', this.dash.charges);
     this.registry.set('dashRegenProgress', 1);
 
+    // Ammo tracking per-weapon for this scene
+    this._lastActiveWeapon = this.gs.activeWeapon;
+    this.ammoByWeapon = {};
+    this.reload = { active: false, until: 0, duration: 0 };
+    const cap0 = this.getActiveMagCapacity();
+    this.ensureAmmoFor(this._lastActiveWeapon, cap0);
+    this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon] ?? cap0);
+    this.registry.set('magSize', cap0);
+    this.registry.set('reloadActive', false);
+    this.registry.set('reloadProgress', 0);
+
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
@@ -54,6 +66,23 @@ export default class CombatScene extends Phaser.Scene {
       this.arenaRect = new Phaser.Geom.Rectangle(0, 0, width, height);
       this.walls = null;
     }
+    // Barricades: indestructible (hard) and destructible (soft)
+    this.barricadesHard = this.physics.add.staticGroup();
+    this.barricadesSoft = this.physics.add.staticGroup();
+    const barricades = generateBarricades(this.gs.rng, this.arenaRect);
+    barricades.forEach((b) => {
+      if (b.kind === 'hard') {
+        const s = this.physics.add.staticImage(b.x, b.y, 'barricade_hard');
+        s.setData('destructible', false);
+        this.barricadesHard.add(s);
+      } else {
+        const s = this.physics.add.staticImage(b.x, b.y, 'barricade_soft');
+        s.setData('destructible', true);
+        // Base HP for destructible tiles; can be tuned
+        s.setData('hp', 60);
+        this.barricadesSoft.add(s);
+      }
+    });
     room.spawnPoints.forEach((p) => {
       // Spawn composition (normal level): Sniper 10%, Shooter 30%, Runner 20%, Melee 40%
       const roll = this.gs.rng.next();
@@ -79,6 +108,15 @@ export default class CombatScene extends Phaser.Scene {
       this.physics.add.collider(this.player, this.walls);
       this.physics.add.collider(this.enemies, this.walls);
     }
+    // Colliders with barricades (block movement and bullets)
+    this.physics.add.collider(this.player, this.barricadesHard);
+    this.physics.add.collider(this.player, this.barricadesSoft);
+    this.physics.add.collider(this.enemies, this.barricadesHard);
+    this.physics.add.collider(this.enemies, this.barricadesSoft);
+    // Enemies can break destructible barricades by pushing into them
+    this.physics.add.collider(this.enemies, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
+    this.physics.add.collider(this.bullets, this.barricadesHard, (b, s) => this.onBulletHitBarricade(b, s));
+    this.physics.add.collider(this.bullets, this.barricadesSoft, (b, s) => this.onBulletHitBarricade(b, s));
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
@@ -112,6 +150,8 @@ export default class CombatScene extends Phaser.Scene {
             if (other.hp <= 0) { this.killEnemy(other); }
           }
         });
+        // Splash also chips nearby destructible barricades
+        this.damageSoftBarricadesInRadius(b.x, b.y, radius, Math.ceil((b.damage || 10) * 0.8));
       }
       // Handle pierce core: allow one extra target without removing the bullet
       if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
@@ -162,6 +202,9 @@ export default class CombatScene extends Phaser.Scene {
       // Always destroy enemy bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
+    // Enemy bullets blocked by barricades as well
+    this.physics.add.collider(this.enemyBullets, this.barricadesHard, (b, s) => this.onEnemyBulletHitBarricade(b, s));
+    this.physics.add.collider(this.enemyBullets, this.barricadesSoft, (b, s) => this.onEnemyBulletHitBarricade(b, s));
 
     // Exit appears when all enemies dead
     this.exitActive = false;
@@ -181,6 +224,8 @@ export default class CombatScene extends Phaser.Scene {
       .setOrigin(1, 1)
       .setAlpha(0.9);
 
+    // Init nav state for enemy pathfinding
+    this._nav = { grid: null, builtAt: 0 };
     
   }
 
@@ -195,6 +240,115 @@ export default class CombatScene extends Phaser.Scene {
     try { this.gs.gold += 5; } catch (_) {}
     // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
+  }
+
+  // Player bullet hits a barricade (hard or soft)
+  onBulletHitBarricade(b, s) {
+    if (!b || !b.active || !s) return;
+    const isSoft = !!s.getData('destructible');
+    const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+    // Apply damage to destructible tiles
+    if (isSoft) {
+      const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 60;
+      const hp1 = hp0 - dmg;
+      // Small brown puff for soft hits
+      try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+      if (hp1 <= 0) {
+        try { s.destroy(); } catch (_) {}
+      } else {
+        s.setData('hp', hp1);
+      }
+    } else {
+      // Grey puff on hard
+      try { impactBurst(this, b.x, b.y, { color: 0xBBBBBB, size: 'small' }); } catch (_) {}
+    }
+    // Rockets: explode on barricade contact and splash enemies
+    if (b._core === 'blast') {
+      const radius = b._blastRadius || 70;
+      try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+      const r2 = radius * radius; const ex = b.x; const ey = b.y;
+      this.enemies.getChildren().forEach((other) => {
+        if (!other?.active) return;
+        const dx = other.x - ex; const dy = other.y - ey;
+        if (dx * dx + dy * dy <= r2) {
+          if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
+          other.hp -= (b.damage || 10);
+          if (other.hp <= 0) this.killEnemy(other);
+        }
+      });
+      // Also damage nearby destructible barricades
+      this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10));
+    }
+    // Always destroy player bullet on barricade collision
+    try { b.destroy(); } catch (_) {}
+  }
+
+  // Enemy bullet hits a barricade
+  onEnemyBulletHitBarricade(b, s) {
+    if (!b || !s) return;
+    const isSoft = !!s.getData('destructible');
+    const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
+    if (isSoft) {
+      const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 60;
+      const hp1 = hp0 - dmg;
+      if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
+      else s.setData('hp', hp1);
+    }
+    try { b.destroy(); } catch (_) {}
+  }
+
+  // Utility: damage all destructible barricades within radius
+  damageSoftBarricadesInRadius(x, y, radius, dmg) {
+    try {
+      const r2 = radius * radius;
+      const arr = this.barricadesSoft?.getChildren?.() || [];
+      for (let i = 0; i < arr.length; i += 1) {
+        const s = arr[i]; if (!s?.active) continue;
+        const dx = s.x - x; const dy = s.y - y;
+        if ((dx * dx + dy * dy) <= r2) {
+          const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 60;
+          const hp1 = hp0 - dmg;
+          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Enemy body tries to push through a destructible barricade: damage over time
+  onEnemyHitBarricade(e, s) {
+    if (!s?.active) return;
+    if (!s.getData('destructible')) return;
+    const now = this.time.now;
+    const last = s.getData('_lastMeleeHurtAt') || 0;
+    if (now - last < 250) return; // throttle
+    s.setData('_lastMeleeHurtAt', now);
+    const dmg = Math.max(4, Math.floor((e?.damage || 8) * 0.6));
+    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 60;
+    const hp1 = hp0 - dmg;
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
+    else s.setData('hp', hp1);
+  }
+
+  // Returns true if a straight line between two points hits any barricade
+  isLineBlocked(x1, y1, x2, y2) {
+    try {
+      const line = new Phaser.Geom.Line(x1, y1, x2, y2);
+      const checkGroup = (grp) => {
+        if (!grp) return false;
+        const arr = grp.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const s = arr[i]; if (!s?.active) continue;
+          const rect = s.getBounds();
+          if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) return true;
+        }
+        return false;
+      };
+      if (checkGroup(this.barricadesHard)) return true;
+      if (checkGroup(this.barricadesSoft)) return true;
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   shoot() {
@@ -257,6 +411,8 @@ export default class CombatScene extends Phaser.Scene {
                 if (other.hp <= 0) { this.killEnemy(other); }
               }
             });
+            // Also damage nearby destructible barricades
+            this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10));
             try { b.destroy(); } catch (_) {}
           }
         };
@@ -354,12 +510,50 @@ export default class CombatScene extends Phaser.Scene {
 
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
+    const isRail = !!weapon.isRailgun;
+    // Finish reload if timer elapsed; update reload progress for UI
+    if (this.reload?.active) {
+      const now = this.time.now;
+      const remaining = Math.max(0, this.reload.until - now);
+      const dur = Math.max(1, this.reload.duration || this.getActiveReloadMs());
+      const prog = 1 - Math.min(1, remaining / dur);
+      this.registry.set('reloadActive', true);
+      this.registry.set('reloadProgress', prog);
+      if (now >= this.reload.until) {
+        const wid = this.gs.activeWeapon;
+        const cap = this.getActiveMagCapacity();
+        this.ensureAmmoFor(wid, cap);
+        this.ammoByWeapon[wid] = cap;
+        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+        this.registry.set('magSize', cap);
+        this.reload.active = false;
+        this.reload.duration = 0;
+        this.registry.set('reloadActive', false);
+        this.registry.set('reloadProgress', 1);
+      }
+    } else {
+      this.registry.set('reloadActive', false);
+    }
+    // Track and update ammo registry on weapon change or capacity change
+    if (this._lastActiveWeapon !== this.gs.activeWeapon) {
+      this._lastActiveWeapon = this.gs.activeWeapon;
+      const cap = this.getActiveMagCapacity();
+      this.ensureAmmoFor(this._lastActiveWeapon, cap);
+      this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
+      this.registry.set('magSize', cap);
+    } else {
+      // Keep registry in sync in case mods/cores change capacity
+      const cap = this.getActiveMagCapacity();
+      this.ensureAmmoFor(this._lastActiveWeapon, cap, true);
+      this.registry.set('magSize', cap);
+      this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
+    }
     // Update spread heat each frame based on whether player is holding fire
     const dt = (this.game?.loop?.delta || 16.7) / 1000;
     if (this._spreadHeat === undefined) this._spreadHeat = 0;
     const rampPerSec = 0.7; // time to max ~1.4s holding
     const coolPerSec = 1.2; // cool to 0 in ~0.8s
-    if (this.inputMgr.isLMBDown && !weapon.singleFire) {
+    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail) {
       this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
     } else {
       this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
@@ -369,10 +563,30 @@ export default class CombatScene extends Phaser.Scene {
     if (this._lmbWasDown === undefined) this._lmbWasDown = false;
     const edgeDown = (!this._lmbWasDown) && !!ptr.isDown && ((ptr.buttons & 1) === 1);
     const wantsClick = !!ptr.justDown || edgeDown;
-    const wantsShot = weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown;
+    if (isRail) {
+      this.handleRailgunCharge(this.time.now, weapon, ptr);
+    }
+    const wantsShot = (!isRail) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
     if (wantsShot && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
-      this.shoot();
-      this.lastShot = this.time.now;
+      const cap = this.getActiveMagCapacity();
+      const wid = this.gs.activeWeapon;
+      this.ensureAmmoFor(wid, cap);
+      const ammo = this.ammoByWeapon[wid] ?? 0;
+      if (ammo <= 0 || this.reload.active) {
+        // Start auto-reload when empty (or continue if already reloading)
+        if (!this.reload.active) {
+          this.reload.active = true;
+          this.reload.duration = this.getActiveReloadMs();
+          this.reload.until = this.time.now + this.reload.duration;
+          this.registry.set('reloadActive', true);
+          this.registry.set('reloadProgress', 0);
+        }
+      } else {
+        this.shoot();
+        this.lastShot = this.time.now;
+        this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
+        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+      }
     }
     this._lmbWasDown = !!ptr.isDown;
 
@@ -390,19 +604,154 @@ export default class CombatScene extends Phaser.Scene {
           const next = owned[(idx + 1) % owned.length];
           this.gs.activeWeapon = next;
         }
+      // Cancel any in-progress reload on weapon swap
+      this.reload.active = false;
+      this.reload.duration = 0;
+      this.registry.set('reloadActive', false);
+      // Cancel rail charging/aim if any
+      try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
+      this.endRailAim?.();
       }
+    }
+
+    // Manual reload (R)
+    if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.r)) {
+      const cap = this.getActiveMagCapacity();
+      const wid = this.gs.activeWeapon;
+      this.ensureAmmoFor(wid, cap);
+      if (!this.reload.active && (this.ammoByWeapon[wid] ?? 0) < cap) {
+        this.reload.active = true;
+        this.reload.duration = this.getActiveReloadMs();
+        this.reload.until = this.time.now + this.reload.duration;
+        this.registry.set('reloadActive', true);
+        this.registry.set('reloadProgress', 0);
+      }
+    }
+
+    // Rebuild nav grid periodically so enemies can re-route around obstacles
+    if (!this._nav) this._nav = { grid: null, builtAt: 0 };
+    if (!this._nav.grid || (this.time.now - this._nav.builtAt > 1200)) {
+      try {
+        this._nav.grid = buildNavGrid(this, this.arenaRect, 16);
+        this._nav.builtAt = this.time.now;
+      } catch (_) {}
     }
 
     // Update enemies: melee chase; shooters chase gently and fire at intervals; snipers aim then fire
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
+      const now = this.time.now;
+      const dt = (this.game?.loop?.delta || 16.7) / 1000; // seconds
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const nx = dx / len;
-      const ny = dy / len;
-      const moveSpeed = e.isShooter ? e.speed * 0.8 : e.speed;
-      e.body.setVelocity(nx * moveSpeed, ny * moveSpeed);
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Movement logic by type
+      if (!e.isSniper) {
+        let vx = 0, vy = 0;
+        let speed = e.speed || 60;
+        // Global speed boost for all enemies
+        speed *= 1.5;
+        // Pathfinding when LOS to player is blocked
+        let usingPath = false;
+        const losBlocked = this.isLineBlocked(e.x, e.y, this.player.x, this.player.y);
+        if (losBlocked && this._nav?.grid) {
+          const needRepath = (!e._path || (e._pathIdx == null) || (e._pathIdx >= e._path.length) || (now - (e._lastPathAt || 0) > 800));
+          if (needRepath) {
+            try {
+              const [sgx, sgy] = worldToGrid(this._nav.grid, e.x, e.y);
+              const [ggx, ggy] = worldToGrid(this._nav.grid, this.player.x, this.player.y);
+              e._path = findPath(this._nav.grid, sgx, sgy, ggx, ggy) || null;
+              e._pathIdx = 0; e._lastPathAt = now;
+            } catch (_) {}
+          }
+          const wp = (e._path && e._path[e._pathIdx || 0]) || null;
+          if (wp) {
+            const tx = wp[0], ty = wp[1];
+            const pdx = tx - e.x; const pdy = ty - e.y;
+            const pd = Math.hypot(pdx, pdy) || 1;
+            if (pd < 10) { e._pathIdx = (e._pathIdx || 0) + 1; }
+            else { const px = pdx / pd; const py = pdy / pd; vx = px * speed; vy = py * speed; usingPath = true; }
+          }
+        }
+        if (!usingPath && e.isShooter) {
+          // Random wander; approach if far, back off if too close
+          if (!e._wanderChangeAt || now >= e._wanderChangeAt) {
+            // Longer hold times to avoid twitching
+            e._wanderChangeAt = now + Phaser.Math.Between(1400, 2600);
+            const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const mag = Phaser.Math.FloatBetween(0.6, 1.0);
+            e._wanderVX = Math.cos(ang) * speed * mag;
+            e._wanderVY = Math.sin(ang) * speed * mag;
+          }
+          // Desired velocity combines wander and a gentle bias toward/away from player
+          vx = (e._wanderVX || 0);
+          vy = (e._wanderVY || 0);
+          // Bias towards player direction even when not far
+          vx += nx * speed * 0.2; vy += ny * speed * 0.2;
+          const far = dist > 280, tooClose = dist < 140;
+          if (far) { vx += nx * speed * 0.75; vy += ny * speed * 0.75; }
+          else if (tooClose) { vx -= nx * speed * 0.65; vy -= ny * speed * 0.65; }
+        } else if (!usingPath) {
+          // Melee: zig-zag sometimes; otherwise straight chase, with occasional wander/flee
+          if (!e._zigPhase) e._zigPhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
+          if (!e._mode || now >= (e._modeUntil || 0)) {
+            const r = Math.random();
+            if (r < 0.55) e._mode = 'straight';
+            else if (r < 0.75) e._mode = 'zig';
+            else if (r < 0.90) e._mode = 'wander';
+            else e._mode = 'flee';
+            e._modeUntil = now + Phaser.Math.Between(900, 2200);
+            if (e._mode === 'wander') {
+              const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              e._wanderVX = Math.cos(a) * speed * 0.6;
+              e._wanderVY = Math.sin(a) * speed * 0.6;
+            }
+            if (e._mode === 'zig') {
+              // Choose a smooth frequency and strafe amplitude for this zig session
+              e._zigFreq = Phaser.Math.FloatBetween(1.0, 2.0); // Hz
+              e._zigAmp = Phaser.Math.FloatBetween(0.5, 0.75); // strafe weight (slightly reduced)
+            }
+          }
+          if (e._mode === 'zig') {
+            // Perpendicular wiggle to dodge
+            const px = -ny, py = nx;
+            if (!e._lastZigT) e._lastZigT = now;
+            const dtMs = Math.max(1, now - e._lastZigT);
+            // Smooth continuous phase advance based on frequency
+            const freq = e._zigFreq || 1.5; // Hz
+            e._zigPhase += (Math.PI * 2) * freq * (dtMs / 1000);
+            e._lastZigT = now;
+            const w = Math.sin(e._zigPhase);
+            const zigSpeed = speed * 1.5; // 150% of normal during zig-zag
+            const amp = e._zigAmp || 0.75;
+            vx = nx * zigSpeed * (0.85 + 0.10 * Math.sin(e._zigPhase * 0.5)) + px * zigSpeed * amp * w;
+            vy = ny * zigSpeed * (0.85 + 0.10 * Math.sin(e._zigPhase * 0.5)) + py * zigSpeed * amp * w;
+          } else if (e._mode === 'wander') {
+            vx = (e._wanderVX || 0) * 0.9; vy = (e._wanderVY || 0) * 0.9;
+          } else if (e._mode === 'straight') {
+            vx = nx * speed; vy = ny * speed;
+          } else { // flee
+            vx = -nx * speed * 0.9; vy = -ny * speed * 0.9;
+          }
+        }
+        // Smooth velocity to avoid twitching (inertia/acceleration)
+        const smooth = 0.12; // approaching target ~12% per frame
+        if (e._svx === undefined) e._svx = 0;
+        if (e._svy === undefined) e._svy = 0;
+        e._svx += (vx - e._svx) * smooth;
+        e._svy += (vy - e._svy) * smooth;
+        e.body.setVelocity(e._svx, e._svy);
+        // Stuck detection triggers repath
+        if (e._lastPosT === undefined) { e._lastPosT = now; e._lx = e.x; e._ly = e.y; }
+        if (now - e._lastPosT > 400) {
+          const md = Math.hypot((e.x - (e._lx || e.x)), (e.y - (e._ly || e.y)));
+          e._lx = e.x; e._ly = e.y; e._lastPosT = now;
+          if (md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
+        }
+      }
       // Clamp enemies to screen bounds as a failsafe
       try {
         const pad = (e.body?.halfWidth || 6);
@@ -441,7 +790,7 @@ export default class CombatScene extends Phaser.Scene {
           if (!e._aimG) e._aimG = this.add.graphics();
           try {
             e._aimG.clear();
-            e._aimG.lineStyle(2, 0xff2222, 1);
+            e._aimG.lineStyle(1, 0xff2222, 1); // thinner sniper aim line
             e._aimG.beginPath();
             e._aimG.moveTo(e.x, e.y);
             e._aimG.lineTo(this.player.x, this.player.y);
@@ -502,7 +851,7 @@ export default class CombatScene extends Phaser.Scene {
           // Not aiming: wander randomly, do not chase player
           if (!e._wanderChangeAt || now >= e._wanderChangeAt) {
             const ang = this.gs.rng.next() * Math.PI * 2;
-            const mag = e.speed * 0.9;
+            const mag = e.speed * 0.9 * 1.5; // 50% faster global
             e._wanderVX = Math.cos(ang) * mag;
             e._wanderVY = Math.sin(ang) * mag;
             e._wanderChangeAt = now + 800 + Math.floor(this.gs.rng.next() * 800);
@@ -567,6 +916,184 @@ export default class CombatScene extends Phaser.Scene {
       const left = this.physics.add.staticImage(x + tile / 2, wy, 'wall_tile');
       const right = this.physics.add.staticImage(x + w - tile / 2, wy, 'wall_tile');
       this.walls.add(left); this.walls.add(right);
+    }
+  }
+
+  // Returns the effective magazine capacity for the currently active weapon
+  getActiveMagCapacity() {
+    try {
+      const w = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
+      const cap = Math.max(1, Math.floor(w.magSize || 1));
+      return cap;
+    } catch (_) {
+      return 1;
+    }
+  }
+
+  // Ensure ammo entry exists for weaponId. If clampOnly, only caps ammo when above capacity
+  ensureAmmoFor(weaponId, capacity, clampOnly = false) {
+    if (weaponId == null) return;
+    if (this.ammoByWeapon[weaponId] == null) {
+      this.ammoByWeapon[weaponId] = Math.max(0, capacity | 0);
+      return;
+    }
+    if (clampOnly) {
+      if (this.ammoByWeapon[weaponId] > capacity) this.ammoByWeapon[weaponId] = capacity;
+    }
+  }
+
+  // Returns reload time in ms for active weapon (default 1.5s, rocket 2s)
+  getActiveReloadMs() {
+    try {
+      const w = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
+      if (typeof w.reloadMs === 'number') return w.reloadMs;
+      return (w.projectile === 'rocket') ? 1000 : 1500;
+    } catch (_) {
+      return 1500;
+    }
+  }
+
+  // Railgun mechanics
+  handleRailgunCharge(now, weapon, ptr) {
+    const wid = this.gs.activeWeapon;
+    const cap = this.getActiveMagCapacity();
+    this.ensureAmmoFor(wid, cap);
+    const ammo = this.ammoByWeapon[wid] ?? 0;
+    // Cancel charge if swapping away handled elsewhere
+    if (this.reload.active || ammo <= 0) {
+      this.endRailAim();
+      return;
+    }
+    const maxMs = 1500;
+    if (!this.rail) this.rail = { charging: false, startedAt: 0, aimG: null };
+    const coreHold = !!weapon.railHold;
+    const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
+
+    if (ptr.isDown && ((ptr.buttons & 1) === 1)) {
+      if (!this.rail.charging) {
+        if (!this.lastShot || (now - this.lastShot) > weapon.fireRateMs) {
+          this.rail.charging = true;
+          this.rail.startedAt = now;
+        }
+      }
+    } else {
+      // Released: fire if charging
+      if (this.rail.charging) {
+        const t = Math.min(1, (now - this.rail.startedAt) / maxMs);
+        this.fireRailgun(baseAngle, weapon, t);
+        this.rail.charging = false;
+        this.endRailAim();
+      }
+      return;
+    }
+
+    // While holding
+    if (this.rail.charging) {
+      const t = Math.min(1, (now - this.rail.startedAt) / maxMs);
+      this.drawRailAim(baseAngle, weapon, t);
+      if (t >= 1 && !coreHold) {
+        // Auto-fire at max unless core allows holding
+        this.fireRailgun(baseAngle, weapon, t);
+        this.rail.charging = false;
+        this.endRailAim();
+      }
+    }
+  }
+
+  drawRailAim(angle, weapon, t) {
+    try {
+      if (!this.rail?.aimG) this.rail.aimG = this.add.graphics();
+      const g = this.rail.aimG; g.clear(); g.setDepth(9000);
+      const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0));
+      const spread = spread0 * (1 - t);
+      const len = 340; // longer aim guide for railgun
+      g.lineStyle(1, 0xffffff, 0.9); // thinner lines
+      const a1 = angle - spread / 2; const a2 = angle + spread / 2;
+      const x = this.player.x; const y = this.player.y;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath();
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath();
+    } catch (_) {}
+  }
+
+  endRailAim() {
+    try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {}
+    if (this.rail) this.rail.aimG = null;
+  }
+
+  fireRailgun(baseAngle, weapon, t) {
+    const wid = this.gs.activeWeapon;
+    const cap = this.getActiveMagCapacity();
+    this.ensureAmmoFor(wid, cap);
+    const ammo = this.ammoByWeapon[wid] ?? 0;
+    if (ammo <= 0 || this.reload.active) return;
+    const dmg = Math.floor(weapon.damage * (1 + 2 * t));
+    const speed = Math.floor(weapon.bulletSpeed * (1 + 2 * t));
+    const spreadRad = Phaser.Math.DegToRad(Math.max(0, (weapon.spreadDeg || 0))) * (1 - t);
+    const off = (spreadRad > 0) ? Phaser.Math.FloatBetween(-spreadRad / 2, spreadRad / 2) : 0;
+    const angle = baseAngle + off;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+    const b = this.bullets.get(this.player.x, this.player.y, 'bullet');
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.setCircle(2).setOffset(-2, -2);
+    b.setVelocity(vx, vy);
+    b.damage = dmg;
+    b.setTint(0x66aaff);
+    b._core = 'pierce';
+    b._pierceLeft = 999; // effectively unlimited pierce
+    // Simple light-blue trail
+    const trail = this.add.graphics();
+    b._g = trail; trail.setDepth(8000);
+    b._px = b.x; b._py = b.y;
+    b.update = () => {
+      try {
+        // Draw trail
+        trail.clear();
+        trail.lineStyle(2, 0xaaddff, 0.9);
+        const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02);
+        trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath();
+      } catch (_) {}
+
+      // Manual hit check to avoid tunneling at high speed
+      try {
+        const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y);
+        if (!b._hitSet) b._hitSet = new Set();
+        const arr = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const e = arr[i];
+          if (!e || !e.active) continue;
+          if (b._hitSet.has(e)) continue;
+          const rect = e.getBounds();
+          if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
+            if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+            e.hp -= (b.damage || 10);
+            try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {}
+            b._hitSet.add(e);
+            if (e.hp <= 0) { try { this.killEnemy ? this.killEnemy(e) : e.destroy(); } catch (_) {} }
+          }
+        }
+      } catch (_) {}
+
+      // Offscreen cleanup
+      const view = this.cameras?.main?.worldView;
+      if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
+      b._px = b.x; b._py = b.y;
+    };
+    b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+    // consume ammo and start cooldown
+    this.ammoByWeapon[wid] = Math.max(0, (this.ammoByWeapon[wid] ?? cap) - 1);
+    this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+    this.lastShot = this.time.now;
+    if (this.ammoByWeapon[wid] <= 0) {
+      // trigger reload
+      if (!this.reload.active) {
+        this.reload.active = true;
+        this.reload.duration = this.getActiveReloadMs();
+        this.reload.until = this.time.now + this.reload.duration;
+        this.registry.set('reloadActive', true);
+        this.registry.set('reloadProgress', 0);
+      }
     }
   }
 }

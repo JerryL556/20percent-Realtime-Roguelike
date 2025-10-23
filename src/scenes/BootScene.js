@@ -20,6 +20,15 @@ export default class BootScene extends Phaser.Scene {
     g.clear(); g.fillStyle(0x666666, 1); g.fillRect(0, 0, 16, 16);
     g.lineStyle(1, 0x999999, 1).strokeRect(0, 0, 16, 16);
     g.generateTexture('wall_tile', 16, 16);
+    // Barricade tiles
+    // Destructible (light brown)
+    g.clear(); g.fillStyle(0xC8A165, 1); g.fillRect(0, 0, 16, 16);
+    g.lineStyle(1, 0x9c7b4a, 1).strokeRect(0, 0, 16, 16);
+    g.generateTexture('barricade_soft', 16, 16);
+    // Indestructible (light grey)
+    g.clear(); g.fillStyle(0xBBBBBB, 1); g.fillRect(0, 0, 16, 16);
+    g.lineStyle(1, 0x8f8f8f, 1).strokeRect(0, 0, 16, 16);
+    g.generateTexture('barricade_hard', 16, 16);
     g.destroy();
   }
   create() {

@@ -59,6 +59,7 @@ export default class HubScene extends Phaser.Scene {
       'E: Interact',
       'LMB: Shoot',
       'Q: Swap Weapon',
+      'R: Reload',
       'Tab: Loadout',
     ].join('\n');
     this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
@@ -276,6 +277,22 @@ export default class HubScene extends Phaser.Scene {
         this.gs.nextScene = SceneKeys.Combat;
         SaveManager.saveToLocal(this.gs);
         this.scene.start(SceneKeys.Combat);
+      }
+    }
+
+    // Allow swapping weapons in the Hub with Q
+    if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
+      const slots = this.gs.equippedWeapons || [];
+      const a = this.gs.activeWeapon;
+      if (slots[0] && slots[1]) {
+        this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
+      } else {
+        const owned = this.gs.ownedWeapons;
+        if (owned && owned.length) {
+          const idx = Math.max(0, owned.indexOf(a));
+          const next = owned[(idx + 1) % owned.length];
+          this.gs.activeWeapon = next;
+        }
       }
     }
   }

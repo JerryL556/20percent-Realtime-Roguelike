@@ -30,11 +30,27 @@ export default class BossScene extends Phaser.Scene {
     this.registry.set('dashCharges', this.dash.charges);
     this.registry.set('dashRegenProgress', 1);
 
+    // Ammo tracking per-weapon for this scene
+    this._lastActiveWeapon = this.gs.activeWeapon;
+    this.ammoByWeapon = {};
+    this.reload = { active: false, until: 0, duration: 0 };
+    const cap0 = this.getActiveMagCapacity();
+    this.ensureAmmoFor(this._lastActiveWeapon, cap0);
+    this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon] ?? cap0);
+    this.registry.set('magSize', cap0);
+    this.registry.set('reloadActive', false);
+    this.registry.set('reloadProgress', 0);
+
     // Boss
     const mods = this.gs.getDifficultyMods();
     const pistol = getWeaponById('pistol');
-    const baseBossHp = Math.floor((pistol?.damage || 15) * 20);
+    // Triple base HP for current boss
+    const baseBossHp = Math.floor((pistol?.damage || 15) * 20) * 3;
     this.boss = createBoss(this, width / 2, 100, Math.floor(baseBossHp * (mods.enemyHp || 1)), Math.floor(20 * (mods.enemyDamage || 1)), 50);
+    // Make boss visually larger with a bigger hitbox
+    try { this.boss.setScale(1.5); } catch (_) {}
+    try { this.boss.setSize(36, 36).setOffset(0, 0); } catch (_) {}
+    this.boss.bossType = 'Shotgunner';
     // Group the boss into a physics group for consistent overlap handling
     this.bossGroup = this.physics.add.group();
     this.bossGroup.add(this.boss);
@@ -60,6 +76,13 @@ export default class BossScene extends Phaser.Scene {
       this.physics.add.collider(this.player, this.walls);
       this.physics.add.collider(this.boss, this.walls);
     }
+
+    // Barricades for boss room: simpler and all destructible
+    this.barricadesSoft = this.physics.add.staticGroup();
+    this.generateBossBarricades();
+    this.physics.add.collider(this.player, this.barricadesSoft);
+    // Boss can break destructible barricades by pushing into them
+    this.physics.add.collider(this.boss, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
 
     // Basic overlap damage
     this.physics.add.overlap(this.player, this.boss, () => {
@@ -113,6 +136,8 @@ export default class BossScene extends Phaser.Scene {
       // Boss death check
       if (e.hp <= 0) this.killBoss(e);
     });
+    // Player bullets collide with barricades (block and damage them)
+    this.physics.add.collider(this.bullets, this.barricadesSoft, (b, s) => this.onBulletHitBarricade(b, s));
 
     // Boss bullets (Arcade.Image pool)
     this.bossBullets = this.physics.add.group({
@@ -136,21 +161,29 @@ export default class BossScene extends Phaser.Scene {
       // Always destroy boss bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
+    // Boss bullets also collide with destructible barricades
+    this.physics.add.collider(this.bossBullets, this.barricadesSoft, (b, s) => this.onBossBulletHitBarricade(b, s));
 
-    // Text + Boss HP bar at top (shorter to avoid UI overlap)
-    this.prompt = this.add.text(width / 2, 40, 'Defeat the Boss', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
+    // Boss HP bar at top (shorter to avoid UI overlap)
     const barW = Math.min(420, Math.max(200, width - 220));
     const barX = Math.floor((width - barW) / 2);
-    // Place just below the prompt text at y=40
+    // Place near top area
     this.bossHpBar = new HpBar(this, barX, 60, barW, 10);
+    // Boss name above the HP bar
+    this.bossName = 'Shotgunner';
+    this.bossNameText = this.add.text(width / 2, 48, this.bossName, { fontFamily: 'monospace', fontSize: 16, color: '#ff6666' }).setOrigin(0.5);
     this.exitRect = null;
     this.exitG = this.add.graphics();
+
+    // Ability: Shotgunner grenade volley
+    this.grenades = this.physics.add.group({ classType: Phaser.Physics.Arcade.Image, maxSize: 20, runChildUpdate: true });
+    this._grenadeNextAvailableAt = this.time.now + 2000; // small initial delay
+    this._lastAbilityRollAt = 0;
   }
 
   win() {
     // Reward and spawn portal to hub
-    if (this.gs) this.gs.gold += 50;
-    if (this.prompt) this.prompt.setText('Boss defeated! Enter portal');
+    if (this.gs) { this.gs.gold += 50; this.gs.xp = (this.gs.xp || 0) + 150; }
     const px = this.scale.width - 50 + 20; // center of previous exit area
     const py = this.scale.height / 2;
     this.exitG.clear();
@@ -232,6 +265,8 @@ export default class BossScene extends Phaser.Scene {
                 if (this.boss.hp <= 0) this.killBoss(this.boss);
               }
             }
+            // Also damage nearby destructible barricades
+            this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
             try { b.destroy(); } catch (_) {}
           }
         };
@@ -329,12 +364,50 @@ export default class BossScene extends Phaser.Scene {
 
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
+    const isRail = !!weapon.isRailgun;
+    // Finish reload if timer elapsed; update reload progress for UI
+    if (this.reload?.active) {
+      const now = time;
+      const remaining = Math.max(0, this.reload.until - now);
+      const dur = Math.max(1, this.reload.duration || this.getActiveReloadMs());
+      const prog = 1 - Math.min(1, remaining / dur);
+      this.registry.set('reloadActive', true);
+      this.registry.set('reloadProgress', prog);
+      if (now >= this.reload.until) {
+        const wid = this.gs.activeWeapon;
+        const cap = this.getActiveMagCapacity();
+        this.ensureAmmoFor(wid, cap);
+        this.ammoByWeapon[wid] = cap;
+        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+        this.registry.set('magSize', cap);
+        this.reload.active = false;
+        this.reload.duration = 0;
+        this.registry.set('reloadActive', false);
+        this.registry.set('reloadProgress', 1);
+      }
+    } else {
+      this.registry.set('reloadActive', false);
+    }
+    // Track and update ammo registry on weapon change or capacity change
+    if (this._lastActiveWeapon !== this.gs.activeWeapon) {
+      this._lastActiveWeapon = this.gs.activeWeapon;
+      const cap = this.getActiveMagCapacity();
+      this.ensureAmmoFor(this._lastActiveWeapon, cap);
+      this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
+      this.registry.set('magSize', cap);
+    } else {
+      // Keep registry in sync in case mods/cores change capacity
+      const cap = this.getActiveMagCapacity();
+      this.ensureAmmoFor(this._lastActiveWeapon, cap, true);
+      this.registry.set('magSize', cap);
+      this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
+    }
     // Update spread heat each frame
     const dt = (this.game?.loop?.delta || 16.7) / 1000;
     if (this._spreadHeat === undefined) this._spreadHeat = 0;
     const rampPerSec = 0.7;
     const coolPerSec = 1.2;
-    if (this.inputMgr.isLMBDown && !weapon.singleFire) {
+    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail) {
       this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
     } else {
       this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
@@ -343,12 +416,65 @@ export default class BossScene extends Phaser.Scene {
     if (this._lmbWasDown === undefined) this._lmbWasDown = false;
     const edgeDown = (!this._lmbWasDown) && !!ptr.isDown && ((ptr.buttons & 1) === 1);
     const wantsClick = !!ptr.justDown || edgeDown;
-    const wantsShot = weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown;
+    if (isRail) { this.handleRailgunCharge(time, weapon, ptr); }
+    const wantsShot = (!isRail) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
     if (wantsShot && (!this.lastShot || time - this.lastShot > weapon.fireRateMs)) {
-      this.shoot();
-      this.lastShot = time;
+      const cap = this.getActiveMagCapacity();
+      const wid = this.gs.activeWeapon;
+      this.ensureAmmoFor(wid, cap);
+      const ammo = this.ammoByWeapon[wid] ?? 0;
+      if (ammo <= 0 || this.reload.active) {
+        if (!this.reload.active) {
+          this.reload.active = true;
+          this.reload.duration = this.getActiveReloadMs();
+          this.reload.until = time + this.reload.duration;
+          this.registry.set('reloadActive', true);
+          this.registry.set('reloadProgress', 0);
+        }
+      } else {
+        this.shoot();
+        this.lastShot = time;
+        this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
+        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+      }
     }
     this._lmbWasDown = !!ptr.isDown;
+
+    // Swap weapons with Q (mirror CombatScene behavior)
+    if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
+      const slots = this.gs.equippedWeapons || [];
+      const a = this.gs.activeWeapon;
+      if (slots[0] && slots[1]) {
+        this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
+      } else {
+        const owned = this.gs.ownedWeapons;
+        if (owned && owned.length) {
+          const idx = Math.max(0, owned.indexOf(a));
+          const next = owned[(idx + 1) % owned.length];
+          this.gs.activeWeapon = next;
+        }
+      }
+      // Cancel any in-progress reload on weapon swap
+      this.reload.active = false;
+      this.reload.duration = 0;
+      this.registry.set('reloadActive', false);
+      try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
+      this.endRailAim?.();
+    }
+
+    // Manual reload (R)
+    if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.r)) {
+      const cap = this.getActiveMagCapacity();
+      const wid = this.gs.activeWeapon;
+      this.ensureAmmoFor(wid, cap);
+      if (!this.reload.active && (this.ammoByWeapon[wid] ?? 0) < cap) {
+        this.reload.active = true;
+        this.reload.duration = this.getActiveReloadMs();
+        this.reload.until = time + this.reload.duration;
+        this.registry.set('reloadActive', true);
+        this.registry.set('reloadProgress', 0);
+      }
+    }
 
     // Boss simple pattern: drift toward player with sine offset
     if (this.boss && this.boss.active) {
@@ -379,8 +505,8 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Boss shooting pattern
-    if (this.boss && this.boss.active) {
+    // Boss shooting pattern (disabled while casting grenades)
+    if (this.boss && this.boss.active && !this._castingGrenades) {
       if (!this.lastBossShot || time - this.lastBossShot > 700) {
         this.lastBossShot = time;
         // Fire 3-way aimed burst
@@ -397,7 +523,134 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
+    // Boss ability: random grenade volley with cooldown
+    if (this.boss && this.boss.active) {
+      if (time >= (this._grenadeNextAvailableAt || 0)) {
+        if (!this._lastAbilityRollAt || (time - this._lastAbilityRollAt) > 500) {
+          this._lastAbilityRollAt = time;
+          if (Math.random() < 0.35) { // 35% chance on roll
+            this.castGrenadeVolley();
+            this._grenadeNextAvailableAt = time + 6000; // 6s cooldown
+          }
+        }
+      }
+    }
+
     // Portal check handled by physics overlap when it exists
+  }
+
+  // Simple generation: a few short lines and clusters, all destructible
+  generateBossBarricades() {
+    const rect = this.arenaRect; if (!rect) return;
+    const tile = 16;
+    const tilesX = Math.floor(rect.width / tile);
+    const tilesY = Math.floor(rect.height / tile);
+    const centerX = rect.centerX; const centerY = rect.centerY;
+    const avoidR2 = 64 * 64;
+    const used = new Set();
+    const key = (x, y) => `${x},${y}`;
+    const place = (gx, gy) => {
+      if (gx < 1 || gy < 1 || gx >= tilesX - 1 || gy >= tilesY - 1) return;
+      const wx = rect.x + gx * tile + tile / 2;
+      const wy = rect.y + gy * tile + tile / 2;
+      const dx = wx - centerX; const dy = wy - centerY;
+      if (dx * dx + dy * dy < avoidR2) return;
+      const k = key(gx, gy); if (used.has(k)) return; used.add(k);
+      const s = this.physics.add.staticImage(wx, wy, 'barricade_soft');
+      s.setData('destructible', true); s.setData('hp', 50);
+      this.barricadesSoft.add(s);
+    };
+    // Lines
+    const lines = 5;
+    for (let i = 0; i < lines; i += 1) {
+      const vertical = (i % 2) === 0;
+      if (vertical) {
+        const gx = Phaser.Math.Between(3, tilesX - 4);
+        let gy = Phaser.Math.Between(2, tilesY - 8);
+        const len = Phaser.Math.Between(4, 8);
+        for (let j = 0; j < len; j += 1) { place(gx, gy); if (Math.random() < 0.15) { gy += 1; continue; } gy += 1; }
+      } else {
+        const gy = Phaser.Math.Between(3, tilesY - 4);
+        let gx = Phaser.Math.Between(2, tilesX - 8);
+        const len = Phaser.Math.Between(4, 8);
+        for (let j = 0; j < len; j += 1) { place(gx, gy); if (Math.random() < 0.15) { gx += 1; continue; } gx += 1; }
+      }
+    }
+    // Clusters
+    const clusters = 7;
+    for (let c = 0; c < clusters; c += 1) {
+      const gx = Phaser.Math.Between(2, tilesX - 3);
+      const gy = Phaser.Math.Between(2, tilesY - 3);
+      const n = Phaser.Math.Between(3, 5);
+      for (let k = 0; k < n; k += 1) { place(gx + Phaser.Math.Between(-1, 1), gy + Phaser.Math.Between(-1, 1)); }
+    }
+  }
+
+  // Player bullet hits a barricade (all barricades here are destructible)
+  onBulletHitBarricade(b, s) {
+    if (!b || !b.active || !s) return;
+    const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
+    const hp1 = hp0 - dmg;
+    try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+    // Rockets: explode on barricade and splash boss if in range
+    if (b._core === 'blast') {
+      const radius = b._blastRadius || 70;
+      try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+      const r2 = radius * radius; const ex = b.x; const ey = b.y;
+      if (this.boss?.active) {
+        const dx = this.boss.x - ex; const dy = this.boss.y - ey;
+        if ((dx * dx + dy * dy) <= r2) {
+          if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300;
+          this.boss.hp -= (b.damage || 12);
+          if (this.boss.hp <= 0) this.killBoss(this.boss);
+        }
+      }
+      // Also damage nearby destructible barricades
+      this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+    }
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    try { b.destroy(); } catch (_) {}
+  }
+
+  // Boss bullets collide with barricades (no splash)
+  onBossBulletHitBarricade(b, s) {
+    if (!b || !s) return;
+    const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
+    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
+    const hp1 = hp0 - dmg;
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    try { b.destroy(); } catch (_) {}
+  }
+
+  // Utility: damage all destructible barricades within radius (boss room)
+  damageSoftBarricadesInRadius(x, y, radius, dmg) {
+    try {
+      const r2 = radius * radius;
+      const arr = this.barricadesSoft?.getChildren?.() || [];
+      for (let i = 0; i < arr.length; i += 1) {
+        const s = arr[i]; if (!s?.active) continue;
+        const dx = s.x - x; const dy = s.y - y;
+        if ((dx * dx + dy * dy) <= r2) {
+          const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
+          const hp1 = hp0 - dmg;
+          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Enemy body tries to push through a destructible barricade: damage over time
+  onEnemyHitBarricade(e, s) {
+    if (!s?.active) return;
+    const now = this.time.now;
+    const last = s.getData('_lastMeleeHurtAt') || 0;
+    if (now - last < 250) return; // throttle
+    s.setData('_lastMeleeHurtAt', now);
+    const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7));
+    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
+    const hp1 = hp0 - dmg;
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
   }
 
   createArenaWalls() {
@@ -419,6 +672,142 @@ export default class BossScene extends Phaser.Scene {
       const left = this.physics.add.staticImage(x + tile / 2, wy, 'wall_tile');
       const right = this.physics.add.staticImage(x + w - tile / 2, wy, 'wall_tile');
       this.walls.add(left); this.walls.add(right);
+    }
+  }
+
+  // Railgun helpers
+  handleRailgunCharge(now, weapon, ptr) {
+    const wid = this.gs.activeWeapon; const cap = this.getActiveMagCapacity(); this.ensureAmmoFor(wid, cap);
+    const ammo = this.ammoByWeapon[wid] ?? 0; if (this.reload.active || ammo <= 0) { this.endRailAim(); return; }
+    const maxMs = 1500; if (!this.rail) this.rail = { charging: false, startedAt: 0, aimG: null };
+    const coreHold = !!weapon.railHold;
+    const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
+    if (ptr.isDown && ((ptr.buttons & 1) === 1)) {
+      if (!this.rail.charging) { if (!this.lastShot || (now - this.lastShot) > weapon.fireRateMs) { this.rail.charging = true; this.rail.startedAt = now; } }
+    } else {
+      if (this.rail.charging) { const t = Math.min(1, (now - this.rail.startedAt) / maxMs); this.fireRailgun(baseAngle, weapon, t); this.rail.charging = false; this.endRailAim(); }
+      return;
+    }
+    if (this.rail.charging) {
+      const t = Math.min(1, (now - this.rail.startedAt) / maxMs); this.drawRailAim(baseAngle, weapon, t);
+      if (t >= 1 && !coreHold) { this.fireRailgun(baseAngle, weapon, t); this.rail.charging = false; this.endRailAim(); }
+    }
+  }
+  drawRailAim(angle, weapon, t) { try { if (!this.rail?.aimG) this.rail.aimG = this.add.graphics(); const g = this.rail.aimG; g.clear(); g.setDepth(9000); const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0)); const spread = spread0 * (1 - t); const len = 340; g.lineStyle(1, 0xffffff, 0.9); const a1 = angle - spread / 2; const a2 = angle + spread / 2; const x = this.player.x; const y = this.player.y; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath(); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath(); } catch (_) {} }
+  endRailAim() { try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {} if (this.rail) this.rail.aimG = null; }
+  fireRailgun(baseAngle, weapon, t) {
+    const wid = this.gs.activeWeapon; const cap = this.getActiveMagCapacity(); this.ensureAmmoFor(wid, cap); const ammo = this.ammoByWeapon[wid] ?? 0; if (ammo <= 0 || this.reload.active) return;
+    const dmg = Math.floor(weapon.damage * (1 + 2 * t)); const speed = Math.floor(weapon.bulletSpeed * (1 + 2 * t)); const spreadRad = Phaser.Math.DegToRad(Math.max(0, (weapon.spreadDeg || 0))) * (1 - t); const off = (spreadRad > 0) ? Phaser.Math.FloatBetween(-spreadRad / 2, spreadRad / 2) : 0; const angle = baseAngle + off; const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
+    const b = this.bullets.get(this.player.x, this.player.y, 'bullet'); if (!b) return; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.damage = dmg; b.setTint(0x66aaff); b._core = 'pierce'; b._pierceLeft = 999; const trail = this.add.graphics(); b._g = trail; trail.setDepth(8000); b._px = b.x; b._py = b.y; b.update = () => { try { trail.clear(); trail.lineStyle(2, 0xaaddff, 0.9); const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02); trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath(); } catch (_) {} try { const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y); const boss = this.boss; if (boss && boss.active) { const rect = boss.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b.damage || 12); try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {} if (boss.hp <= 0) this.killBoss(boss); } } } catch (_) {} const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } b._px = b.x; b._py = b.y; }; b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+    this.ammoByWeapon[wid] = Math.max(0, (this.ammoByWeapon[wid] ?? cap) - 1);
+    this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+    const nowT = this.time.now;
+    this.lastShot = nowT;
+    if (this.ammoByWeapon[wid] <= 0) {
+      if (!this.reload.active) {
+        this.reload.active = true;
+        this.reload.duration = this.getActiveReloadMs();
+        this.reload.until = nowT + this.reload.duration;
+        this.registry.set('reloadActive', true);
+        this.registry.set('reloadProgress', 0);
+      }
+    }
+  }
+
+  castGrenadeVolley() {
+    // Throw five grenades one at a time, 0.5s between each
+    this._castingGrenades = true;
+    for (let i = 0; i < 5; i += 1) {
+      this.time.delayedCall(i * 500, () => {
+        if (!this.boss || !this.boss.active) return;
+        const tx = this.player.x; const ty = this.player.y;
+        this.throwGrenadeAt(tx, ty);
+        if (i === 4) {
+          // End of volley shortly after last throw
+          this.time.delayedCall(100, () => { this._castingGrenades = false; });
+        }
+      });
+    }
+  }
+
+  throwGrenadeAt(targetX, targetY) {
+    const b = this.grenades.get(this.boss.x, this.boss.y, 'bullet');
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    // Make grenade visually distinct (red tint, slightly larger)
+    b.setCircle(3).setOffset(-3, -3);
+    try { b.setScale(1.3); } catch (_) {}
+    b.setTint(0xff4444);
+    const angle = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, targetX, targetY);
+    const speed = 220;
+    const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
+    b.setVelocity(vx, vy);
+    b._spawnAt = this.time.now;
+    b._lifeMs = 800; // explode after ~0.8s
+    b._targetX = targetX; b._targetY = targetY;
+    b.update = () => {
+      const now = this.time.now;
+      const dx = b.x - b._targetX; const dy = b.y - b._targetY;
+      const near = (dx * dx + dy * dy) <= 18 * 18;
+      const expired = (now - b._spawnAt) >= b._lifeMs;
+      const view = this.cameras?.main?.worldView;
+      const off = view && !view.contains(b.x, b.y);
+      if (near || expired || off) {
+        const ex = b.x; const ey = b.y;
+        try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius: 70 }); } catch (_) {}
+        // Damage player if within radius (use rocket-like radius ~70)
+        const radius = 70; const r2 = radius * radius;
+        const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+        if ((pdx * pdx + pdy * pdy) <= r2) {
+          if (now >= this.player.iframesUntil) {
+            this.gs.hp -= (this.boss.damage || 20);
+            this.player.iframesUntil = now + 500;
+            if (this.gs.hp <= 0) {
+              const eff = getPlayerEffects(this.gs);
+              this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+              this.gs.nextScene = SceneKeys.Hub;
+              SaveManager.saveToLocal(this.gs);
+              this.scene.start(SceneKeys.Hub);
+            }
+          }
+        }
+        // Also damage destructible barricades near grenade explosion
+        this.damageSoftBarricadesInRadius(ex, ey, radius, (this.boss?.damage || 20));
+        try { b.destroy(); } catch (_) {}
+      }
+    };
+  }
+  // Returns the effective magazine capacity for the currently active weapon
+  getActiveMagCapacity() {
+    try {
+      const w = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
+      const cap = Math.max(1, Math.floor(w.magSize || 1));
+      return cap;
+    } catch (_) {
+      return 1;
+    }
+  }
+
+  // Ensure ammo entry exists for weaponId. If clampOnly, only caps ammo when above capacity
+  ensureAmmoFor(weaponId, capacity, clampOnly = false) {
+    if (weaponId == null) return;
+    if (this.ammoByWeapon[weaponId] == null) {
+      this.ammoByWeapon[weaponId] = Math.max(0, capacity | 0);
+      return;
+    }
+    if (clampOnly) {
+      if (this.ammoByWeapon[weaponId] > capacity) this.ammoByWeapon[weaponId] = capacity;
+    }
+  }
+
+  // Returns reload time in ms for active weapon (default 1.5s, rocket 2s)
+  getActiveReloadMs() {
+    try {
+      const w = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
+      if (typeof w.reloadMs === 'number') return w.reloadMs;
+      return (w.projectile === 'rocket') ? 1000 : 1500;
+    } catch (_) {
+      return 1500;
     }
   }
 }

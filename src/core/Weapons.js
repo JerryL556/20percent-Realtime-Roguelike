@@ -1,5 +1,5 @@
 // Edit this file to customize weapons
-// Each weapon has: id, name, damage, fireRateMs, bulletSpeed, pelletCount, spreadDeg, color, price
+// Each weapon has: id, name, damage, fireRateMs, bulletSpeed, pelletCount, spreadDeg, color, price, magSize
 export const weaponDefs = [
   {
     id: 'pistol',
@@ -12,6 +12,22 @@ export const weaponDefs = [
     maxSpreadDeg: 12,
     color: 0xffff66,
     price: 0,
+    magSize: 18,
+  },
+  {
+    id: 'railgun',
+    name: 'Railgun',
+    damage: 24,
+    fireRateMs: 350,
+    bulletSpeed: 1560,
+    pelletCount: 1,
+    spreadDeg: 15, // uncharged spread (deg)
+    maxSpreadDeg: 0,
+    color: 0x66aaff,
+    price: 200,
+    singleFire: true,
+    magSize: 3,
+    isRailgun: true,
   },
   {
     id: 'rifle',
@@ -24,6 +40,7 @@ export const weaponDefs = [
     maxSpreadDeg: 8,
     color: 0x66ccff,
     price: 60,
+    magSize: 30,
   },
   {
     id: 'shotgun',
@@ -36,6 +53,7 @@ export const weaponDefs = [
     maxSpreadDeg: 8,
     color: 0xffaa66,
     price: 80,
+    magSize: 8,
   },
   {
     id: 'smg',
@@ -48,6 +66,7 @@ export const weaponDefs = [
     maxSpreadDeg: 24,
     color: 0x99ff99,
     price: 90,
+    magSize: 45,
   },
   {
     id: 'rocket',
@@ -62,6 +81,7 @@ export const weaponDefs = [
     singleFire: true,
     projectile: 'rocket',
     blastRadius: 70,
+    magSize: 1,
   },
 ];
 

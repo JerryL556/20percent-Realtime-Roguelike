@@ -21,6 +21,7 @@ export function difficultyModifiers(diff) {
 export class GameState {
   constructor() {
     this.gold = 99999; // testing default
+    this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
     // Equipment & loadout
@@ -46,6 +47,7 @@ export class GameState {
 
   startNewRun(seed, difficulty) {
     this.gold = 99999; // testing default
+    this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
     this.ownedWeapons = ['pistol'];
@@ -85,6 +87,7 @@ export class GameState {
   serialize() {
     return {
       gold: this.gold,
+      xp: this.xp,
       maxHp: this.maxHp,
       hp: this.hp,
       ownedWeapons: this.ownedWeapons,
@@ -107,6 +110,7 @@ export class GameState {
   static deserialize(obj) {
     const gs = new GameState();
     Object.assign(gs, obj);
+    if (typeof gs.xp !== 'number') gs.xp = 0;
     gs.rng = new RNG(gs.runSeed);
     if (!gs.ownedWeapons) gs.ownedWeapons = ['pistol'];
     if (!gs.equippedWeapons || !Array.isArray(gs.equippedWeapons)) gs.equippedWeapons = [gs.ownedWeapons[0] || 'pistol', null];

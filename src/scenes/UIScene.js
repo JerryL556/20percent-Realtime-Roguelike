@@ -26,6 +26,10 @@ export default class UIScene extends Phaser.Scene {
     const weaponX0 = dashXStart + dashWidth0 + 20;
     const uiTextY = Math.max(8, height - 32);
     this.weaponText = this.add.text(weaponX0, uiTextY, 'Weapon: -', { fontFamily: 'monospace', fontSize: 18, color: '#ffff66' }).setOrigin(0, 0);
+    this.ammoText = this.add.text(weaponX0 + 180, uiTextY + 2, 'Ammo: -/-', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0, 0);
+
+    // Reload bar graphics (lazy show/hide during reload)
+    this.reloadBar = { g: null, tween: null, wasActive: false };
     // Hint to open loadout with Tab (top-left)
     this.loadoutHint = this.add.text(12, 12, 'Loadout (TAB)', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0).setAlpha(0.9);
     
@@ -77,7 +81,28 @@ export default class UIScene extends Phaser.Scene {
       const dashX = 16 + 180 + 20;
       const dashWidth = maxC * (this.dashBar.size + this.dashBar.gap);
       const uiTextY = Math.max(8, this.scale.height - 32);
-      this.weaponText.setPosition(dashX + dashWidth + 20, uiTextY);
+      const wx = dashX + dashWidth + 20;
+      this.weaponText.setPosition(wx, uiTextY);
+      const ammoInMag = this.registry.get('ammoInMag');
+      const magSize = this.registry.get('magSize');
+      const ammoStr = (typeof ammoInMag === 'number' && typeof magSize === 'number') ? `${ammoInMag}/${magSize}` : '-/-';
+      this.ammoText.setText(`Ammo: ${ammoStr}`);
+      this.ammoText.setPosition(wx + 180, uiTextY + 2);
+
+      // Reload bar handling
+      const reloading = !!this.registry.get('reloadActive');
+      const rprog = this.registry.get('reloadProgress') ?? 0;
+      if (reloading) {
+        if (!this.reloadBar.wasActive) this.startReloadBar();
+        this.drawReloadBar(rprog);
+        this.reloadBar.wasActive = true;
+      } else {
+        // If just finished, play expand+fade then hide
+        if (this.reloadBar.wasActive) {
+          this.reloadBar.wasActive = false;
+          this.finishReloadBar();
+        }
+      }
       // Keep highlights in sync: each mod line yellow if that slot has a mod; core line if core equipped;
       // weapon slots if equipped; armour equip + armour mods similarly.
       if (this.loadout?.panel && (this.loadout.modLabels || this.loadout.weaponLabels || this.loadout.armourLabel || this.loadout.armourModLabels)) {
@@ -111,6 +136,79 @@ export default class UIScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.tab)) {
       if (this.loadout.panel) this.closeLoadout(); else this.openLoadout();
     }
+  }
+
+  drawReloadBar(progress) {
+    const w = 240; const h = 6; // thinner
+    const cx = Math.floor(this.scale.width / 2);
+    // higher up from bottom
+    const cy = Math.max(40, this.scale.height - 80);
+    if (!this.reloadBar.g) {
+      this.reloadBar.g = this.add.graphics();
+      this.reloadBar.g.setDepth(1000);
+      this.reloadBar.g.setPosition(cx, cy);
+      this.reloadBar.g.setAlpha(1);
+      this.reloadBar.g.setScale(1, 1);
+    }
+    const g = this.reloadBar.g;
+    g.clear();
+    // Track/background (thin outline)
+    g.lineStyle(1, 0xffffff, 0.8);
+    g.strokeRect(-w / 2, -h / 2, w, h);
+    g.fillStyle(0xffffff, 0.9);
+    const fillW = Math.floor((Math.max(0, Math.min(1, progress))) * (w - 4));
+    if (fillW > 0) g.fillRect(-w / 2 + 2, -h / 2 + 2, fillW, h - 4);
+    g.setPosition(cx, cy);
+    g.setVisible(true);
+  }
+
+  startReloadBar() {
+    const w = 240; const h = 6;
+    const cx = Math.floor(this.scale.width / 2);
+    const cy = Math.max(40, this.scale.height - 80);
+    if (!this.reloadBar.g) {
+      this.reloadBar.g = this.add.graphics();
+      this.reloadBar.g.setDepth(1000);
+    }
+    const g = this.reloadBar.g;
+    try { this.tweens.killTweensOf(g); } catch (_) {}
+    g.clear();
+    g.setPosition(cx, cy);
+    g.setVisible(true);
+    g.setAlpha(0);
+    g.setScale(0.96, 0.8);
+    // Initial frame (blank track)
+    g.lineStyle(1, 0xffffff, 0.8);
+    g.strokeRect(-w / 2, -h / 2, w, h);
+    this.reloadBar.tween = this.tweens.add({
+      targets: g,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 160,
+      ease: 'quad.out',
+    });
+  }
+
+  finishReloadBar() {
+    const g = this.reloadBar.g;
+    if (!g) return;
+    try { this.tweens.killTweensOf(g); } catch (_) {}
+    this.reloadBar.tween = this.tweens.add({
+      targets: g,
+      scaleX: 1.12,
+      scaleY: 1.18,
+      alpha: 0,
+      duration: 180,
+      onComplete: () => {
+        try {
+          g.clear();
+          g.setVisible(false);
+          g.setAlpha(1);
+          g.setScale(1, 1);
+        } catch (_) {}
+      },
+    });
   }
 
   openLoadout() {

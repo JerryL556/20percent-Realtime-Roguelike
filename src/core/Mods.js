@@ -25,6 +25,16 @@ export const weaponCores = [
   { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', apply: (w) => ({ ...w, _core: 'pierce' }) },
   { id: 'core_blast', name: 'Explosive Core', desc: '+Small explosion on hit', apply: (w) => ({ ...w, _core: 'blast' }) },
   {
+    id: 'core_rail_hold',
+    name: 'Rail Stabilizer',
+    onlyFor: 'railgun',
+    desc: 'Railgun only\nHold max charge without auto-fire',
+    apply: (w) => {
+      if (!w || w.id !== 'railgun') return w;
+      return { ...w, railHold: true };
+    },
+  },
+  {
     id: 'core_lead_storm',
     name: 'Lead Storm',
     onlyFor: 'shotgun',
