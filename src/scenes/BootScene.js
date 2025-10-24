@@ -1,8 +1,11 @@
 import { SceneKeys } from '../core/SceneKeys.js';
+import { preloadWeaponAssets } from '../systems/WeaponVisuals.js';
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Boot); }
   preload() {
+    // Load external PNG assets for weapons
+    try { preloadWeaponAssets(this); } catch (_) {}
     // Generate simple textures used by bullets and optional sprites
     const g = this.make.graphics({ x: 0, y: 0, add: false });
     g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 4, 4);
@@ -35,3 +38,4 @@ export default class BootScene extends Phaser.Scene {
     this.scene.start(SceneKeys.Start);
   }
 }
+

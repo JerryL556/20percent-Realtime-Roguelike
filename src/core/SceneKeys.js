@@ -5,6 +5,6 @@ export const SceneKeys = Object.freeze({
   Hub: 'Hub',
   Combat: 'Combat',
   Boss: 'Boss',
+  ShootingRange: 'ShootingRange',
   UI: 'UI',
 });
-

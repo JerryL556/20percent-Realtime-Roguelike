@@ -40,6 +40,14 @@ export class GameState {
     this.currentDepth = 1; // increments per combat
     this.achievements = {};
     this.nextScene = 'Hub';
+    // Game mode: 'Normal' or 'BossRush'
+    this.gameMode = 'Normal';
+    // Boss Rush sequence queue (array of boss type strings)
+    this.bossRushQueue = [];
+    // Track last spawned boss type in Normal mode to alternate
+    this.lastBossType = null; // 'Shotgunner' | 'Charger' | null
+    // Ability equipped (gadget)
+    this.abilityId = 'ads';
     // Dash settings
     this.dashMaxCharges = 3;
     this.dashRegenMs = 6000;
@@ -61,6 +69,10 @@ export class GameState {
     this.roomsClearedInCycle = 0;
     this.currentDepth = 1;
     this.nextScene = 'Hub';
+    this.gameMode = 'Normal';
+    this.bossRushQueue = [];
+    this.lastBossType = null;
+    this.abilityId = 'ads';
     this.dashMaxCharges = 3;
     this.dashRegenMs = 6000;
   }
@@ -70,18 +82,69 @@ export class GameState {
   }
 
   progressAfterCombat() {
+    // In Normal mode: 3 rooms then a boss
+    if (this.gameMode === 'BossRush') {
+      // Not used in BossRush; keep safe default to Boss
+      this.nextScene = 'Boss';
+      return;
+    }
     this.roomsClearedInCycle += 1;
     this.currentDepth += 1;
-    if (this.roomsClearedInCycle >= 3) {
-      this.roomsClearedInCycle = 0;
-      this.nextScene = 'Boss';
-    } else {
-      this.nextScene = 'Combat';
-    }
+    if (this.roomsClearedInCycle >= 3) { this.roomsClearedInCycle = 0; this.nextScene = 'Boss'; }
+    else { this.nextScene = 'Combat'; }
   }
 
   progressAfterBoss() {
+    if (this.gameMode === 'BossRush') {
+      // Remove the defeated boss and decide next
+      if (Array.isArray(this.bossRushQueue) && this.bossRushQueue.length > 0) {
+        this.bossRushQueue = this.bossRushQueue.slice(1);
+      }
+      if (this.bossRushQueue && this.bossRushQueue.length > 0) {
+        this.nextScene = 'Boss';
+      } else {
+        // Finished all bosses
+        this.nextScene = 'Hub';
+      }
+      return;
+    }
     this.nextScene = 'Hub';
+  }
+
+  // Decide the next boss type for spawning (does not mutate queues except to init BossRush)
+  chooseBossType() {
+    if (this.gameMode === 'BossRush') {
+      if (!Array.isArray(this.bossRushQueue) || this.bossRushQueue.length === 0) {
+        this.setGameMode('BossRush');
+      }
+      return (this.bossRushQueue && this.bossRushQueue[0]) ? this.bossRushQueue[0] : 'Charger';
+    }
+    // Normal mode: alternate to ensure both appear over time
+    if (this.lastBossType === 'Charger') return 'Shotgunner';
+    return 'Charger';
+  }
+
+  // Change game mode and initialize any mode-specific state
+  setGameMode(mode) {
+    this.gameMode = (mode === 'BossRush') ? 'BossRush' : 'Normal';
+    if (this.gameMode === 'BossRush') {
+      // Initialize a shuffled list of bosses for this run
+      const bosses = ['Shotgunner', 'Charger'];
+      // Fisher–Yates using run RNG
+      for (let i = bosses.length - 1; i > 0; i -= 1) {
+        const j = this.rng.int(0, i);
+        const tmp = bosses[i]; bosses[i] = bosses[j]; bosses[j] = tmp;
+      }
+      this.bossRushQueue = bosses;
+      this.roomsClearedInCycle = 0;
+      this.currentDepth = 1;
+      this.nextScene = 'Boss';
+    } else {
+      this.bossRushQueue = [];
+      this.roomsClearedInCycle = 0;
+      this.currentDepth = 1;
+      this.nextScene = 'Hub';
+    }
   }
 
   serialize() {
@@ -102,6 +165,10 @@ export class GameState {
       currentDepth: this.currentDepth,
       achievements: this.achievements,
       nextScene: this.nextScene,
+      gameMode: this.gameMode,
+      bossRushQueue: this.bossRushQueue,
+      lastBossType: this.lastBossType,
+      abilityId: this.abilityId,
       dashMaxCharges: this.dashMaxCharges,
       dashRegenMs: this.dashRegenMs,
     };
@@ -119,6 +186,10 @@ export class GameState {
     if (!gs.weaponBuilds) gs.weaponBuilds = {};
     gs.dashMaxCharges = Math.min(gs.dashMaxCharges || 3, 5);
     gs.dashRegenMs = Math.max(gs.dashRegenMs || 6000, 6000);
+    if (!gs.gameMode) gs.gameMode = 'Normal';
+    if (!Array.isArray(gs.bossRushQueue)) gs.bossRushQueue = [];
+    if (!('lastBossType' in gs)) gs.lastBossType = null;
+    if (!gs.abilityId) gs.abilityId = 'ads';
     return gs;
   }
 }

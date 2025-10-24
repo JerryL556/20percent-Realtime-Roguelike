@@ -1,4 +1,4 @@
-export function createEnemy(scene, x, y, hp = 60, damage = 10, speed = 60) {
+export function createEnemy(scene, x, y, hp = 100, damage = 10, speed = 60) {
   const e = scene.physics.add.sprite(x, y, 'enemy_square');
   e.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   e.hp = hp;
@@ -11,7 +11,7 @@ export function createEnemy(scene, x, y, hp = 60, damage = 10, speed = 60) {
 }
 
 // Fast melee "runner" enemy: 2x speed, ~30% less HP
-export function createRunnerEnemy(scene, x, y, hp = 42, damage = 10, speed = 120) {
+export function createRunnerEnemy(scene, x, y, hp = 60, damage = 10, speed = 120) {
   const r = scene.physics.add.sprite(x, y, 'enemy_square');
   r.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   r.hp = hp;
@@ -53,6 +53,57 @@ export function createShooterEnemy(scene, x, y, hp = 90, damage = 10, speed = 45
   s.setTint(0x66aaff);
   s.on('destroy', () => s._g?.destroy());
   return s;
+}
+
+// Rocketeer: fires explosive rockets at 0.5/s, moderate HP, slow speed
+export function createRocketeerEnemy(scene, x, y, hp = 80, damage = 12, speed = 40, fireRateMs = 2000) {
+  const r = scene.physics.add.sprite(x, y, 'enemy_square');
+  r.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
+  r.hp = hp;
+  r.maxHp = hp;
+  r.damage = damage;
+  r.speed = speed;
+  r.isEnemy = true;
+  r.isShooter = true;
+  r.isRocketeer = true;
+  r.fireRateMs = fireRateMs;
+  r.lastShotAt = 0;
+  // Orange tint to indicate explosive unit
+  r.setTint(0xff8844);
+  r.on('destroy', () => r._g?.destroy());
+  return r;
+}
+
+// MachineGunner: tougher than shooter, slower movement, fires 12-bullet volleys
+export function createMachineGunnerEnemy(
+  scene,
+  x,
+  y,
+  hp = 140,
+  damage = 7,
+  speed = 35,
+  fireRateMs = 1100,
+  burstCount = 15,
+  spreadDeg = 14,
+) {
+  const m = scene.physics.add.sprite(x, y, 'enemy_square');
+  m.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
+  m.hp = hp;
+  m.maxHp = hp;
+  m.damage = damage;
+  m.speed = speed;
+  m.isEnemy = true;
+  m.isShooter = true;
+  m.isMachineGunner = true;
+  m.fireRateMs = fireRateMs;
+  m.burstCount = burstCount; // bullets per burst
+  m.burstGapMs = 70; // time between shots in a burst
+  m.spreadDeg = spreadDeg; // small cone while spraying
+  m.lastShotAt = 0;
+  // Distinct tint (teal-ish)
+  m.setTint(0x22ddaa);
+  m.on('destroy', () => m._g?.destroy());
+  return m;
 }
 
 // Sniper enemy: aims with a red laser for 1s, then fires a high-speed, high-damage shot.
