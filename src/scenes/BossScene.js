@@ -518,7 +518,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Ability activation (F) �� match CombatScene
+    // Ability activation (F) ?? match CombatScene
     if (this.inputMgr.pressedAbility) {
       const nowT = this.time.now;
       if (nowT >= (this.ability.onCooldownUntil || 0)) {
@@ -681,7 +681,7 @@ export default class BossScene extends Phaser.Scene {
       const dt = (this.game?.loop?.delta || 16.7) / 1000;
       this._repulses = this._repulses.filter((rp) => {
         rp.r += rp.speed * dt;
-        try { rp.g.clear(); rp.g.lineStyle(6, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
+        try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 0.95).strokeCircle(0, 0, rp.r); } catch (_) {}
         const band = rp.band;
         const r2min = (rp.r - band) * (rp.r - band);
         const r2max = (rp.r + band) * (rp.r + band);
@@ -1195,7 +1195,7 @@ export default class BossScene extends Phaser.Scene {
     if (!this._repulses) this._repulses = [];
     const x = this.player.x, y = this.player.y;
     const g = this.add.graphics({ x, y });
-    try { g.setDepth?.(20000); g.setScrollFactor?.(1); } catch (_) {}
+    try { g.setDepth?.(9000); } catch (_) {}
     const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
     const corners = [ { x: rect.left, y: rect.top }, { x: rect.right, y: rect.top }, { x: rect.right, y: rect.bottom }, { x: rect.left, y: rect.bottom } ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
@@ -1245,6 +1245,8 @@ export default class BossScene extends Phaser.Scene {
     }
   }
 }
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -108,7 +108,7 @@ export default class CombatScene extends Phaser.Scene {
 		  const dt = (this.game?.loop?.delta || 16.7) / 1000;
 		  this._repulses = this._repulses.filter((rp) => {
 			 rp.r += rp.speed * dt;
-			 try { rp.g.clear(); rp.g.lineStyle(6, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
+			 try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 0.95).strokeCircle(0, 0, rp.r); } catch (_) {}
 			 const band = rp.band;
 			 const r2min = (rp.r - band) * (rp.r - band);
 			 const r2max = (rp.r + band) * (rp.r + band);
@@ -1688,6 +1688,7 @@ export default class CombatScene extends Phaser.Scene {
     }
   }
 }
+
 
 
 
