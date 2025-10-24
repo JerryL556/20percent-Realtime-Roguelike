@@ -675,6 +675,33 @@ export default class BossScene extends Phaser.Scene {
       const prog = active ? (1 - Math.min(1, remaining / denom)) : 1;
       this.registry.set('abilityCooldownActive', active);
       this.registry.set('abilityCooldownProgress', prog);
+
+    // Update Repulsion Pulse effects (block boss projectiles and push boss)
+    if (this._repulses && this._repulses.length) {
+      const dt = (this.game?.loop?.delta || 16.7) / 1000;
+      this._repulses = this._repulses.filter((rp) => {
+        rp.r += rp.speed * dt;
+        try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 0.95).strokeCircle(0, 0, rp.r); } catch (_) {}
+        const band = rp.band;
+        const r2min = (rp.r - band) * (rp.r - band);
+        const r2max = (rp.r + band) * (rp.r + band);
+        try {
+          const arrB = this.bossBullets?.getChildren?.() || [];
+          for (let i = 0; i < arrB.length; i += 1) {
+            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+          }
+          const arrG = this.grenades?.getChildren?.() || [];
+          for (let i = 0; i < arrG.length; i += 1) {
+            const b = arrG[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+          }
+        } catch (_) {}
+        try {
+          const boss = this.boss; if (boss?.active) { const dx = boss.x - rp.x; const dy = boss.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 240; try { boss.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { boss.setVelocity(nx * power, ny * power); } catch (_) {} } } }
+        } catch (_) {}
+        if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
+        return true;
+      });
+    }
     } catch (_) {}
 
     // Boss modern movement/attacks
