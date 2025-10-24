@@ -112,13 +112,14 @@ export default class CombatScene extends Phaser.Scene {
       try {
         const arrB = this.enemyBullets?.getChildren?.() || [];
         for (let i = 0; i < arrB.length; i += 1) {
-          const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+          const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
         }
       } catch (_) {}
       try {
         const arrE = this.enemies?.getChildren?.() || [];
         for (let i = 0; i < arrE.length; i += 1) {
-          const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
+          const e = arrE[i]; if (!e?.active) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power =  420; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
+            try { if (e.isDummy) { this._dummyDamage = (this._dummyDamage||0) + 5; } } catch (_) {}
             // Apply 5 damage once per enemy per pulse
             try {
               if (!rp._hitSet) rp._hitSet = new Set();
@@ -1510,7 +1511,7 @@ export default class CombatScene extends Phaser.Scene {
       { x: rect.left, y: rect.bottom },
     ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const cx = corners[i].x; const cy = corners[i].y; const dx = cx - x; const dy = cy - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
-    const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g, lastDrawnAt: 0 };
+    const obj = { x, y, r: 0, band: 6, speed: 300, maxR: maxD + 24, g, lastDrawnAt: 0 };
     this._repulses.push(obj);
   }
 
