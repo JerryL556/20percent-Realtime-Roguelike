@@ -4,7 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst, bitSpawnBurst } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
@@ -1443,7 +1443,7 @@ export default class CombatScene extends Phaser.Scene {
   deployBITs() {
     if (!this._bits) this._bits = [];
     // Green particle spawn burst around player
-    try { bitSpawnBurst(this, this.player.x, this.player.y, { count: 48 }); } catch (_) {}
+    try { bitSpawnRing(this, this.player.x, this.player.y, { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
