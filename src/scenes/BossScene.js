@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+ï»¿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -518,7 +518,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Ability activation (F) ¡ª match CombatScene
+    // Ability activation (F) ï¿½ï¿½ match CombatScene
     if (this.inputMgr.pressedAbility) {
       const nowT = this.time.now;
       if (nowT >= (this.ability.onCooldownUntil || 0)) {
@@ -1188,6 +1188,19 @@ export default class BossScene extends Phaser.Scene {
       bit.vx = Math.cos(a) * sp; bit.vy = Math.sin(a) * sp; bit.moveUntil = this.time.now + Phaser.Math.Between(200, 400);
       this._bits.push(bit);
     }
+  }
+
+
+  deployRepulsionPulse() {
+    if (!this._repulses) this._repulses = [];
+    const x = this.player.x, y = this.player.y;
+    const g = this.add.graphics({ x, y });
+    try { g.setDepth?.(20000); g.setScrollFactor?.(1); } catch (_) {}
+    const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
+    const corners = [ { x: rect.left, y: rect.top }, { x: rect.right, y: rect.top }, { x: rect.right, y: rect.bottom }, { x: rect.left, y: rect.bottom } ];
+    let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
+    const obj = { x, y, r: 0, band: 8, speed: 600, maxR: maxD + 24, g };
+    this._repulses.push(obj);
   }
 
   // Deploy ADS ??identical to CombatScene
