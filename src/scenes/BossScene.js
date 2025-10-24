@@ -745,7 +745,8 @@ export default class BossScene extends Phaser.Scene {
     // Boss shooting pattern (pause during dash)
     if (this.boss && this.boss.active && !this._castingGrenades) {
       const isCharger = (this.boss.bossType === 'Charger');
-      const canShoot = !this._dashSeq;
+      // Allow Charger to shoot during idle windows and between dash legs (wait phase)
+      const canShoot = (!this._dashSeq) || (this._dashSeq && this._dashSeq.phase === 'wait');
       const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
       if (isCharger) {
         if (canShoot) {
