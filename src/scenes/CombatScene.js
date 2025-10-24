@@ -1010,6 +1010,8 @@ export default class CombatScene extends Phaser.Scene {
             // Apply damage
             if (typeof trg.hp !== 'number') trg.hp = trg.maxHp || 20;
             trg.hp -= 7; if (trg.hp <= 0) { try { this.killEnemy(trg); } catch (_) {} }
+            // Shooting Range: accumulate dummy damage when present
+            try { if (trg?.isDummy) this._dummyDamage = (this._dummyDamage || 0) + 7; } catch (_) {}
             bit.lastShotAt = now;
             bit.holdUntil = now + 400; // hold for 0.4s
             bit.moveUntil = now + 400; // next plan after hold
@@ -1440,6 +1442,8 @@ export default class CombatScene extends Phaser.Scene {
 
   deployBITs() {
     if (!this._bits) this._bits = [];
+    // Green spawn burst around player
+    try { impactBurst(this, this.player.x, this.player.y, { color: 0x33ff66, size: 'large', radius: 36 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
