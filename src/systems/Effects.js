@@ -32,3 +32,26 @@ export function impactBurst(scene, x, y, opts = {}) {
   }
 }
 
+// Green particle burst used for BITs spawn: no outer ring, floating particles
+export function bitSpawnBurst(scene, x, y, opts = {}) {
+  try {
+    const count = typeof opts.count === 'number' ? opts.count : 24;
+    const texKey = 'bit_particle';
+    // Particle manager tied to this burst
+    const mgr = scene.add.particles(texKey);
+    try { mgr.setDepth?.(9999); } catch (_) {}
+    const emitter = mgr.createEmitter({
+      x, y,
+      speed: { min: 60, max: 140 },
+      angle: { min: 0, max: 360 },
+      lifespan: { min: 400, max: 800 },
+      alpha: { start: 0.7, end: 0 },
+      scale: { start: 0.7, end: 0 },
+      gravityY: 0,
+      quantity: 0,
+      blendMode: 'ADD',
+    });
+    emitter.explode(count, x, y);
+    scene.time.delayedCall(900, () => { try { mgr.destroy(); } catch (_) {} });
+  } catch (_) {}
+}
