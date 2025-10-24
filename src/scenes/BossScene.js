@@ -111,7 +111,16 @@ export default class BossScene extends Phaser.Scene {
     this.barricadesSoft = this.physics.add.staticGroup();
     try { this.generateBossBarricades(); } catch (_) {}
     this.physics.add.collider(this.player, this.barricadesSoft);
-    this.physics.add.collider(this.boss, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
+    // Boss vs barricades: allow melee chip when not dashing; no separation during Charger dash
+    this.physics.add.collider(
+      this.boss,
+      this.barricadesSoft,
+      (e, s) => this.onEnemyHitBarricade(e, s),
+      (e, s) => {
+        return !(this._dashSeq && this._dashSeq.phase === 'dash');
+      },
+      this,
+    );
 
     // Basic overlap damage
     this.physics.add.overlap(this.player, this.boss, () => {
