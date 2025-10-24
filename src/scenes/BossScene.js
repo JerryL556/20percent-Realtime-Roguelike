@@ -5,7 +5,7 @@ import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
 import { impactBurst } from '../systems/Effects.js';
-import { createFittedImage } from '../systems/WeaponVisuals.js';
+import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
@@ -30,6 +30,8 @@ export default class BossScene extends Phaser.Scene {
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
     this.registry.set('dashRegenProgress', 1);
+    // Weapon visuals (match CombatScene)
+    try { createPlayerWeaponSprite(this); } catch (_) {}
 
     // Ammo tracking per-weapon for this scene
     this._lastActiveWeapon = this.gs.activeWeapon;
@@ -435,6 +437,7 @@ export default class BossScene extends Phaser.Scene {
       this.ensureAmmoFor(this._lastActiveWeapon, cap);
       this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
       this.registry.set('magSize', cap);
+      try { if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon); } catch (_) {}
     } else {
       // Keep registry in sync in case mods/cores change capacity
       const cap = this.getActiveMagCapacity();
@@ -1196,3 +1199,6 @@ export default class BossScene extends Phaser.Scene {
     }
   }
 }
+    // Keep weapon sprite positioned/rotated and texture synced to active weapon
+    try { updateWeaponSprite(this); } catch (_) {}
+    try { if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon); } catch (_) {}
