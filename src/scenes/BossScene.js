@@ -69,12 +69,14 @@ export default class BossScene extends Phaser.Scene {
       this.boss.hp = this.boss.maxHp;
       this.boss.speed = 80;
       this.boss.dashDamage = Math.floor(20 * (mods.enemyDamage || 1));
+      try { this.boss.setTint(0xff4444); } catch (_) {}
     } else {
       this.boss.bossType = 'Shotgunner';
       this.boss.maxHp = Math.floor(650 * (mods.enemyHp || 1));
       this.boss.hp = this.boss.maxHp;
       this.boss.speed = 50;
       this.boss.dashDamage = Math.floor(16 * (mods.enemyDamage || 1));
+      try { this.boss.setTint(0xffff66); } catch (_) {}
     }
     try { this.gs.lastBossType = this.boss.bossType; SaveManager.saveToLocal(this.gs); } catch (_) {}
     this._dashSeq = null;
@@ -196,8 +198,8 @@ export default class BossScene extends Phaser.Scene {
     const barX = Math.floor((width - barW) / 2);
     // Place near top area
     this.bossHpBar = new HpBar(this, barX, 60, barW, 10);
-    // Boss name above the HP bar
-    this.bossName = 'Shotgunner';
+    // Boss name above the HP bar (dynamic)
+    this.bossName = (this.boss?.bossType === 'Charger') ? 'Charger' : 'Shotgunner';
     this.bossNameText = this.add.text(width / 2, 48, this.bossName, { fontFamily: 'monospace', fontSize: 16, color: '#ff6666' }).setOrigin(0.5);
     this.exitRect = null;
     this.exitG = this.add.graphics();
