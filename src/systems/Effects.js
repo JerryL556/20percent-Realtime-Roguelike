@@ -35,22 +35,30 @@ export function impactBurst(scene, x, y, opts = {}) {
 // Green particle burst used for BITs spawn: no outer ring, floating particles
 export function bitSpawnBurst(scene, x, y, opts = {}) {
   try {
-    const count = typeof opts.count === 'number' ? opts.count : 48;
+    const count = typeof opts.count === 'number' ? opts.count : 64;
     const texKey = 'bit_particle';
+    // Fallback: ensure particle texture exists
+    try {
+      if (!scene.textures || !scene.textures.exists(texKey)) {
+        const g = scene.make.graphics({ x: 0, y: 0, add: false });
+        g.clear(); g.fillStyle(0x33ff66, 1); g.fillCircle(4, 4, 4);
+        g.generateTexture(texKey, 8, 8); g.destroy();
+      }
+    } catch (_) {}
     const mgr = scene.add.particles(texKey);
     try { mgr.setDepth?.(9999); } catch (_) {}
     const emitter = mgr.createEmitter({
       x, y,
-      speed: { min: 120, max: 240 },
+      speed: { min: 140, max: 300 },
       angle: { min: 0, max: 360 },
-      lifespan: { min: 600, max: 1000 },
-      alpha: { start: 0.9, end: 0.1 },
+      lifespan: { min: 700, max: 1100 },
+      alpha: { start: 1.0, end: 0 },
       scale: { start: 1.2, end: 0 },
-      gravityY: 0,
+      gravityY: -20,
       quantity: 0,
-      blendMode: 'NORMAL',
+      blendMode: Phaser.BlendModes.ADD,
     });
     emitter.explode(count, x, y);
-    scene.time.delayedCall(1100, () => { try { mgr.destroy(); } catch (_) {} });
+    scene.time.delayedCall(1200, () => { try { mgr.destroy(); } catch (_) {} });
   } catch (_) {}
 }
