@@ -688,11 +688,11 @@ export default class BossScene extends Phaser.Scene {
         try {
           const arrB = this.bossBullets?.getChildren?.() || [];
           for (let i = 0; i < arrB.length; i += 1) {
-            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
           }
           const arrG = this.grenades?.getChildren?.() || [];
           for (let i = 0; i < arrG.length; i += 1) {
-            const b = arrG[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+            const b = arrG[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
           }
         } catch (_) {}
         try {
