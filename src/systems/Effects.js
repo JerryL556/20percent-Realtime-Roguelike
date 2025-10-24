@@ -1,4 +1,4 @@
-// Lightweight hit/explosion effect utility
+﻿// Lightweight hit/explosion effect utility
 // Usage: impactBurst(scene, x, y, { color, size })
 // size: 'small' | 'large'
 
@@ -60,5 +60,27 @@ export function bitSpawnBurst(scene, x, y, opts = {}) {
     });
     emitter.explode(count, x, y);
     scene.time.delayedCall(1200, () => { try { mgr.destroy(); } catch (_) {} });
+  } catch (_) {}
+}
+
+// Simple expanding ring (no fill) for BIT activation
+export function bitSpawnRing(scene, x, y, opts = {}) {
+  try {
+    const color = opts.color ?? 0x33ff66;
+    const radius = typeof opts.radius === 'number' ? Math.max(4, opts.radius) : 18;
+    const lineWidth = typeof opts.lineWidth === 'number' ? Math.max(1, opts.lineWidth) : 3;
+    const duration = typeof opts.duration === 'number' ? Math.max(100, opts.duration) : 400;
+    const scaleTarget = opts.scaleTarget ?? 1.8;
+    const g = scene.add.graphics({ x, y });
+    try { g.setDepth?.(9999); } catch (_) {}
+    g.lineStyle(lineWidth, color, 0.95).strokeCircle(0, 0, radius);
+    scene.tweens.add({
+      targets: g,
+      alpha: 0,
+      scale: scaleTarget,
+      duration,
+      ease: 'Cubic.Out',
+      onComplete: () => { try { g.destroy(); } catch (_) {} },
+    });
   } catch (_) {}
 }

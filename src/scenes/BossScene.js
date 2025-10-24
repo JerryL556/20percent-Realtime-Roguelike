@@ -4,7 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
-import { impactBurst, bitSpawnBurst } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing } from '../systems/Effects.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
@@ -1145,7 +1145,7 @@ export default class BossScene extends Phaser.Scene {
   deployBITs() {
     if (!this._bits) this._bits = [];
     // Green particle spawn burst around player
-    try { bitSpawnBurst(this, this.player.x, this.player.y, { count: 48 }); } catch (_) {}
+    try { bitSpawnRing(this, this.player.x, this.player.y, { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
