@@ -518,7 +518,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Ability activation (F) ??match CombatScene
+    // Ability activation (F) — match CombatScene
     if (this.inputMgr.pressedAbility) {
       const nowT = this.time.now;
       if (nowT >= (this.ability.onCooldownUntil || 0)) {
@@ -527,11 +527,10 @@ export default class BossScene extends Phaser.Scene {
           this.deployADS?.();
           this.ability.onCooldownUntil = nowT + 10000; // 10s
         } else if (abilityId === 'bits') {
+          this.deployBITs();
+          this.ability.onCooldownUntil = nowT + 10000; // 10s
         } else if (abilityId === 'repulse') {
           this.deployRepulsionPulse();
-          this.ability.onCooldownUntil = nowT + 10000;
-        }
-          this.deployBITs();
           this.ability.onCooldownUntil = nowT + 10000; // 10s
         }
       }
