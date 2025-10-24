@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -518,7 +518,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Ability activation (F) �?match CombatScene
+    // Ability activation (F) ??match CombatScene
     if (this.inputMgr.pressedAbility) {
       const nowT = this.time.now;
       if (nowT >= (this.ability.onCooldownUntil || 0)) {
@@ -533,7 +533,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Update active gadgets (ADS) �?identical behavior to CombatScene, but scan boss bullets + grenades
+    // Update active gadgets (ADS) ??identical behavior to CombatScene, but scan boss bullets + grenades
     if (this._gadgets && this._gadgets.length) {
       const nowT = this.time.now;
       this._gadgets = this._gadgets.filter((g) => {
@@ -568,7 +568,7 @@ export default class BossScene extends Phaser.Scene {
       });
     }
 
-    // Update BIT units �?replicate CombatScene behavior with boss as the only target
+    // Update BIT units ??replicate CombatScene behavior with boss as the only target
     if (!this._bits) this._bits = [];
     if (this._bits.length) {
       const dt2 = (this.game?.loop?.delta || 16.7) / 1000;
@@ -1141,11 +1141,11 @@ export default class BossScene extends Phaser.Scene {
     const { width, height } = this.scale; const tile = 16; const margin = 80; const w = width - margin; const h = height - margin; const x = (width - w) / 2; const y = (height - h) / 2; this.arenaRect = new Phaser.Geom.Rectangle(x, y, w, h); this.walls = this.physics.add.staticGroup(); const tilesX = Math.ceil(w / tile); const tilesY = Math.ceil(h / tile); for (let i = 0; i < tilesX; i += 1) { const wx = x + i * tile + tile / 2; const top = this.physics.add.staticImage(wx, y + tile / 2, 'wall_tile'); const bot = this.physics.add.staticImage(wx, y + h - tile / 2, 'wall_tile'); this.walls.add(top); this.walls.add(bot); } for (let j = 1; j < tilesY - 1; j += 1) { const wy = y + j * tile + tile / 2; const left = this.physics.add.staticImage(x + tile / 2, wy, 'wall_tile'); const right = this.physics.add.staticImage(x + w - tile / 2, wy, 'wall_tile'); this.walls.add(left); this.walls.add(right); }
   }
   
-  // Deploy BITs �?identical to CombatScene
+  // Deploy BITs ??identical to CombatScene
   deployBITs() {
     if (!this._bits) this._bits = [];
     // Green particle spawn burst around player
-    try { bitSpawnBurst(this, this.player.x, this.player.y, { count: 28 }); } catch (_) {}
+    try { bitSpawnBurst(this, this.player.x, this.player.y, { count: 48 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
@@ -1160,7 +1160,7 @@ export default class BossScene extends Phaser.Scene {
     }
   }
 
-  // Deploy ADS �?identical to CombatScene
+  // Deploy ADS ??identical to CombatScene
   deployADS() {
     const x = this.player.x; const y = this.player.y;
     const g = createFittedImage(this, x, y, 'ability_ads',  20);

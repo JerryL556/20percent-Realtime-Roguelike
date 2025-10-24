@@ -1443,7 +1443,7 @@ export default class CombatScene extends Phaser.Scene {
   deployBITs() {
     if (!this._bits) this._bits = [];
     // Green particle spawn burst around player
-    try { bitSpawnBurst(this, this.player.x, this.player.y, { count: 28 }); } catch (_) {}
+    try { bitSpawnBurst(this, this.player.x, this.player.y, { count: 48 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
