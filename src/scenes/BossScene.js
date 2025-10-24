@@ -789,18 +789,7 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Boss ability: random grenade volley with cooldown
-    if (this.boss && this.boss.active) {
-      if (time >= (this._grenadeNextAvailableAt || 0)) {
-        if (!this._lastAbilityRollAt || (time - this._lastAbilityRollAt) > 500) {
-          this._lastAbilityRollAt = time;
-          if (Math.random() < 0.35) { // 35% chance on roll
-            this.castGrenadeVolley();
-            this._grenadeNextAvailableAt = time + 6000; // 6s cooldown
-          }
-        }
-      }
-    }
+    // Note: grenade volley handled only for Shotgunner above
 
     // Portal check handled by physics overlap when it exists
   }
