@@ -5,6 +5,7 @@ import { makeTextButton } from '../ui/Buttons.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { getPlayerEffects } from '../core/Loadout.js';
 import { weaponMods, weaponCores, armourMods, armourDefs } from '../core/Mods.js';
+import { abilityDefs, getAbilityById } from '../core/Abilities.js';
 import { getWeaponById } from '../core/Weapons.js';
 
 export default class UIScene extends Phaser.Scene {
@@ -27,6 +28,9 @@ export default class UIScene extends Phaser.Scene {
     const uiTextY = Math.max(8, height - 32);
     this.weaponText = this.add.text(weaponX0, uiTextY, 'Weapon: -', { fontFamily: 'monospace', fontSize: 18, color: '#ffff66' }).setOrigin(0, 0);
     this.ammoText = this.add.text(weaponX0 + 180, uiTextY + 2, 'Ammo: -/-', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0, 0);
+    // Ability label + cooldown square
+    this.abilityText = this.add.text(weaponX0 + 340, uiTextY + 2, 'Ability: -', { fontFamily: 'monospace', fontSize: 14, color: '#66aaff' }).setOrigin(0, 0);
+    this.abilityG = this.add.graphics();
 
     // Reload bar graphics (lazy show/hide during reload)
     this.reloadBar = { g: null, tween: null, wasActive: false };
@@ -71,7 +75,8 @@ export default class UIScene extends Phaser.Scene {
       const effectiveMax = (gs.maxHp || 0) + (eff.bonusHp || 0);
       this.hpBar.draw(gs.hp, effectiveMax);
       this.goldText.setText(`Gold: ${gs.gold}`);
-      this.weaponText.setText(`Weapon: ${gs.activeWeapon}`);
+      const wName = (getWeaponById(gs.activeWeapon)?.name || gs.activeWeapon);
+      this.weaponText.setText(`Weapon: ${wName}`);
       const charges = this.registry.get('dashCharges');
       const progress = this.registry.get('dashRegenProgress') ?? 0;
       const maxC = gs.dashMaxCharges ?? 3;
@@ -88,6 +93,28 @@ export default class UIScene extends Phaser.Scene {
       const ammoStr = (typeof ammoInMag === 'number' && typeof magSize === 'number') ? `${ammoInMag}/${magSize}` : '-/-';
       this.ammoText.setText(`Ammo: ${ammoStr}`);
       this.ammoText.setPosition(wx + 180, uiTextY + 2);
+      // Ability label + cooldown box
+      try {
+        const abilityName = (getAbilityById(gs.abilityId)?.name || '-');
+        const ax = wx + 340; const ay = uiTextY + 2;
+        this.abilityText.setText(`Ability: ${abilityName}`);
+        this.abilityText.setPosition(ax, ay);
+        // Draw cooldown box next to label
+        const b = this.abilityText.getBounds();
+        const bx = Math.floor(b.right + 8);
+        const by = Math.floor(ay + 2);
+        const size = 14;
+        const prog = this.registry.get('abilityCooldownProgress');
+        const progVal = (typeof prog === 'number' ? prog : 1);
+        const w = Math.max(0, Math.min(size, Math.floor(progVal * size)));
+        this.abilityG.clear();
+        // Border
+        this.abilityG.lineStyle(1, 0xffffff, 1).strokeRect(bx + 0.5, by + 0.5, size, size);
+        // Fill proportional to cooldown progress
+        if (w > 0) {
+          this.abilityG.fillStyle(0x66aaff, 0.9).fillRect(bx + 1, by + 1, w - 1, size - 2);
+        }
+      } catch (_) {}
 
       // Reload bar handling
       const reloading = !!this.registry.get('reloadActive');
@@ -308,8 +335,11 @@ export default class UIScene extends Phaser.Scene {
     const coreBtn = makeTextButton(this, col2X + 210, coreWy + 8, 'Choose…', () => {
       ensureBuild();
       const activeId = gs.activeWeapon;
+      const baseW = getWeaponById(activeId) || {};
+      const isExplosive = baseW.projectile === 'rocket';
       const opts = weaponCores
         .filter((c) => !c.onlyFor || c.onlyFor === activeId)
+        .filter((c) => !(c.id === 'core_blast' && isExplosive))
         .map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
         gs.weaponBuilds[gs.activeWeapon].core = chosenId;
@@ -358,6 +388,22 @@ export default class UIScene extends Phaser.Scene {
       nodes.push(btn);
     };
     armourModLine(0); armourModLine(1);
+
+    // Ability selection (Column 3)
+    y3 += 18;
+    nodes.push(this.add.text(col3X, y3, 'Ability', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' })); y3 += 28;
+    const abilityName = () => (getAbilityById(gs.abilityId)?.name || '-');
+    const abilityLabel = this.add.text(col3X, y3, `Equipped: ${abilityName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(abilityLabel);
+    const abilityBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Choose…', () => {
+      const opts = abilityDefs.map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
+      const cur = gs.abilityId || null;
+      this.openChoicePopup('Choose Ability', opts, cur, (chosenId) => {
+        gs.abilityId = chosenId;
+        abilityLabel.setText(`Equipped: ${abilityName()}`);
+        SaveManager.saveToLocal(gs);
+      });
+    }).setOrigin(0, 0.5);
+    nodes.push(abilityLabel, abilityBtn); y3 += 36;
 
     // Close hint
     nodes.push(this.add.text(width / 2, top + panelH + 30, 'Press Tab to close', { fontFamily: 'monospace', fontSize: 12, color: '#999999' }).setOrigin(0.5));

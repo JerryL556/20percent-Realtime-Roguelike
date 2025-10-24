@@ -5,6 +5,7 @@ import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
 import { impactBurst } from '../systems/Effects.js';
+import { createFittedImage } from '../systems/WeaponVisuals.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
@@ -41,16 +42,43 @@ export default class BossScene extends Phaser.Scene {
     this.registry.set('reloadActive', false);
     this.registry.set('reloadProgress', 0);
 
-    // Boss
+    // Ability system (match normal rooms)
+    this._gadgets = [];
+    this._bits = [];
+    this.ability = { onCooldownUntil: 0 };
+
+    // Boss (modernized: pick variant and tune stats)
     const mods = this.gs.getDifficultyMods();
     const pistol = getWeaponById('pistol');
-    // Triple base HP for current boss
+    let bossType = 'Charger';
+    try {
+      if (typeof this.gs.chooseBossType === 'function') bossType = this.gs.chooseBossType();
+      else if (this.gs.gameMode === 'BossRush' && Array.isArray(this.gs.bossRushQueue) && this.gs.bossRushQueue.length) bossType = this.gs.bossRushQueue[0];
+    } catch (_) {}
     const baseBossHp = Math.floor((pistol?.damage || 15) * 20) * 3;
     this.boss = createBoss(this, width / 2, 100, Math.floor(baseBossHp * (mods.enemyHp || 1)), Math.floor(20 * (mods.enemyDamage || 1)), 50);
-    // Make boss visually larger with a bigger hitbox
     try { this.boss.setScale(1.5); } catch (_) {}
-    try { this.boss.setSize(36, 36).setOffset(0, 0); } catch (_) {}
-    this.boss.bossType = 'Shotgunner';
+    try {
+      const bw = Math.max(1, Math.round(this.boss.displayWidth));
+      const bh = Math.max(1, Math.round(this.boss.displayHeight));
+      this.boss.setSize(bw, bh).setOffset(0, 0);
+    } catch (_) {}
+    if (bossType === 'Charger') {
+      this.boss.bossType = 'Charger';
+      this.boss.maxHp = Math.floor(750 * (mods.enemyHp || 1));
+      this.boss.hp = this.boss.maxHp;
+      this.boss.speed = 80;
+      this.boss.dashDamage = Math.floor(20 * (mods.enemyDamage || 1));
+    } else {
+      this.boss.bossType = 'Shotgunner';
+      this.boss.maxHp = Math.floor(650 * (mods.enemyHp || 1));
+      this.boss.hp = this.boss.maxHp;
+      this.boss.speed = 50;
+      this.boss.dashDamage = Math.floor(16 * (mods.enemyDamage || 1));
+    }
+    try { this.gs.lastBossType = this.boss.bossType; SaveManager.saveToLocal(this.gs); } catch (_) {}
+    this._dashSeq = null;
+    this._dashNextAt = this.time.now + 3000;
     // Group the boss into a physics group for consistent overlap handling
     this.bossGroup = this.physics.add.group();
     this.bossGroup.add(this.boss);
@@ -77,11 +105,10 @@ export default class BossScene extends Phaser.Scene {
       this.physics.add.collider(this.boss, this.walls);
     }
 
-    // Barricades for boss room: simpler and all destructible
+    // Barricades (destructible soft cover)
     this.barricadesSoft = this.physics.add.staticGroup();
-    this.generateBossBarricades();
+    try { this.generateBossBarricades(); } catch (_) {}
     this.physics.add.collider(this.player, this.barricadesSoft);
-    // Boss can break destructible barricades by pushing into them
     this.physics.add.collider(this.boss, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
 
     // Basic overlap damage
@@ -476,7 +503,163 @@ export default class BossScene extends Phaser.Scene {
       }
     }
 
-    // Boss simple pattern: drift toward player with sine offset
+    // Ability activation (F) — match CombatScene
+    if (this.inputMgr.pressedAbility) {
+      const nowT = this.time.now;
+      if (nowT >= (this.ability.onCooldownUntil || 0)) {
+        const abilityId = this.gs?.abilityId || 'ads';
+        if (abilityId === 'ads') {
+          this.deployADS?.();
+          this.ability.onCooldownUntil = nowT + 10000; // 10s
+        } else if (abilityId === 'bits') {
+          this.deployBITs();
+          this.ability.onCooldownUntil = nowT + 10000; // 10s
+        }
+      }
+    }
+
+    // Update active gadgets (ADS) — identical behavior to CombatScene, but scan boss bullets + grenades
+    if (this._gadgets && this._gadgets.length) {
+      const nowT = this.time.now;
+      this._gadgets = this._gadgets.filter((g) => {
+        if (nowT >= (g.until || 0)) { try { g.g?.destroy(); } catch (_) {} return false; }
+        if (nowT >= (g.nextZapAt || 0)) {
+          const radius = g.radius || 120; const r2 = radius * radius;
+          let best = null; let bestD2 = Infinity;
+          const scan = (grp) => {
+            const arr = grp?.getChildren?.() || [];
+            for (let i = 0; i < arr.length; i += 1) {
+              const b = arr[i]; if (!b?.active) continue;
+              const dx = b.x - g.x; const dy = b.y - g.y; const d2 = dx * dx + dy * dy;
+              if (d2 <= r2 && d2 < bestD2) { best = b; bestD2 = d2; }
+            }
+          };
+          scan(this.bossBullets); scan(this.grenades);
+          if (best) {
+            try {
+              const lg = this.add.graphics();
+              lg.setDepth(9000);
+              lg.lineStyle(1, 0x66aaff, 1);
+              lg.beginPath(); lg.moveTo(g.x, g.y - 4); lg.lineTo(best.x, best.y); lg.strokePath();
+              lg.setAlpha(1);
+              this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
+            } catch (_) { /* ignore */ }
+            try { impactBurst(this, best.x, best.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
+            try { best.destroy(); } catch (_) {}
+            g.nextZapAt = nowT + 100; // 10 per second
+          }
+        }
+        return true;
+      });
+    }
+
+    // Update BIT units — replicate CombatScene behavior with boss as the only target
+    if (!this._bits) this._bits = [];
+    if (this._bits.length) {
+      const dt2 = (this.game?.loop?.delta || 16.7) / 1000;
+      const now2 = this.time.now;
+      const boss = (this.boss && this.boss.active) ? this.boss : null;
+      this._bits = this._bits.filter((bit) => {
+        if (!bit || !bit.g) return false;
+        // Expire: return-to-player phase, despawn on contact
+        if (now2 >= (bit.despawnAt || 0)) {
+          let dx = this.player.x - bit.x; let dy = this.player.y - bit.y;
+          let len = Math.hypot(dx, dy) || 1;
+          if (len < 12) { try { bit.g.destroy(); } catch (_) {} return false; }
+          const sp = 420;
+          bit.vx = (dx / len) * sp; bit.vy = (dy / len) * sp;
+          bit.x += bit.vx * dt2; bit.y += bit.vy * dt2;
+          try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
+          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
+          dx = this.player.x - bit.x; dy = this.player.y - bit.y; len = Math.hypot(dx, dy) || 1;
+          if (len < 12) { try { bit.g.destroy(); } catch (_) {} return false; }
+          return true;
+        }
+        // Spawn scatter: keep initial outward motion briefly
+        if (bit.spawnScatterUntil && now2 < bit.spawnScatterUntil) {
+          bit.x += (bit.vx || 0) * dt2; bit.y += (bit.vy || 0) * dt2;
+          try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
+          try { bit.g.setRotation(Math.atan2((bit.vy || 0), (bit.vx || 0)) + Math.PI); } catch (_) {}
+          return true;
+        }
+        // Emulate target acquisition: lock only if boss within lock range
+        const lockR = 180; const lockR2 = lockR * lockR;
+        let trg = null;
+        if (boss) {
+          const dx = boss.x - bit.x; const dy = boss.y - bit.y; const d2 = dx * dx + dy * dy;
+          if (d2 <= lockR2) trg = boss;
+        }
+        if (!trg) {
+          // Idle orbit near player
+          if (bit._idleAngle === undefined) bit._idleAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+          if (bit._idleRadius === undefined) bit._idleRadius = Phaser.Math.Between(20, 36);
+          if (bit._idleSpeed === undefined) bit._idleSpeed = Phaser.Math.FloatBetween(2.0, 3.2);
+          bit._idleAngle += bit._idleSpeed * dt2;
+          const px = this.player.x; const py = this.player.y;
+          const tx = px + Math.cos(bit._idleAngle) * bit._idleRadius;
+          const ty = py + Math.sin(bit._idleAngle) * bit._idleRadius;
+          const dx = tx - bit.x; const dy = ty - bit.y; const len = Math.hypot(dx, dy) || 1; const sp = 260;
+          bit.vx = (dx / len) * sp; bit.vy = (dy / len) * sp;
+          bit.x += bit.vx * dt2; bit.y += bit.vy * dt2; try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
+          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
+          return true;
+        }
+        // Firing hold: face target
+        if (now2 < (bit.holdUntil || 0)) {
+          try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {}
+          return true;
+        }
+        // Decide next action
+        if (!bit.moveUntil || now2 >= bit.moveUntil) {
+          // Fire if in range
+          const fireR = 180; const fireR2 = fireR * fireR;
+          const ddx = trg.x - bit.x; const ddy = trg.y - bit.y; const dd2 = ddx * ddx + ddy * ddy;
+          if ((!bit.lastShotAt || (now2 - bit.lastShotAt > 500)) && dd2 <= fireR2) {
+            // Laser + damage
+            try {
+              const lg = this.add.graphics(); lg.setDepth(9000);
+              lg.lineStyle(1, 0x66aaff, 1);
+              lg.beginPath(); lg.moveTo(bit.x, bit.y); lg.lineTo(trg.x, trg.y); lg.strokePath();
+              this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
+            } catch (_) {}
+            try { impactBurst(this, trg.x, trg.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
+            try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {}
+            if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300;
+            this.boss.hp -= 7; if (this.boss.hp <= 0) { try { this.killBoss(this.boss); } catch (_) {} }
+            bit.lastShotAt = now2; bit.holdUntil = now2 + 400; bit.moveUntil = now2 + 400; return true;
+          }
+          // Plan quick straight movement around target
+          const angTo = Math.atan2(bit.y - trg.y, bit.x - trg.x);
+          const off = Phaser.Math.FloatBetween(-Math.PI / 2, Math.PI / 2);
+          const r = Phaser.Math.Between(40, 120);
+          const tx = trg.x + Math.cos(angTo + off) * r;
+          const ty = trg.y + Math.sin(angTo + off) * r;
+          const dx = tx - bit.x; const dy = ty - bit.y; const len = Math.hypot(dx, dy) || 1;
+          const sp = 380; bit.vx = (dx / len) * sp; bit.vy = (dy / len) * sp;
+          bit.moveUntil = now2 + Phaser.Math.Between(240, 420);
+        } else {
+          // Move step
+          bit.x += bit.vx * dt2; bit.y += bit.vy * dt2;
+          try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
+          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
+        }
+        return true;
+      });
+    }
+
+    // Ability cooldown progress for UI (match CombatScene)
+    try {
+      const nowT2 = this.time.now;
+      const until = this.ability?.onCooldownUntil || 0;
+      const active = nowT2 < until;
+      const denom = 10000;
+      const remaining = Math.max(0, until - nowT2);
+      const prog = active ? (1 - Math.min(1, remaining / denom)) : 1;
+      this.registry.set('abilityCooldownActive', active);
+      this.registry.set('abilityCooldownProgress', prog);
+    } catch (_) {}
+
+    // Boss modern movement/attacks
     if (this.boss && this.boss.active) {
       const dx = this.player.x - this.boss.x;
       const dy = this.player.y - this.boss.y;
@@ -484,42 +667,105 @@ export default class BossScene extends Phaser.Scene {
       const nx = dx / len;
       const ny = dy / len;
       const wobble = Math.sin(time / 300) * 60;
-      this.boss.body.setVelocity((nx * this.boss.speed) + wobble * -ny * 0.4, (ny * this.boss.speed) + wobble * nx * 0.4);
-
-      if (TEMP_BOSS_BOUND_GUARD) {
-        // Clamp inside screen bounds
-        const { width, height } = this.scale;
-        this.boss.x = Phaser.Math.Clamp(this.boss.x, 12, width - 12);
-        this.boss.y = Phaser.Math.Clamp(this.boss.y, 12, height - 12);
-        // Failsafe: if off-camera for >1.5s, warp back near center
-        const inView = this.cameras.main.worldView.contains(this.boss.x, this.boss.y);
-        if (!inView) {
-          if (!this._bossOffscreenSince) this._bossOffscreenSince = time;
-          if (time - this._bossOffscreenSince > 1500) {
-            this.boss.setPosition(width / 2, height / 3);
-            this._bossOffscreenSince = 0;
+      const isCharger = (this.boss.bossType === 'Charger');
+      // Charger multi-dash window
+      if (isCharger) {
+        if (!this._dashSeq && !this._castingGrenades && time >= (this._dashNextAt || 0)) {
+          this._dashSeq = { phase: 'prep', until: time + 600, idx: 0 };
+          try {
+            const hint = this.add.graphics(); hint.setDepth(9500); hint.lineStyle(3, 0xff3333, 0.9);
+            const to = Math.atan2(this.player.y - this.boss.y, this.player.x - this.boss.x);
+            hint.beginPath(); hint.moveTo(this.boss.x, this.boss.y); hint.lineTo(this.boss.x + Math.cos(to) * 260, this.boss.y + Math.sin(to) * 260); hint.strokePath();
+            this._dashSeq._hintG = hint; this._dashSeq._hintAngle = to;
+          } catch (_) {}
+        }
+        if (this._dashSeq) {
+          const ds = this._dashSeq;
+          if (time >= ds.until) {
+            if (ds.phase === 'prep' || ds.phase === 'wait') {
+              // start dash towards hinted angle
+              const ang = ds._hintAngle ?? Math.atan2(this.player.y - this.boss.y, this.player.x - this.boss.x);
+              const sp = 600; this.boss.body.setVelocity(Math.cos(ang) * sp, Math.sin(ang) * sp);
+              ds.phase = 'dash'; ds.until = time + 260; ds.idx += 1; ds.lastX = this.boss.x; ds.lastY = this.boss.y;
+              try { ds._hintG?.destroy(); } catch (_) {}
+            } else if (ds.phase === 'dash') {
+              // end dash, damage line, maybe prep next
+              this.boss.body.setVelocity(0, 0);
+              try {
+                const line = new Phaser.Geom.Line(ds.lastX ?? this.boss.x, ds.lastY ?? this.boss.y, this.boss.x, this.boss.y);
+                const rect = this.player.getBounds();
+                if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
+                  if (time >= (this.player.iframesUntil || 0)) { this.gs.hp -= (this.boss.dashDamage || 20); this.player.iframesUntil = time + 600; }
+                }
+                const arr = this.barricadesSoft?.getChildren?.() || [];
+                for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const r = s.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, r)) { try { s.destroy(); } catch (_) {} } }
+              } catch (_) {}
+              ds.phase = (ds.idx >= 3) ? 'done' : 'wait'; ds.until = time + 500;
+              if (ds.phase === 'wait') {
+                try {
+                  const to = Math.atan2(this.player.y - this.boss.y, this.player.x - this.boss.x);
+                  const g = this.add.graphics(); g.setDepth(9500); g.lineStyle(3, 0xff3333, 0.9);
+                  g.beginPath(); g.moveTo(this.boss.x, this.boss.y); g.lineTo(this.boss.x + Math.cos(to) * 260, this.boss.y + Math.sin(to) * 260); g.strokePath();
+                  ds._hintG = g; ds._hintAngle = to;
+                } catch (_) {}
+              }
+            } else if (ds.phase === 'done') {
+              this._dashNextAt = time + 8000; try { ds._hintG?.destroy(); } catch (_) {} this._dashSeq = null;
+            }
+          } else if (ds.phase === 'prep' || ds.phase === 'wait') {
+            this.boss.body.setVelocity(0, 0);
           }
         } else {
-          this._bossOffscreenSince = 0;
+          this.boss.body.setVelocity((nx * this.boss.speed) + wobble * -ny * 0.4, (ny * this.boss.speed) + wobble * nx * 0.4);
+        }
+      } else {
+        this.boss.body.setVelocity((nx * this.boss.speed) + wobble * -ny * 0.4, (ny * this.boss.speed) + wobble * nx * 0.4);
+      }
+
+      if (TEMP_BOSS_BOUND_GUARD) {
+        const { width, height } = this.scale; const pad = (this.boss?.body?.halfWidth || 12);
+        this.boss.x = Phaser.Math.Clamp(this.boss.x, pad, width - pad);
+        this.boss.y = Phaser.Math.Clamp(this.boss.y, pad, height - pad);
+      }
+    }
+
+    // Boss shooting pattern (pause during dash)
+    if (this.boss && this.boss.active && !this._castingGrenades) {
+      const isCharger = (this.boss.bossType === 'Charger');
+      const canShoot = !this._dashSeq;
+      const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
+      if (isCharger) {
+        if (canShoot) {
+          const nowT = time;
+          if (!this._bossBurstLeft && (!this.lastBossShot || nowT - this.lastBossShot > 600)) {
+            this._bossBurstLeft = 5; this._bossBurstBase = base; this._bossBurstSpread = Phaser.Math.DegToRad(16); this._bossNextBurstAt = nowT;
+          }
+          if (this._bossBurstLeft && nowT >= (this._bossNextBurstAt || 0)) {
+            const firedIdx = 5 - this._bossBurstLeft; const t = (firedIdx / Math.max(1, 5 - 1)) - 0.5;
+            const ang = (this._bossBurstBase || base) + t * (this._bossBurstSpread || 0);
+            const vx = Math.cos(ang) * 750; const vy = Math.sin(ang) * 750;
+            const b = this.bossBullets.get(this.boss.x, this.boss.y, 'bullet');
+            if (b) { b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.setTint(0xff4444); b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); }; }
+            this._bossBurstLeft -= 1; this._bossNextBurstAt = this._bossBurstLeft <= 0 ? 0 : nowT + 100; if (this._bossBurstLeft <= 0) this.lastBossShot = nowT;
+          }
+        }
+      } else {
+        if (!this.lastBossShot || time - this.lastBossShot > 700) {
+          this.lastBossShot = time; const pellets = 7; const spreadRad = Phaser.Math.DegToRad(28);
+          for (let i = 0; i < pellets; i += 1) {
+            const t = (pellets === 1) ? 0 : (i / (pellets - 1)) - 0.5; const ang = base + t * spreadRad; const vx = Math.cos(ang) * 280; const vy = Math.sin(ang) * 280;
+            const b = this.bossBullets.get(this.boss.x, this.boss.y, 'bullet'); if (!b) continue; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.setTint(0xffff00); b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); };
+          }
         }
       }
     }
 
-    // Boss shooting pattern (disabled while casting grenades)
-    if (this.boss && this.boss.active && !this._castingGrenades) {
-      if (!this.lastBossShot || time - this.lastBossShot > 700) {
-        this.lastBossShot = time;
-        // Fire 3-way aimed burst
-        const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
-        [0, -0.15, 0.15].forEach((off) => {
-          const vx = Math.cos(base + off) * 240; const vy = Math.sin(base + off) * 240;
-          const b = this.bossBullets.get(this.boss.x, this.boss.y, 'bullet'); if (!b) return;
-          b.setActive(true).setVisible(true);
-          b.setCircle(2).setOffset(-2, -2);
-          b.setVelocity(vx, vy);
-          b.setTint(0xffff00); // enemy bullets are yellow
-          b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); };
-        });
+    // Boss ability: grenade volley for Shotgunner
+    if (this.boss && this.boss.active && this.boss.bossType !== 'Charger') {
+      if (time >= (this._grenadeNextAvailableAt || 0)) {
+        if (!this._lastAbilityRollAt || (time - this._lastAbilityRollAt) > 500) {
+          this._lastAbilityRollAt = time; if (Math.random() < 0.35) { this.castGrenadeVolley(); this._grenadeNextAvailableAt = time + 6000; }
+        }
       }
     }
 
@@ -776,6 +1022,114 @@ export default class BossScene extends Phaser.Scene {
         try { b.destroy(); } catch (_) {}
       }
     };
+  }
+  
+  // Simple generation: a few short lines and clusters, all destructible
+  generateBossBarricades() {
+    const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
+    const tile = 16;
+    const tilesX = Math.floor(rect.width / tile);
+    const tilesY = Math.floor(rect.height / tile);
+    const centerX = rect.centerX; const centerY = rect.centerY;
+    const avoidR2 = 64 * 64;
+    const used = new Set();
+    const key = (x, y) => `${x},${y}`;
+    const place = (gx, gy) => {
+      if (gx < 1 || gy < 1 || gx >= tilesX - 1 || gy >= tilesY - 1) return;
+      const wx = rect.x + gx * tile + tile / 2;
+      const wy = rect.y + gy * tile + tile / 2;
+      const dx = wx - centerX; const dy = wy - centerY;
+      if (dx * dx + dy * dy < avoidR2) return;
+      const k = key(gx, gy); if (used.has(k)) return; used.add(k);
+      const s = this.physics.add.staticImage(wx, wy, 'barricade_soft');
+      s.setData('destructible', true); s.setData('hp', 20);
+      this.barricadesSoft.add(s);
+    };
+    // Lines
+    const lines = 5;
+    for (let i = 0; i < lines; i += 1) {
+      const vertical = (i % 2) === 0;
+      if (vertical) {
+        const gx = Phaser.Math.Between(3, tilesX - 4);
+        let gy = Phaser.Math.Between(2, tilesY - 8);
+        const len = Phaser.Math.Between(4, 8);
+        for (let j = 0; j < len; j += 1) { place(gx, gy); gy += 1; }
+      } else {
+        const gy = Phaser.Math.Between(3, tilesY - 4);
+        let gx = Phaser.Math.Between(2, tilesX - 8);
+        const len = Phaser.Math.Between(4, 8);
+        for (let j = 0; j < len; j += 1) { place(gx, gy); gx += 1; }
+      }
+    }
+    // Clusters
+    const clusters = 6;
+    for (let c = 0; c < clusters; c += 1) {
+      const gx = Phaser.Math.Between(2, tilesX - 3);
+      const gy = Phaser.Math.Between(2, tilesY - 3);
+      const n = Phaser.Math.Between(3, 5);
+      for (let k = 0; k < n; k += 1) { place(gx + Phaser.Math.Between(-1, 1), gy + Phaser.Math.Between(-1, 1)); }
+    }
+  }
+
+  // Player bullet hits barricade (all destructible)
+  onBulletHitBarricade(b, s) {
+    if (b?._rail) return; if (!b || !b.active || !s) return;
+    const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+    const hp1 = hp0 - dmg;
+    try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+    if (b._core === 'blast') {
+      const radius = b._blastRadius || 20; try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+      const r2 = radius * radius; const ex = b.x; const ey = b.y;
+      if (this.boss?.active) { const dx = this.boss.x - ex; const dy = this.boss.y - ey; if ((dx * dx + dy * dy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; const splash = b._rocket ? (b.damage || 12) : Math.ceil((b.damage || 12) * 0.5); this.boss.hp -= splash; if (this.boss.hp <= 0) this.killBoss(this.boss); } }
+      this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+    }
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    try { b.destroy(); } catch (_) {}
+  }
+
+  // Boss bullets into barricades
+  onBossBulletHitBarricade(b, s) { if (!b || !s) return; const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } try { b.destroy(); } catch (_) {} }
+
+  // Utility AoE damage to soft barricades
+  damageSoftBarricadesInRadius(x, y, radius, dmg) {
+    try { const r2 = radius * radius; const arr = this.barricadesSoft?.getChildren?.() || []; for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const dx = s.x - x; const dy = s.y - y; if ((dx * dx + dy * dy) <= r2) { const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } } } } catch (_) {}
+  }
+
+  // Boss trying to push destructible cover
+  onEnemyHitBarricade(e, s) { if (!s?.active) return; const now = this.time.now; const last = s.getData('_lastMeleeHurtAt') || 0; if (now - last < 250) return; s.setData('_lastMeleeHurtAt', now); const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7)); const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } }
+
+  // Optional walls
+  createArenaWalls() {
+    const { width, height } = this.scale; const tile = 16; const margin = 80; const w = width - margin; const h = height - margin; const x = (width - w) / 2; const y = (height - h) / 2; this.arenaRect = new Phaser.Geom.Rectangle(x, y, w, h); this.walls = this.physics.add.staticGroup(); const tilesX = Math.ceil(w / tile); const tilesY = Math.ceil(h / tile); for (let i = 0; i < tilesX; i += 1) { const wx = x + i * tile + tile / 2; const top = this.physics.add.staticImage(wx, y + tile / 2, 'wall_tile'); const bot = this.physics.add.staticImage(wx, y + h - tile / 2, 'wall_tile'); this.walls.add(top); this.walls.add(bot); } for (let j = 1; j < tilesY - 1; j += 1) { const wy = y + j * tile + tile / 2; const left = this.physics.add.staticImage(x + tile / 2, wy, 'wall_tile'); const right = this.physics.add.staticImage(x + w - tile / 2, wy, 'wall_tile'); this.walls.add(left); this.walls.add(right); }
+  }
+  
+  // Deploy BITs — identical to CombatScene
+  deployBITs() {
+    if (!this._bits) this._bits = [];
+    // Green spawn burst around player
+    try { impactBurst(this, this.player.x, this.player.y, { color: 0x33ff66, size: 'large', radius: 36 }); } catch (_) {}
+    const count = 6;
+    for (let i = 0; i < count; i += 1) {
+      // Use asset sprite for BIT unit and fit to moderate height
+      const g = createFittedImage(this, this.player.x, this.player.y, 'ability_bit', 14);
+      try { g.setDepth(9000); } catch (_) {}
+      const bit = { x: this.player.x, y: this.player.y, vx: 0, vy: 0, g, target: null, lastShotAt: 0, holdUntil: 0, moveUntil: 0, despawnAt: this.time.now + 7000, spawnScatterUntil: this.time.now + Phaser.Math.Between(260, 420) };
+      // initial scatter velocity
+      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const sp = Phaser.Math.Between(180, 260);
+      bit.vx = Math.cos(a) * sp; bit.vy = Math.sin(a) * sp; bit.moveUntil = this.time.now + Phaser.Math.Between(200, 400);
+      this._bits.push(bit);
+    }
+  }
+
+  // Deploy ADS — identical to CombatScene
+  deployADS() {
+    const x = this.player.x; const y = this.player.y;
+    const g = createFittedImage(this, x, y, 'ability_ads',  20);
+    try { g.setDepth(9000); } catch (_) {}
+    const obj = { x, y, g, radius: 120, nextZapAt: 0, until: this.time.now + 8000 };
+    this._gadgets.push(obj);
   }
   // Returns the effective magazine capacity for the currently active weapon
   getActiveMagCapacity() {

@@ -23,7 +23,17 @@ export const weaponMods = [
 export const weaponCores = [
   { id: null, name: 'No Core', desc: 'No special effect', apply: (w) => w },
   { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', apply: (w) => ({ ...w, _core: 'pierce' }) },
-  { id: 'core_blast', name: 'Explosive Core', desc: '+Small explosion on hit', apply: (w) => ({ ...w, _core: 'blast' }) },
+  {
+    id: 'core_blast',
+    name: 'Explosive Core',
+    desc: '+Small explosion on hit',
+    // Do not apply to explosive weapons (rocket-like projectiles)
+    apply: (w) => {
+      if (!w) return w;
+      if (w.projectile === 'rocket') return w; // disallow on explosive weapons (e.g., rocket, mgl)
+      return { ...w, _core: 'blast' };
+    },
+  },
   {
     id: 'core_rail_hold',
     name: 'Rail Stabilizer',
@@ -46,6 +56,28 @@ export const weaponCores = [
       const newDmg = Math.max(1, Math.floor((w.damage || 1) * 0.5));
       const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 1.75));
       return { ...w, fireRateMs: faster, pelletCount: 10, damage: newDmg, spreadDeg: newSpread };
+    },
+  },
+  {
+    id: 'core_battle_semi',
+    name: 'Semi Auto',
+    onlyFor: 'battle_rifle',
+    desc: [
+      'Battle Rifle only',
+      '- Single-fire',
+      '- Mag size: 25 -> 18 (-28%)',
+      '+ Damage: 16 -> 28 (+75%)',
+      '+ Bullet speed: 575 -> 750 (+30%)',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'battle_rifle') return w;
+      return {
+        ...w,
+        singleFire: true,
+        magSize: 18,
+        damage: 28,
+        bulletSpeed: 750,
+      };
     },
   },
 ];

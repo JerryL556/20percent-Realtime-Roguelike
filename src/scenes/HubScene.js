@@ -38,7 +38,15 @@ export default class HubScene extends Phaser.Scene {
     this.npcG = this.add.graphics();
     this.npcG.fillStyle(0x44aaff, 1).fillRect(this.npcZone.x - 10, this.npcZone.y - 10, 20, 20);
 
-    // Portal to Combat
+    // Mode-select NPC (upper-right)
+    this.modeNpcZone = this.add.zone(width - 80, 60, 40, 40);
+    this.physics.world.enable(this.modeNpcZone);
+    this.modeNpcZone.body.setAllowGravity(false);
+    this.modeNpcZone.body.setImmovable(true);
+    this.modeNpcG = this.add.graphics();
+    this.modeNpcG.fillStyle(0xff66cc, 1).fillRect(this.modeNpcZone.x - 10, this.modeNpcZone.y - 10, 20, 20);
+
+    // Portal to Combat/Boss
     this.portalZone = this.add.zone(width - 60, height / 2, 40, 80);
     this.physics.world.enable(this.portalZone);
     this.portalZone.body.setAllowGravity(false);
@@ -48,6 +56,7 @@ export default class HubScene extends Phaser.Scene {
 
     // Overlap detection
     this.physics.add.overlap(this.player, this.npcZone);
+    this.physics.add.overlap(this.player, this.modeNpcZone);
     this.physics.add.overlap(this.player, this.portalZone);
 
     // UI prompt (top, consistent with Combat "Clear enemies")
@@ -57,6 +66,7 @@ export default class HubScene extends Phaser.Scene {
       'W/A/S/D: Move',
       'Space: Dash',
       'E: Interact',
+      'F: Ability',
       'LMB: Shoot',
       'Q: Swap Weapon',
       'R: Reload',
@@ -192,6 +202,32 @@ export default class HubScene extends Phaser.Scene {
     this.panel._extra = [t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, close];
   }
 
+  openModePanel() {
+    if (this.panel) return;
+    const { width } = this.scale;
+    this.panel = drawPanel(this, width / 2 - 160, 80, 320, 230);
+    this.panel._type = 'modeSelect';
+    const title = this.add.text(width / 2, 105, 'Select Mode', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
+    const normalBtn = makeTextButton(this, width / 2 - 70, 145, 'Normal', () => {
+      try { this.gs.setGameMode('Normal'); SaveManager.saveToLocal(this.gs); } catch (_) {}
+      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+    });
+    const bossRushBtn = makeTextButton(this, width / 2 + 70, 145, 'Boss Rush', () => {
+      try { this.gs.setGameMode('BossRush'); SaveManager.saveToLocal(this.gs); } catch (_) {}
+      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+    });
+    const rangeBtn = makeTextButton(this, width / 2, 175, 'Shooting Range', () => {
+      try { this.gs.setGameMode('Normal'); this.gs.shootingRange = true; SaveManager.saveToLocal(this.gs); } catch (_) {}
+      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+      this.gs.nextScene = SceneKeys.Combat;
+      this.scene.start(SceneKeys.Combat);
+    });
+    const closeBtn = makeTextButton(this, width / 2, 205, 'Close', () => {
+      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+    });
+    this.panel._extra = [title, normalBtn, bossRushBtn, rangeBtn, closeBtn];
+  }
+
   closePanel(extra = []) {
     // Detach shop wheel handler if active
     try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
@@ -255,9 +291,11 @@ export default class HubScene extends Phaser.Scene {
 
     // Interaction
     const nearNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.npcZone.getBounds());
+    const nearModeNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.modeNpcZone.getBounds());
     const nearPortal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.portalZone.getBounds());
-    if (nearNpc) this.prompt.setText('E: Talk');
-    else if (nearPortal) this.prompt.setText('E: Enter Combat');
+    if (nearNpc) this.prompt.setText('E: Shop');
+    else if (nearModeNpc) this.prompt.setText('E: Select Mode');
+    else if (nearPortal) this.prompt.setText(this.gs?.gameMode === 'BossRush' ? 'E: Enter Boss' : 'E: Enter Combat');
     else this.prompt.setText('WASD move, E interact');
 
     // Auto-close the conversation box if player moves away from NPC
@@ -273,10 +311,18 @@ export default class HubScene extends Phaser.Scene {
 
     if (this.inputMgr.pressedInteract) {
       if (nearNpc) this.openNpcPanel();
+      if (nearModeNpc) this.openModePanel();
       if (nearPortal) {
-        this.gs.nextScene = SceneKeys.Combat;
+        let next = (this.gs?.gameMode === 'BossRush') ? SceneKeys.Boss : SceneKeys.Combat;
+        // Ensure Boss Rush queue is ready when entering boss portal
+        try {
+          if (next === SceneKeys.Boss && this.gs && (!Array.isArray(this.gs.bossRushQueue) || this.gs.bossRushQueue.length === 0)) {
+            this.gs.setGameMode('BossRush');
+          }
+        } catch (_) {}
+        this.gs.nextScene = next;
         SaveManager.saveToLocal(this.gs);
-        this.scene.start(SceneKeys.Combat);
+        this.scene.start(next);
       }
     }
 
