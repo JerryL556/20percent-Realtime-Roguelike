@@ -727,6 +727,18 @@ export default class BossScene extends Phaser.Scene {
             }
           } else if (ds.phase === 'prep' || ds.phase === 'wait') {
             this.boss.body.setVelocity(0, 0);
+          } else if (ds.phase === 'dash') {
+            // During dash, continuously clear any barricades the boss passes through
+            try {
+              if (ds._px == null) { ds._px = ds.lastX ?? this.boss.x; ds._py = ds.lastY ?? this.boss.y; }
+              const seg = new Phaser.Geom.Line(ds._px, ds._py, this.boss.x, this.boss.y);
+              const arr = this.barricadesSoft?.getChildren?.() || [];
+              for (let i = 0; i < arr.length; i += 1) {
+                const s = arr[i]; if (!s?.active) continue; const r = s.getBounds();
+                if (Phaser.Geom.Intersects.LineToRectangle(seg, r)) { try { s.destroy(); } catch (_) {} }
+              }
+              ds._px = this.boss.x; ds._py = this.boss.y;
+            } catch (_) {}
           }
         } else {
           this.boss.body.setVelocity((nx * this.boss.speed) + wobble * -ny * 0.4, (ny * this.boss.speed) + wobble * nx * 0.4);
@@ -745,8 +757,8 @@ export default class BossScene extends Phaser.Scene {
     // Boss shooting pattern (pause during dash)
     if (this.boss && this.boss.active && !this._castingGrenades) {
       const isCharger = (this.boss.bossType === 'Charger');
-      // Allow Charger to shoot during idle windows and between dash legs (wait phase)
-      const canShoot = (!this._dashSeq) || (this._dashSeq && this._dashSeq.phase === 'wait');
+      // Do not shoot while any dash sequence is active
+      const canShoot = !this._dashSeq;
       const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
       if (isCharger) {
         if (canShoot) {
