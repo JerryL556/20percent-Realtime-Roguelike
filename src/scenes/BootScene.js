@@ -35,8 +35,8 @@ export default class BootScene extends Phaser.Scene {
     // BITs particle (small green circle for spawn burst)
     g.clear();
     g.fillStyle(0x33ff66, 1);
-    g.fillCircle(3, 3, 3);
-    g.generateTexture('bit_particle', 6, 6);
+    g.fillCircle(4, 4, 4);
+    g.generateTexture('bit_particle', 8, 8);
     g.destroy();
   }
   create() {
