@@ -118,18 +118,24 @@ export default class CombatScene extends Phaser.Scene {
       try {
         const arrE = this.enemies?.getChildren?.() || [];
         for (let i = 0; i < arrE.length; i += 1) {
-          const e = arrE[i]; if (!e?.active) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power =  420; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
-            try { if (e.isDummy) { this._dummyDamage = (this._dummyDamage||0) + 5; } } catch (_) {}
-            // Apply 5 damage once per enemy per pulse
+          const e = arrE[i]; if (!e?.active) continue;
+          const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy;
+          if (d2 >= r2min && d2 <= r2max) {
+            const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 420;
+            try { e.x += nx * 8; e.y += ny * 8; } catch (_) {}
+            try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} }
             try {
               if (!rp._hitSet) rp._hitSet = new Set();
               if (!rp._hitSet.has(e)) {
                 rp._hitSet.add(e);
-                if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
-                e.hp -= 5;
+                if (typeof e.hp !== 'number') e.hp = e.maxHp || 20; e.hp -= 5;
+                if (e.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + 5; }
                 if (e.hp <= 0) { try { this.killEnemy?.(e); } catch (_) {} }
               }
             } catch (_) {}
+          }
+        }
+      } catch (_) {}
         }
       } catch (_) {}
       if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
