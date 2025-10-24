@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -697,6 +697,15 @@ export default class BossScene extends Phaser.Scene {
         } catch (_) {}
         try {
           const boss = this.boss; if (boss?.active) { const dx = boss.x - rp.x; const dy = boss.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 240; try { boss.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { boss.setVelocity(nx * power, ny * power); } catch (_) {} } } }
+          // Deal 5 damage to boss once per pulse
+          try {
+            if (!rp._hitBoss) {
+              rp._hitBoss = true;
+              if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
+              boss.hp -= 5;
+              if (boss.hp <= 0) { try { this.killBoss(boss); } catch (_) {} }
+            }
+          } catch (_) {}
         } catch (_) {}
         if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
         return true;
@@ -1199,7 +1208,7 @@ export default class BossScene extends Phaser.Scene {
     const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
     const corners = [ { x: rect.left, y: rect.top }, { x: rect.right, y: rect.top }, { x: rect.right, y: rect.bottom }, { x: rect.left, y: rect.bottom } ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
-    const obj = { x, y, r: 0, band: 8, speed: 600, maxR: maxD + 24, g };
+    const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g };
     this._repulses.push(obj);
   }
 
