@@ -209,19 +209,21 @@ export default class BossScene extends Phaser.Scene {
   }
 
   win() {
-    // Reward and spawn portal to hub
+    // Reward and spawn portal; require E to confirm exit
     if (this.gs) { this.gs.gold += 50; this.gs.xp = (this.gs.xp || 0) + 150; }
-    const px = this.scale.width - 50 + 20; // center of previous exit area
+    const px = this.scale.width - 50 + 20; // near previous exit area
     const py = this.scale.height / 2;
     this.exitG.clear();
-    // Create a visible portal sprite and physics overlap
     this.portal = this.physics.add.staticImage(px, py, 'portal');
     this.portal.setSize(24, 24).setOffset(0, 0);
-    this.physics.add.overlap(this.player, this.portal, () => {
-      this.gs.progressAfterBoss();
-      SaveManager.saveToLocal(this.gs);
-      this.scene.start(SceneKeys.Hub);
-    });
+    this.exitActive = true;
+    try {
+      if (!this.prompt) {
+        this.prompt = this.add.text(this.scale.width / 2, 40, 'Boss defeated! Press E to exit', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+      } else {
+        this.prompt.setText('Boss defeated! Press E to exit');
+      }
+    } catch (_) {}
   }
 
   // Centralized boss death to keep behavior tied to HP
@@ -759,6 +761,22 @@ export default class BossScene extends Phaser.Scene {
         }
       }
     }
+
+    // Portal confirm: require interact (E) inside portal bounds
+    try {
+      if (this.exitActive && this.portal && this.portal.active) {
+        const playerRect = this.player.getBounds();
+        const portalRect = this.portal.getBounds();
+        if (Phaser.Geom.Intersects.RectangleToRectangle(playerRect, portalRect)) {
+          if (this.inputMgr?.pressedInteract) {
+            this.gs.progressAfterBoss();
+            SaveManager.saveToLocal(this.gs);
+            const next = (this.gs.nextScene === 'Boss') ? SceneKeys.Boss : SceneKeys.Hub;
+            this.scene.start(next);
+          }
+        }
+      }
+    } catch (_) {}
 
     // Boss ability: grenade volley for Shotgunner
     if (this.boss && this.boss.active && this.boss.bossType !== 'Charger') {
