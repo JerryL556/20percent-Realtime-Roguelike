@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -96,39 +96,37 @@ export default class CombatScene extends Phaser.Scene {
     // Keep weapon sprite updated every frame without touching existing update()
     try {
       this.events.on('update', () => {
-        // Update position/rotation
-        updateWeaponSprite(this);
-        // Always try to sync texture in case it finished loading after create
-        if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
-        this._lastActiveWeapon = this.gs?.activeWeapon;
-      });
+  // Weapon sprite follow + texture sync
+  try { updateWeaponSprite(this); } catch (_) {}
+  try { if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon); } catch (_) {}
+  this._lastActiveWeapon = this.gs?.activeWeapon;
+  // Repulsion Pulse effects
+  if (this._repulses && this._repulses.length) {
+    const dt = (this.game?.loop?.delta || 16.7) / 1000;
+    this._repulses = this._repulses.filter((rp) => {
+      rp.r += rp.speed * dt;
+      try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
+      const band = rp.band;
+      const r2min = (rp.r - band) * (rp.r - band);
+      const r2max = (rp.r + band) * (rp.r + band);
+      try {
+        const arrB = this.enemyBullets?.getChildren?.() || [];
+        for (let i = 0; i < arrB.length; i += 1) {
+          const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+        }
+      } catch (_) {}
+      try {
+        const arrE = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arrE.length; i += 1) {
+          const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
+        }
+      } catch (_) {}
+      if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
+      return true;
+    });
+  }
+});
     } catch (_) {}
-		// Update Repulsion Pulse effects
-		if (this._repulses && this._repulses.length) {
-		  const dt = (this.game?.loop?.delta || 16.7) / 1000;
-		  this._repulses = this._repulses.filter((rp) => {
-			 rp.r += rp.speed * dt;
-			 try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
-			 const band = rp.band;
-			 const r2min = (rp.r - band) * (rp.r - band);
-			 const r2max = (rp.r + band) * (rp.r + band);
-			 try {
-			   const arrB = this.enemyBullets?.getChildren?.() || [];
-			   for (let i = 0; i < arrB.length; i += 1) {
-			     const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
-			   }
-			 } catch (_) {}
-			 try {
-			   const arrE = this.enemies?.getChildren?.() || [];
-			   for (let i = 0; i < arrE.length; i += 1) {
-			     const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
-			   }
-			 } catch (_) {}
-			 if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
-			 return true;
-		  });
-		}
-
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
