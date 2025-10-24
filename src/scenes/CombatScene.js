@@ -119,6 +119,16 @@ export default class CombatScene extends Phaser.Scene {
         const arrE = this.enemies?.getChildren?.() || [];
         for (let i = 0; i < arrE.length; i += 1) {
           const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
+            // Apply 5 damage once per enemy per pulse
+            try {
+              if (!rp._hitSet) rp._hitSet = new Set();
+              if (!rp._hitSet.has(e)) {
+                rp._hitSet.add(e);
+                if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+                e.hp -= 5;
+                if (e.hp <= 0) { try { this.killEnemy?.(e); } catch (_) {} }
+              }
+            } catch (_) {}
         }
       } catch (_) {}
       if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
@@ -1500,7 +1510,7 @@ export default class CombatScene extends Phaser.Scene {
       { x: rect.left, y: rect.bottom },
     ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const cx = corners[i].x; const cy = corners[i].y; const dx = cx - x; const dy = cy - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
-    const obj = { x, y, r: 0, band: 8, speed: 600, maxR: maxD + 24, g, lastDrawnAt: 0 };
+    const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g, lastDrawnAt: 0 };
     this._repulses.push(obj);
   }
 
@@ -1666,7 +1676,7 @@ export default class CombatScene extends Phaser.Scene {
 
       // Offscreen cleanup
       const view = this.cameras?.main?.worldView;
-      if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
+      if (view && !view.contains(b.x, b.y)) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
       b._px = b.x; b._py = b.y;
     };
     b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
