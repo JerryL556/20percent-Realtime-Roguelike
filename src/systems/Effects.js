@@ -84,3 +84,24 @@ export function bitSpawnRing(scene, x, y, opts = {}) {
     });
   } catch (_) {}
 }
+
+// Tiny additive spark used along Repulsion Pulse ring
+export function pulseSpark(scene, x, y, opts = {}) {
+  try {
+    const color = opts.color ?? 0xffaa66;
+    const size = opts.size ?? 3;
+    const life = opts.life ?? 160;
+    const g = scene.add.graphics({ x, y });
+    try { g.setDepth?.(9500); } catch (_) {}
+    try { g.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+    g.fillStyle(color, 0.9).fillCircle(0, 0, size);
+    scene.tweens.add({
+      targets: g,
+      alpha: 0,
+      scale: 1.4,
+      duration: life,
+      ease: 'Cubic.Out',
+      onComplete: () => { try { g.destroy(); } catch (_) {} },
+    });
+  } catch (_) {}
+}

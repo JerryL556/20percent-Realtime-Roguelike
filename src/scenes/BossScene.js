@@ -4,7 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing, pulseSpark } from '../systems/Effects.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
@@ -282,19 +282,81 @@ export default class BossScene extends Phaser.Scene {
         b._core = 'blast';
         b._blastRadius = weapon.blastRadius || 70;
         b._rocket = true;
+        // Smart Explosives core flags
+        b._smartExplosives = !!weapon._smartExplosives;
+        if (b._smartExplosives) {
+          const scale = (typeof weapon._detectScale === 'number') ? weapon._detectScale : 0.65;
+          b._detectR = Math.max(8, Math.floor((b._blastRadius || 70) * scale));
+        }
         b._startX = startX; b._startY = startY;
         b._targetX = targetX; b._targetY = targetY;
         const sx = targetX - startX; const sy = targetY - startY;
         b._targetLen2 = sx * sx + sy * sy;
         b.update = () => {
           const view = this.cameras?.main?.worldView;
-          if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+          if (view && !view.contains(b.x, b.y)) {
+            if (!b._mine) { try { b.destroy(); } catch (_) {} return; }
+          }
+          // Smart Explosives: proximity detection and mine behavior (boss as sole target)
+          if (b._smartExplosives) {
+            const detR = b._detectR || Math.max(8, Math.floor((b._blastRadius || 70) * 0.65));
+            const detR2 = detR * detR;
+            const now = this.time.now;
+            if (b._mine) {
+              if (now >= (b._mineExpireAt || 0)) {
+                // Detonate on expiry instead of vanishing
+                const ex = b.x; const ey = b.y;
+                const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+                if (this.boss?.active) {
+                  const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
+                }
+                this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+                try { b.destroy(); } catch (_) {}
+                return;
+              }
+              const boss = this.boss;
+              if (boss && boss.active) {
+                const dx = boss.x - b.x; const dy = boss.y - b.y;
+                if ((dx * dx + dy * dy) <= detR2) {
+                  const ex = b.x; const ey = b.y;
+                  const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+                  if (this.boss?.active) {
+                    const ddx = this.boss.x - ex; const ddy = this.boss.y - ey;
+                    if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
+                  }
+                  this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+                  try { b.destroy(); } catch (_) {}
+                  return;
+                }
+              }
+              return;
+            }
+            // While flying: proximity to boss
+            if (this.boss && this.boss.active) {
+              const dx = this.boss.x - b.x; const dy = this.boss.y - b.y;
+              if ((dx * dx + dy * dy) <= detR2) {
+                const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+                const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
+                this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+                try { b.destroy(); } catch (_) {}
+                return;
+              }
+            }
+          }
           const dxs = (b.x - b._startX); const dys = (b.y - b._startY);
           const prog = dxs * (sx) + dys * (sy);
           const dx = b.x - b._targetX; const dy = b.y - b._targetY;
           const nearTarget = (dx * dx + dy * dy) <= 64;
           const passed = prog >= b._targetLen2 - 1;
           if (nearTarget || passed) {
+            if (b._smartExplosives) {
+              // Become a mine (wait for proximity) instead of auto-exploding
+              b._mine = true; b._mineExpireAt = this.time.now + 8000;
+              try { b.setVelocity(0, 0); } catch (_) {}
+              try { b.body?.setVelocity?.(0, 0); } catch (_) {}
+              try { b.setTint(0x55ff77); } catch (_) {}
+              return;
+            }
             const ex = b.x; const ey = b.y;
             try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large' }); } catch (_) {}
             const radius = b._blastRadius || 70; const r2 = radius * radius;
@@ -343,6 +405,35 @@ export default class BossScene extends Phaser.Scene {
         if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy();
       };
       b.on('destroy', () => b._g?.destroy());
+    }
+    // 2Tap Trigger: auto second shot for pistol core
+    if (weapon._twoTap) {
+      const wid = this.gs.activeWeapon;
+      const angle2 = baseAngle;
+      const sx2 = startX; const sy2 = startY;
+      this.time.delayedCall(70, () => {
+        if (this.gs.activeWeapon !== wid) return;
+        const cap = this.getActiveMagCapacity();
+        this.ensureAmmoFor(wid, cap);
+        const ammo = this.ammoByWeapon[wid] ?? 0;
+        if (ammo <= 0 || this.reload.active) return;
+        const effSpeed = Math.floor((weapon.bulletSpeed || 0) * 1.25);
+        const vx = Math.cos(angle2) * effSpeed;
+        const vy = Math.sin(angle2) * effSpeed;
+        const b2 = this.bullets.get(sx2, sy2, 'bullet');
+        if (!b2) return;
+        b2.setActive(true).setVisible(true);
+        b2.setCircle(2).setOffset(-2, -2);
+        b2.setVelocity(vx, vy);
+        b2.setTint(0xffffff);
+        b2.damage = weapon.damage;
+        b2._core = weapon._core || null;
+        if (b2._core === 'pierce') { b2._pierceLeft = 1; }
+        b2.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} } };
+        b2.on('destroy', () => b2._g?.destroy());
+        this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
+        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+      });
     }
   }
 
@@ -525,13 +616,16 @@ export default class BossScene extends Phaser.Scene {
         const abilityId = this.gs?.abilityId || 'ads';
         if (abilityId === 'ads') {
           this.deployADS?.();
-          this.ability.onCooldownUntil = nowT + 3000; // 3s
+          this.ability.cooldownMs = 3000;
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'bits') {
           this.deployBITs();
-          this.ability.onCooldownUntil = nowT + 3000; // 3s
+          this.ability.cooldownMs = 3000;
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'repulse') {
           this.deployRepulsionPulse();
-          this.ability.onCooldownUntil = nowT + 3000; // 3s
+          this.ability.cooldownMs = 5000; // 5s universal for Repulsion Pulse
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
     }
@@ -670,7 +764,7 @@ export default class BossScene extends Phaser.Scene {
       const nowT2 = this.time.now;
       const until = this.ability?.onCooldownUntil || 0;
       const active = nowT2 < until;
-      const denom = 10000;
+      const denom = this.ability?.cooldownMs || 10000;
       const remaining = Math.max(0, until - nowT2);
       const prog = active ? (1 - Math.min(1, remaining / denom)) : 1;
       this.registry.set('abilityCooldownActive', active);
@@ -681,7 +775,35 @@ export default class BossScene extends Phaser.Scene {
       const dt = (this.game?.loop?.delta || 16.7) / 1000;
       this._repulses = this._repulses.filter((rp) => {
         rp.r += rp.speed * dt;
-        try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
+        try {
+          rp.g.clear();
+          rp.g.setBlendMode?.(Phaser.BlendModes.ADD);
+          const now3 = this.time.now;
+          if (rp._lastTrailR === undefined) rp._lastTrailR = 0;
+          if (!rp._trail) rp._trail = [];
+          if ((rp.r - rp._lastTrailR) > 10) { rp._trail.push({ r: rp.r, t: now3 }); rp._lastTrailR = rp.r; }
+          while (rp._trail.length > 6) rp._trail.shift();
+          for (let i = 0; i < rp._trail.length; i += 1) {
+            const it = rp._trail[i];
+            const age = (now3 - it.t) / 300;
+            const a = Math.max(0, 0.22 * (1 - Math.min(1, age)));
+            if (a <= 0) continue;
+            rp.g.lineStyle(6, 0xffaa33, a).strokeCircle(0, 0, it.r);
+          }
+          rp.g.lineStyle(8, 0xffaa33, 0.20).strokeCircle(0, 0, rp.r);
+          rp.g.lineStyle(3, 0xffdd88, 0.95).strokeCircle(0, 0, Math.max(1, rp.r - 1));
+          if (!rp._nextSparkAt) rp._nextSparkAt = now3;
+          if (now3 >= rp._nextSparkAt) {
+            const sparks = 8;
+            for (let s = 0; s < sparks; s += 1) {
+              const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              const sx = rp.x + Math.cos(a) * rp.r;
+              const sy = rp.y + Math.sin(a) * rp.r;
+              try { pulseSpark(this, sx, sy, { color: 0xffaa66, size: 2, life: 180 }); } catch (_) {}
+            }
+            rp._nextSparkAt = now3 + 28;
+          }
+        } catch (_) {}
         const band = rp.band;
         const r2min = (rp.r - band) * (rp.r - band);
         const r2max = (rp.r + band) * (rp.r + band);
@@ -698,21 +820,24 @@ export default class BossScene extends Phaser.Scene {
         try {
           const boss = this.boss;
           if (boss?.active) {
+            if (!rp._pushedSet) rp._pushedSet = new Set();
             const dx = boss.x - rp.x; const dy = boss.y - rp.y; const d2 = dx * dx + dy * dy;
             if (d2 >= r2min && d2 <= r2max) {
-              const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 420;
-              try { boss.x += nx * 8; boss.y += ny * 8; } catch (_) {}
-              try { boss.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { boss.setVelocity(nx * power, ny * power); } catch (_) {} }
-              this._bossKnockUntil = time + 120;
-              // Deal 5 damage to boss once per pulse
-              try {
-                if (!rp._hitBoss) {
-                  rp._hitBoss = true;
-                  if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
-                  boss.hp -= 5;
-                  if (boss.hp <= 0) { try { this.killBoss(boss); } catch (_) {} }
-                }
-              } catch (_) {}
+              if (!rp._pushedSet.has(boss) && !(time < (this._bossKnockUntil || 0))) {
+                const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 240;
+                this._bossKnockUntil = time + 1000;
+                boss._repulseVX = nx * power; boss._repulseVY = ny * power;
+                try { boss.body?.setVelocity?.(boss._repulseVX, boss._repulseVY); } catch (_) { try { boss.setVelocity(boss._repulseVX, boss._repulseVY); } catch (_) {} }
+                rp._pushedSet.add(boss);
+                try {
+                  if (!rp._hitBoss) {
+                    rp._hitBoss = true;
+                    if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
+                    boss.hp -= 5;
+                    if (boss.hp <= 0) { try { this.killBoss(boss); } catch (_) {} }
+                  }
+                } catch (_) {}
+              }
             }
           }
         } catch (_) {}
@@ -724,6 +849,12 @@ export default class BossScene extends Phaser.Scene {
 
     // Boss modern movement/attacks
     if (this.boss && this.boss.active) {
+      // Respect repulsion knockback for 1s, do not re-plan attacks during this period
+      if (time < (this._bossKnockUntil || 0)) {
+        const vx = this.boss._repulseVX || 0; const vy = this.boss._repulseVY || 0;
+        try { this.boss.body?.setVelocity?.(vx, vy); } catch (_) { try { this.boss.setVelocity(vx, vy); } catch (_) {} }
+        return;
+      }
       const dx = this.player.x - this.boss.x;
       const dy = this.player.y - this.boss.y;
       const len = Math.hypot(dx, dy) || 1;
@@ -1214,6 +1345,7 @@ export default class BossScene extends Phaser.Scene {
     const x = this.player.x, y = this.player.y;
     const g = this.add.graphics({ x, y });
     try { g.setDepth?.(9000); } catch (_) {}
+    try { g.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
     const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
     const corners = [ { x: rect.left, y: rect.top }, { x: rect.right, y: rect.top }, { x: rect.right, y: rect.bottom }, { x: rect.left, y: rect.bottom } ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
