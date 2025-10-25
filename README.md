@@ -1,6 +1,11 @@
-# 25percent-Project
+# 20percent Realtime Roguelike
 
 Play in browser: https://jerryl556.github.io/20percent-Realtime-Roguelike/
+
+## GitHub Pages
+- Source: `main` branch, folder `docs` (GitHub Pages settings → Build and deployment → Source: Deploy from a branch → Branch: `main` / `/docs`).
+- Deployed files live under `docs/` and include `index.html`, `assets/`, and a copy of `src/` for ES module loading.
+- Local dev: open `index.html` at repo root when serving the repo root (e.g., `npx http-server .`) or open `docs/index.html` to mirror the Pages layout.
 
 ## Current Status
 Early prototype. Core scenes and systems are scaffolded (Boot, Start, Menu, Hub, Combat, Boss, UI) and placeholder graphics are generated at runtime. Expect incomplete features and occasional bugs while gameplay, art, and balance are still in progress.
