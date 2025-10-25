@@ -18,7 +18,8 @@ export default class CombatScene extends Phaser.Scene {
   preload() {
     // Ensure weapon images are loaded even if entering this scene directly
     try { preloadWeaponAssets(this); } catch (_) {}
-  
+  }
+
   openTerminalPanel() {
     if (this.panel) return;
     const { width } = this.scale;
@@ -45,6 +46,7 @@ export default class CombatScene extends Phaser.Scene {
     });
     const close = makeTextButton(this, cx, y0 + 10 * line, 'Close', () => this.closePanel([title, b1, b2, b3, b4, b5, b6, b7, b8, close]));
     this.panel._extra = [title, b1, b2, b3, b4, b5, b6, b7, b8, close];
+  }
 
   closePanel(extra = []) {
     const extras = [
@@ -53,6 +55,7 @@ export default class CombatScene extends Phaser.Scene {
     ];
     if (this.panel) { try { this.panel.destroy(); } catch (_) {} this.panel = null; }
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
+  }
 
   create() {
     const { width, height } = this.scale;
@@ -181,6 +184,8 @@ export default class CombatScene extends Phaser.Scene {
           s.setData('hp', 20);
           this.barricadesSoft.add(s);
       });
+    }
+    }
     // Helper: pick a spawn on screen edges/corners, far from player
     const pickEdgeSpawn = () => {
       const pad = 12;
@@ -200,6 +205,8 @@ export default class CombatScene extends Phaser.Scene {
         else { sx = W - pad; sy = Phaser.Math.Between(pad, H - pad); } // right
         const dx = sx - px, dy = sy - py;
         if ((dx * dx + dy * dy) >= (minDist * minDist)) return { x: sx, y: sy };
+        
+      }
       // Fallback: farthest corner from player
       const sx = (px < this.scale.width / 2) ? (this.scale.width - pad) : pad;
       const sy = (py < this.scale.height / 2) ? (this.scale.height - pad) : pad;
