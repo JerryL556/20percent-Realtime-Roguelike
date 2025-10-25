@@ -99,28 +99,29 @@ export default class CombatScene extends Phaser.Scene {
         // Update position/rotation
         updateWeaponSprite(this);
         // Always try to sync texture in case it finished loading after create
-		// Repulsion Pulse effects
+        if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
+        this._lastActiveWeapon = this.gs?.activeWeapon;
+      });
+    } catch (_) {}
+		// Update Repulsion Pulse effects
 		if (this._repulses && this._repulses.length) {
 		  const dt = (this.game?.loop?.delta || 16.7) / 1000;
 		  this._repulses = this._repulses.filter((rp) => {
 			 rp.r += rp.speed * dt;
-			 try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
+			 try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 0.95).strokeCircle(0, 0, rp.r); } catch (_) {}
 			 const band = rp.band;
 			 const r2min = (rp.r - band) * (rp.r - band);
 			 const r2max = (rp.r + band) * (rp.r + band);
 			 try {
 			   const arrB = this.enemyBullets?.getChildren?.() || [];
 			   for (let i = 0; i < arrB.length; i += 1) {
-			     const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+			     const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
 			   }
-      });
-    } catch (_) {}
 			 } catch (_) {}
 			 try {
 			   const arrE = this.enemies?.getChildren?.() || [];
 			   for (let i = 0; i < arrE.length; i += 1) {
-			     const e = arrE[i]; if (!e?.active ) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 420; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
-                  try { e.x += nx * 8; e.y += ny * 8; } catch (_) {}
+			     const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
 			   }
 			 } catch (_) {}
 			 if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
@@ -337,7 +338,7 @@ export default class CombatScene extends Phaser.Scene {
         // Defer removal to end of tick to avoid skipping other overlaps this frame
         try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
         try { b.setActive(false).setVisible(false); } catch (_) {}
-        this.time.delayedCall(0, () => { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} });
+        this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
       }
       // Check primary enemy death after damage
       if (e.hp <= 0) { this.killEnemy(e); }
@@ -384,7 +385,7 @@ export default class CombatScene extends Phaser.Scene {
         try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
         // Chip nearby destructible barricades
         this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
-        try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+        try { b.destroy(); } catch (_) {}
         return;
       }
       if (!inIframes) {
@@ -400,7 +401,7 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
       // Always destroy enemy bullet on contact, even during i-frames
-      try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+      try { b.destroy(); } catch (_) {}
     });
     // Enemy bullets blocked by barricades as well
     this.physics.add.collider(this.enemyBullets, this.barricadesHard, (b, s) => this.onEnemyBulletHitBarricade(b, s));
@@ -491,7 +492,7 @@ export default class CombatScene extends Phaser.Scene {
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10));
     }
     // Always destroy player bullet on barricade collision
-    try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+    try { b.destroy(); } catch (_) {}
   }
 
   // Enemy bullet hits a barricade
@@ -503,7 +504,7 @@ export default class CombatScene extends Phaser.Scene {
       const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70;
       try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
-      try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+      try { b.destroy(); } catch (_) {}
       return;
     }
     const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
@@ -513,7 +514,7 @@ export default class CombatScene extends Phaser.Scene {
       if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
       else s.setData('hp', hp1);
     }
-    try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+    try { b.destroy(); } catch (_) {}
   }
 
   // Utility: damage all destructible barricades within radius
@@ -611,7 +612,7 @@ export default class CombatScene extends Phaser.Scene {
         b.update = () => {
           // Lifetime via camera view when walls are disabled
           const view = this.cameras?.main?.worldView;
-          if (view && !view.contains(b.x, b.y)) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} return; }
+          if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
           // Check if reached or passed target point
           const dxs = (b.x - b._startX); const dys = (b.y - b._startY);
           const prog = dxs * (sx) + dys * (sy);
@@ -639,7 +640,7 @@ export default class CombatScene extends Phaser.Scene {
             });
             // Also damage nearby destructible barricades
             this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
-            try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+            try { b.destroy(); } catch (_) {}
           }
         };
         b.on('destroy', () => b._g?.destroy());
@@ -893,13 +894,13 @@ export default class CombatScene extends Phaser.Scene {
         if (abilityId === 'ads') {
           this.deployADS();
           // Cooldown 10s
-          this.ability.onCooldownUntil = nowT + 3000;
+          this.ability.onCooldownUntil = nowT + 10000;
         } else if (abilityId === 'bits') {
           this.deployBITs();
-          this.ability.onCooldownUntil = nowT + 3000;
+          this.ability.onCooldownUntil = nowT + 10000;
         } else if (abilityId === 'repulse') {
           this.deployRepulsionPulse();
-          this.ability.onCooldownUntil = nowT + 3000;
+          this.ability.onCooldownUntil = nowT + 10000;
         }
       }
     }
@@ -1344,7 +1345,7 @@ export default class CombatScene extends Phaser.Scene {
                         this.scene.start(SceneKeys.Hub);
                       }
                     }
-                    try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {}
+                    try { b.destroy(); } catch (_) {}
                     return;
                   }
                 } catch (_) {}
@@ -1501,7 +1502,7 @@ export default class CombatScene extends Phaser.Scene {
       { x: rect.left, y: rect.bottom },
     ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const cx = corners[i].x; const cy = corners[i].y; const dx = cx - x; const dy = cy - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
-    const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g, lastDrawnAt: 0 };
+    const obj = { x, y, r: 0, band: 8, speed: 600, maxR: maxD + 24, g, lastDrawnAt: 0 };
     this._repulses.push(obj);
   }
 
@@ -1667,7 +1668,7 @@ export default class CombatScene extends Phaser.Scene {
 
       // Offscreen cleanup
       const view = this.cameras?.main?.worldView;
-      if (view && !view.contains(b.x, b.y)) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+      if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
       b._px = b.x; b._py = b.y;
     };
     b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
