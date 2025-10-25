@@ -99,11 +99,7 @@ export default class CombatScene extends Phaser.Scene {
         // Update position/rotation
         updateWeaponSprite(this);
         // Always try to sync texture in case it finished loading after create
-        if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
-        this._lastActiveWeapon = this.gs?.activeWeapon;
-      });
-    } catch (_) {}
-		// Update Repulsion Pulse effects
+		// Repulsion Pulse effects
 		if (this._repulses && this._repulses.length) {
 		  const dt = (this.game?.loop?.delta || 16.7) / 1000;
 		  this._repulses = this._repulses.filter((rp) => {
@@ -117,6 +113,8 @@ export default class CombatScene extends Phaser.Scene {
 			   for (let i = 0; i < arrB.length; i += 1) {
 			     const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
 			   }
+      });
+    } catch (_) {}
 			 } catch (_) {}
 			 try {
 			   const arrE = this.enemies?.getChildren?.() || [];
