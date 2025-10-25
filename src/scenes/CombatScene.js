@@ -1,10 +1,10 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing } from '../systems/Effects.js';
+import { impactBurst } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
@@ -103,31 +103,6 @@ export default class CombatScene extends Phaser.Scene {
         this._lastActiveWeapon = this.gs?.activeWeapon;
       });
     } catch (_) {}
-		// Update Repulsion Pulse effects
-		if (this._repulses && this._repulses.length) {
-		  const dt = (this.game?.loop?.delta || 16.7) / 1000;
-		  this._repulses = this._repulses.filter((rp) => {
-			 rp.r += rp.speed * dt;
-			 try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 0.95).strokeCircle(0, 0, rp.r); } catch (_) {}
-			 const band = rp.band;
-			 const r2min = (rp.r - band) * (rp.r - band);
-			 const r2max = (rp.r + band) * (rp.r + band);
-			 try {
-			   const arrB = this.enemyBullets?.getChildren?.() || [];
-			   for (let i = 0; i < arrB.length; i += 1) {
-			     const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
-			   }
-			 } catch (_) {}
-			 try {
-			   const arrE = this.enemies?.getChildren?.() || [];
-			   for (let i = 0; i < arrE.length; i += 1) {
-			     const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
-			   }
-			 } catch (_) {}
-			 if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
-			 return true;
-		  });
-		}
 
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
@@ -898,9 +873,6 @@ export default class CombatScene extends Phaser.Scene {
         } else if (abilityId === 'bits') {
           this.deployBITs();
           this.ability.onCooldownUntil = nowT + 10000;
-        } else if (abilityId === 'repulse') {
-          this.deployRepulsionPulse();
-          this.ability.onCooldownUntil = nowT + 10000;
         }
       }
     }
@@ -1038,8 +1010,6 @@ export default class CombatScene extends Phaser.Scene {
             // Apply damage
             if (typeof trg.hp !== 'number') trg.hp = trg.maxHp || 20;
             trg.hp -= 7; if (trg.hp <= 0) { try { this.killEnemy(trg); } catch (_) {} }
-            // Shooting Range: accumulate dummy damage when present
-            try { if (trg?.isDummy) this._dummyDamage = (this._dummyDamage || 0) + 7; } catch (_) {}
             bit.lastShotAt = now;
             bit.holdUntil = now + 400; // hold for 0.4s
             bit.moveUntil = now + 400; // next plan after hold
@@ -1470,8 +1440,6 @@ export default class CombatScene extends Phaser.Scene {
 
   deployBITs() {
     if (!this._bits) this._bits = [];
-    // Green particle spawn burst around player
-    try { bitSpawnRing(this, this.player.x, this.player.y, { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
@@ -1484,26 +1452,6 @@ export default class CombatScene extends Phaser.Scene {
       bit.vx = Math.cos(a) * sp; bit.vy = Math.sin(a) * sp; bit.moveUntil = this.time.now + Phaser.Math.Between(200, 400);
       this._bits.push(bit);
     }
-  }
-
-  // Repulsion Pulse: expanding ring that blocks enemy projectiles and pushes enemies
-  deployRepulsionPulse() {
-    if (!this._repulses) this._repulses = [];
-    const x = this.player.x, y = this.player.y;
-    const color = 0xffaa33;
-    const g = this.add.graphics({ x, y });
-    try { g.setDepth?.(9000); } catch (_) {}
-    const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
-    // Max distance to farthest corner
-    const corners = [
-      { x: rect.left, y: rect.top },
-      { x: rect.right, y: rect.top },
-      { x: rect.right, y: rect.bottom },
-      { x: rect.left, y: rect.bottom },
-    ];
-    let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const cx = corners[i].x; const cy = corners[i].y; const dx = cx - x; const dy = cy - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
-    const obj = { x, y, r: 0, band: 8, speed: 600, maxR: maxD + 24, g, lastDrawnAt: 0 };
-    this._repulses.push(obj);
   }
 
   // Railgun mechanics
