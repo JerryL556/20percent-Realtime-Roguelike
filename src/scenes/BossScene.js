@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -696,16 +696,25 @@ export default class BossScene extends Phaser.Scene {
           }
         } catch (_) {}
         try {
-          const boss = this.boss; if (boss?.active) { const dx = boss.x - rp.x; const dy = boss.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 240; try { boss.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { boss.setVelocity(nx * power, ny * power); } catch (_) {} } } }
-          // Deal 5 damage to boss once per pulse
-          try {
-            if (!rp._hitBoss) {
-              rp._hitBoss = true;
-              if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
-              boss.hp -= 5;
-              if (boss.hp <= 0) { try { this.killBoss(boss); } catch (_) {} }
+          const boss = this.boss;
+          if (boss?.active) {
+            const dx = boss.x - rp.x; const dy = boss.y - rp.y; const d2 = dx * dx + dy * dy;
+            if (d2 >= r2min && d2 <= r2max) {
+              const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 420;
+              try { boss.x += nx * 8; boss.y += ny * 8; } catch (_) {}
+              try { boss.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { boss.setVelocity(nx * power, ny * power); } catch (_) {} }
+              this._bossKnockUntil = time + 120;
+              // Deal 5 damage to boss once per pulse
+              try {
+                if (!rp._hitBoss) {
+                  rp._hitBoss = true;
+                  if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
+                  boss.hp -= 5;
+                  if (boss.hp <= 0) { try { this.killBoss(boss); } catch (_) {} }
+                }
+              } catch (_) {}
             }
-          } catch (_) {}
+          }
         } catch (_) {}
         if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
         return true;
