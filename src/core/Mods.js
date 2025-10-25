@@ -35,6 +35,27 @@ export const weaponCores = [
     },
   },
   {
+    id: 'core_burst_rifle',
+    name: 'Burst Fire',
+    onlyFor: 'rifle',
+    desc: [
+      'Assault Rifle only',
+      '+ Fires 3 rounds per click',
+      '+ Greatly increased bullet speed',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'rifle') return w;
+      return {
+        ...w,
+        singleFire: true,
+        _burstN: 3,
+        _burstGapMs: 70,
+        // Substantially increase muzzle velocity
+        bulletSpeed: 800,
+      };
+    },
+  },
+  {
     id: 'core_2tap_pistol',
     name: '2Tap Trigger',
     onlyFor: 'pistol',

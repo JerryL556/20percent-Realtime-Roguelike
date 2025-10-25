@@ -747,6 +747,41 @@ export default class CombatScene extends Phaser.Scene {
       };
       b.on('destroy', () => b._g?.destroy());
     }
+    // Burst Fire core: schedule additional shots within a short window
+    if (weapon._burstN && weapon._burstN > 1) {
+      const wid = this.gs.activeWeapon;
+      const sx = startX; const sy = startY; const ang = baseAngle;
+      const perGap = Math.max(30, weapon._burstGapMs || 70);
+      for (let k = 1; k < weapon._burstN; k += 1) {
+        this.time.delayedCall(perGap * k, () => {
+          if (this.gs.activeWeapon !== wid) return;
+          const cap = this.getActiveMagCapacity();
+          this.ensureAmmoFor(wid, cap);
+          const ammo = this.ammoByWeapon[wid] ?? 0;
+          if (ammo <= 0 || this.reload.active) return;
+          const effSpeed = Math.floor((weapon.bulletSpeed || 0) * 1.25);
+          const vx = Math.cos(ang) * effSpeed;
+          const vy = Math.sin(ang) * effSpeed;
+          const bN = this.bullets.get(sx, sy, 'bullet');
+          if (!bN) return;
+          bN.setActive(true).setVisible(true);
+          bN.setCircle(2).setOffset(-2, -2);
+          bN.setVelocity(vx, vy);
+          bN.setTint(0xffffff);
+          bN.damage = weapon.damage;
+          bN._core = weapon._core || null;
+          if (bN._core === 'pierce') { bN._pierceLeft = 1; }
+          bN.update = () => {
+            const view = this.cameras?.main?.worldView;
+            if (view && !view.contains(bN.x, bN.y)) { try { bN.destroy(); } catch (_) {} }
+          };
+          bN.on('destroy', () => bN._g?.destroy());
+          // consume ammo and sync UI
+          this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
+          this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+        });
+      }
+    }
     // 2Tap Trigger: schedule an automatic second accurate shot shortly after
     if (weapon._twoTap) {
       const wid = this.gs.activeWeapon;
