@@ -19,7 +19,7 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure weapon images are loaded even if entering this scene directly
     try { preloadWeaponAssets(this); } catch (_) {}
   }
-
+  
   openTerminalPanel() {
     if (this.panel) return;
     const { width } = this.scale;
@@ -96,58 +96,39 @@ export default class CombatScene extends Phaser.Scene {
     // Keep weapon sprite updated every frame without touching existing update()
     try {
       this.events.on('update', () => {
-        // Weapon sprite follow + texture sync
-        try { updateWeaponSprite(this); } catch (_) {}
-        try { if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon); } catch (_) {}
+        // Update position/rotation
+        updateWeaponSprite(this);
+        // Always try to sync texture in case it finished loading after create
+        if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
-        // Repulsion Pulse effects
-        if (this._repulses && this._repulses.length) {
-          const dt = (this.game?.loop?.delta || 16.7) / 1000;
-          this._repulses = this._repulses.filter((rp) => {
-            rp.r += rp.speed * dt;
-            try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 1.0).strokeCircle(0, 0, rp.r); } catch (_) {}
-            const band = rp.band;
-            const r2min = (rp.r - band) * (rp.r - band);
-            const r2max = (rp.r + band) * (rp.r + band);
-            // Block enemy projectiles
-            try {
-              const arrB = this.enemyBullets?.getChildren?.() || [];
-              for (let bi = 0; bi < arrB.length; bi += 1) {
-                const b = arrB[bi]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy;
-                if (d2 >= r2min && d2 <= r2max) {
-                  try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {}
-                  try { b.destroy(); } catch (_) {}
-                }
-              }
-            } catch (_) {}
-            // Push enemies outward and apply 5 damage once per pulse
-            try {
-              const arrE = this.enemies?.getChildren?.() || [];
-              for (let ei = 0; ei < arrE.length; ei += 1) {
-                const e = arrE[ei]; if (!e?.active) continue;
-                const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy;
-                if (d2 >= r2min && d2 <= r2max) {
-                  const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 420;
-                  try { e.x += nx * 8; e.y += ny * 8; } catch (_) {}
-                  try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} }
-                  try {
-                    if (!rp._hitSet) rp._hitSet = new Set();
-                    if (!rp._hitSet.has(e)) {
-                      rp._hitSet.add(e);
-                      if (typeof e.hp !== 'number') e.hp = e.maxHp || 20; e.hp -= 5;
-                      if (e.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + 5; }
-                      if (e.hp <= 0) { try { this.killEnemy?.(e); } catch (_) {} }
-                    }
-                  } catch (_) {}
-                }
-              }
-            } catch (_) {}
-            if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
-            return true;
-          });
-        }
       });
     } catch (_) {}
+		// Update Repulsion Pulse effects
+		if (this._repulses && this._repulses.length) {
+		  const dt = (this.game?.loop?.delta || 16.7) / 1000;
+		  this._repulses = this._repulses.filter((rp) => {
+			 rp.r += rp.speed * dt;
+			 try { rp.g.clear(); rp.g.lineStyle(3, 0xffaa33, 0.95).strokeCircle(0, 0, rp.r); } catch (_) {}
+			 const band = rp.band;
+			 const r2min = (rp.r - band) * (rp.r - band);
+			 const r2max = (rp.r + band) * (rp.r + band);
+			 try {
+			   const arrB = this.enemyBullets?.getChildren?.() || [];
+			   for (let i = 0; i < arrB.length; i += 1) {
+			     const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { b.destroy(); } catch (_) {} }
+			   }
+			 } catch (_) {}
+			 try {
+			   const arrE = this.enemies?.getChildren?.() || [];
+			   for (let i = 0; i < arrE.length; i += 1) {
+			     const e = arrE[i]; if (!e?.active || e.isDummy) continue; const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 280; try { e.body?.setVelocity?.(nx * power, ny * power); } catch (_) { try { e.setVelocity(nx * power, ny * power); } catch (_) {} } }
+			   }
+			 } catch (_) {}
+			 if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
+			 return true;
+		  });
+		}
+
     // Bullets group (use Arcade.Image for proper pooling)
     this.bullets = this.physics.add.group({
       classType: Phaser.Physics.Arcade.Image,
@@ -167,6 +148,7 @@ export default class CombatScene extends Phaser.Scene {
       const { width, height } = this.scale;
       this.arenaRect = new Phaser.Geom.Rectangle(0, 0, width, height);
       this.walls = null;
+    }
     // Barricades: indestructible (hard) and destructible (soft)
     this.barricadesHard = this.physics.add.staticGroup();
     this.barricadesSoft = this.physics.add.staticGroup();
@@ -183,8 +165,8 @@ export default class CombatScene extends Phaser.Scene {
           // Base HP for destructible tiles
           s.setData('hp', 20);
           this.barricadesSoft.add(s);
+        }
       });
-    }
     }
     // Helper: pick a spawn on screen edges/corners, far from player
     const pickEdgeSpawn = () => {
@@ -205,7 +187,6 @@ export default class CombatScene extends Phaser.Scene {
         else { sx = W - pad; sy = Phaser.Math.Between(pad, H - pad); } // right
         const dx = sx - px, dy = sy - py;
         if ((dx * dx + dy * dy) >= (minDist * minDist)) return { x: sx, y: sy };
-        
       }
       // Fallback: farthest corner from player
       const sx = (px < this.scale.width / 2) ? (this.scale.width - pad) : pad;
@@ -234,6 +215,7 @@ export default class CombatScene extends Phaser.Scene {
         // Melee normal
         const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
         e = createEnemy(this, sp.x, sp.y, Math.floor(100 * mods.enemyHp), meleeDmg, 60);
+      }
       this.enemies.add(e);
     });
 
@@ -266,11 +248,13 @@ export default class CombatScene extends Phaser.Scene {
 
       // Helper text
       this.rangeText = this.add.text(width / 2, 28, 'Shooting Range: E near Terminal/Dummy/Portal', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    }
 
     // Colliders
     if (this.walls) {
       this.physics.add.collider(this.player, this.walls);
       this.physics.add.collider(this.enemies, this.walls);
+    }
     // Colliders with barricades (block movement and bullets)
     this.physics.add.collider(this.player, this.barricadesHard);
     this.physics.add.collider(this.player, this.barricadesSoft);
@@ -301,6 +285,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!b._hitSet) b._hitSet = new Set();
         if (b._hitSet.has(e)) return;
         b._hitSet.add(e);
+      }
       // Dummy target: accumulate damage and do not die
       if (e.isDummy) {
         const baseDmg = b.damage || 10;
@@ -313,6 +298,8 @@ export default class CombatScene extends Phaser.Scene {
           const baseDmg = b.damage || 10;
           const primaryDmg = (b._core === 'blast' && !b._rocket) ? Math.ceil(baseDmg * 0.8) : baseDmg;
           e.hp -= primaryDmg;
+        }
+      }
       // Visual impact effect by core type (small unless blast)
       try {
         const core = b._core || null;
@@ -338,9 +325,12 @@ export default class CombatScene extends Phaser.Scene {
               if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
               other.hp -= splashDmg;
               if (other.hp <= 0) { this.killEnemy(other); }
+            }
+          }
         });
         // Splash to barricades now 100%
         this.damageSoftBarricadesInRadius(b.x, b.y, radius, (b.damage || 10));
+      }
       // Handle pierce core: allow one extra target without removing the bullet
       if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
         b._pierceLeft -= 1;
@@ -349,6 +339,7 @@ export default class CombatScene extends Phaser.Scene {
         try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
         try { b.setActive(false).setVisible(false); } catch (_) {}
         this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+      }
       // Check primary enemy death after damage
       if (e.hp <= 0) { this.killEnemy(e); }
     });
@@ -364,6 +355,7 @@ export default class CombatScene extends Phaser.Scene {
         this.gs.nextScene = SceneKeys.Hub;
         SaveManager.saveToLocal(this.gs);
         this.scene.start(SceneKeys.Hub);
+      }
     });
 
     // Enemy bullets (for shooters)
@@ -388,11 +380,14 @@ export default class CombatScene extends Phaser.Scene {
             this.gs.nextScene = SceneKeys.Hub;
             SaveManager.saveToLocal(this.gs);
             this.scene.start(SceneKeys.Hub);
+          }
+        }
         try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
         // Chip nearby destructible barricades
         this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
         try { b.destroy(); } catch (_) {}
         return;
+      }
       if (!inIframes) {
         const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; // default shooter damage
         this.gs.hp -= dmg;
@@ -403,6 +398,8 @@ export default class CombatScene extends Phaser.Scene {
           this.gs.nextScene = SceneKeys.Hub;
           SaveManager.saveToLocal(this.gs);
           this.scene.start(SceneKeys.Hub);
+        }
+      }
       // Always destroy enemy bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
@@ -435,6 +432,7 @@ export default class CombatScene extends Phaser.Scene {
     this._gadgets = [];
     this.ability = { onCooldownUntil: 0 };
     
+  }
 
   // Centralized enemy death handler to keep removal tied to HP system
   killEnemy(e) {
@@ -447,6 +445,7 @@ export default class CombatScene extends Phaser.Scene {
     try { this.gs.gold += 5; } catch (_) {}
     // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
+  }
 
   // Player bullet hits a barricade (hard or soft)
   onBulletHitBarricade(b, s) {
@@ -465,9 +464,11 @@ export default class CombatScene extends Phaser.Scene {
         try { s.destroy(); } catch (_) {}
       } else {
         s.setData('hp', hp1);
+      }
     } else {
       // Grey puff on hard
       try { impactBurst(this, b.x, b.y, { color: 0xBBBBBB, size: 'small' }); } catch (_) {}
+    }
     // Rockets: explode on barricade contact and splash enemies
     if (b._core === 'blast') {
       const radius = b._blastRadius || 20;
@@ -484,11 +485,15 @@ export default class CombatScene extends Phaser.Scene {
             if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
             other.hp -= splashDmg;
             if (other.hp <= 0) this.killEnemy(other);
+          }
+        }
       });
       // Also damage nearby destructible barricades
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10));
+    }
     // Always destroy player bullet on barricade collision
     try { b.destroy(); } catch (_) {}
+  }
 
   // Enemy bullet hits a barricade
   onEnemyBulletHitBarricade(b, s) {
@@ -501,13 +506,16 @@ export default class CombatScene extends Phaser.Scene {
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
       try { b.destroy(); } catch (_) {}
       return;
+    }
     const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
     if (isSoft) {
       const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
       const hp1 = hp0 - dmg;
       if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
       else s.setData('hp', hp1);
+    }
     try { b.destroy(); } catch (_) {}
+  }
 
   // Utility: damage all destructible barricades within radius
   damageSoftBarricadesInRadius(x, y, radius, dmg) {
@@ -521,7 +529,10 @@ export default class CombatScene extends Phaser.Scene {
       const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
           const hp1 = hp0 - dmg;
           if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+        }
+      }
     } catch (_) {}
+  }
 
   // Enemy body tries to push through a destructible barricade: damage over time
   onEnemyHitBarricade(e, s) {
@@ -536,6 +547,7 @@ export default class CombatScene extends Phaser.Scene {
     const hp1 = hp0 - dmg;
     if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
     else s.setData('hp', hp1);
+  }
 
   // Returns true if a straight line between two points hits any barricade
   isLineBlocked(x1, y1, x2, y2) {
@@ -548,6 +560,7 @@ export default class CombatScene extends Phaser.Scene {
           const s = arr[i]; if (!s?.active) continue;
           const rect = s.getBounds();
           if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) return true;
+        }
         return false;
       };
       if (checkGroup(this.barricadesHard)) return true;
@@ -555,6 +568,8 @@ export default class CombatScene extends Phaser.Scene {
       return false;
     } catch (_) {
       return false;
+    }
+  }
 
   shoot() {
     const gs = this.gs;
@@ -620,13 +635,18 @@ export default class CombatScene extends Phaser.Scene {
                   if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
                   other.hp -= aoe;
                   if (other.hp <= 0) { this.killEnemy(other); }
+                }
+              }
             });
             // Also damage nearby destructible barricades
             this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
             try { b.destroy(); } catch (_) {}
+          }
         };
         b.on('destroy', () => b._g?.destroy());
+      }
       return;
+    }
     for (let i = 0; i < pellets; i += 1) {
       let angle = baseAngle;
       if (pellets === 1) {
@@ -638,6 +658,7 @@ export default class CombatScene extends Phaser.Scene {
         const t = (i / (pellets - 1)) - 0.5;
         angle += t * totalSpreadRad;
         if (totalSpreadRad > 0) angle += Phaser.Math.FloatBetween(-0.1, 0.1) * totalSpreadRad;
+      }
       // Increase bullet speed for all non-rocket projectiles
       const effSpeed = (weapon.projectile === 'rocket') ? weapon.bulletSpeed : Math.floor((weapon.bulletSpeed || 0) * 1.25);
       const vx = Math.cos(angle) * effSpeed;
@@ -657,6 +678,8 @@ export default class CombatScene extends Phaser.Scene {
         if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
       };
       b.on('destroy', () => b._g?.destroy());
+    }
+  }
 
   update() {
     // Update dash charge display for UI
@@ -672,6 +695,7 @@ export default class CombatScene extends Phaser.Scene {
       prog = 1 - Math.min(1, remaining / denom);
     } else {
       prog = 1;
+    }
     this.registry.set('dashRegenProgress', prog);
 
     // Dash handling
@@ -690,6 +714,7 @@ export default class CombatScene extends Phaser.Scene {
       // consume charge and queue regen
       this.dash.charges -= 1;
       this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
+    }
 
     if (this.dash.active && now < this.dash.until) {
       this.player.setVelocity(this.dash.vx, this.dash.vy);
@@ -698,6 +723,7 @@ export default class CombatScene extends Phaser.Scene {
       const mv = this.inputMgr.moveVec;
       const speed = 200 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
+    }
 
     // Regen charges
     if (this.dash.regen.length) {
@@ -706,6 +732,8 @@ export default class CombatScene extends Phaser.Scene {
         const remaining = this.dash.regen.filter((t) => now < t);
         this.dash.regen = remaining;
         this.dash.charges = Math.min(this.dash.charges + ready.length, this.gs.dashMaxCharges);
+      }
+    }
 
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
@@ -729,8 +757,10 @@ export default class CombatScene extends Phaser.Scene {
         this.reload.duration = 0;
         this.registry.set('reloadActive', false);
         this.registry.set('reloadProgress', 1);
+      }
     } else {
       this.registry.set('reloadActive', false);
+    }
 
     // Shooting Range interactions
     if (this.gs?.shootingRange) {
@@ -740,6 +770,7 @@ export default class CombatScene extends Phaser.Scene {
           this.dummyLabel.setPosition(this.dummy.x, this.dummy.y - 16);
           this.dummyLabel.setText(`DMG: ${this._dummyDamage | 0}`);
         } catch (_) {}
+      }
       // Context prompts
       const playerRect = this.player.getBounds();
       const nearTerminal = this.terminalZone && Phaser.Geom.Intersects.RectangleToRectangle(playerRect, this.terminalZone.getBounds());
@@ -758,6 +789,9 @@ export default class CombatScene extends Phaser.Scene {
           this.gs.nextScene = SceneKeys.Hub;
           SaveManager.saveToLocal(this.gs);
           this.scene.start(SceneKeys.Hub);
+        }
+      }
+    }
     // Track and update ammo registry on weapon change or capacity change
     if (this._lastActiveWeapon !== this.gs.activeWeapon) {
       this._lastActiveWeapon = this.gs.activeWeapon;
@@ -771,6 +805,7 @@ export default class CombatScene extends Phaser.Scene {
       this.ensureAmmoFor(this._lastActiveWeapon, cap, true);
       this.registry.set('magSize', cap);
       this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
+    }
     // Update spread heat each frame based on whether player is holding fire
     const dt = (this.game?.loop?.delta || 16.7) / 1000;
     if (this._spreadHeat === undefined) this._spreadHeat = 0;
@@ -780,6 +815,7 @@ export default class CombatScene extends Phaser.Scene {
       this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
     } else {
       this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
+    }
     // Robust single-click detect: Phaser pointer.justDown or edge from previous frame
     const ptr = this.inputMgr.pointer;
     if (this._lmbWasDown === undefined) this._lmbWasDown = false;
@@ -787,6 +823,7 @@ export default class CombatScene extends Phaser.Scene {
     const wantsClick = !!ptr.justDown || edgeDown;
     if (isRail) {
       this.handleRailgunCharge(this.time.now, weapon, ptr);
+    }
     const wantsShot = (!isRail) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
     if (wantsShot && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
       const cap = this.getActiveMagCapacity();
@@ -801,11 +838,14 @@ export default class CombatScene extends Phaser.Scene {
           this.reload.until = this.time.now + this.reload.duration;
           this.registry.set('reloadActive', true);
           this.registry.set('reloadProgress', 0);
+        }
       } else {
         this.shoot();
         this.lastShot = this.time.now;
         this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
         this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+      }
+    }
     this._lmbWasDown = !!ptr.isDown;
 
     // Swap weapons with Q
@@ -821,6 +861,7 @@ export default class CombatScene extends Phaser.Scene {
           const idx = Math.max(0, owned.indexOf(a));
           const next = owned[(idx + 1) % owned.length];
           this.gs.activeWeapon = next;
+        }
       // Cancel any in-progress reload on weapon swap
       this.reload.active = false;
       this.reload.duration = 0;
@@ -828,6 +869,8 @@ export default class CombatScene extends Phaser.Scene {
       // Cancel rail charging/aim if any
       try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
       this.endRailAim?.();
+      }
+    }
 
     // Manual reload (R)
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.r)) {
@@ -840,6 +883,8 @@ export default class CombatScene extends Phaser.Scene {
         this.reload.until = this.time.now + this.reload.duration;
         this.registry.set('reloadActive', true);
         this.registry.set('reloadProgress', 0);
+      }
+    }
 
     // Ability activation (F)
     if (this.inputMgr.pressedAbility) {
@@ -855,7 +900,10 @@ export default class CombatScene extends Phaser.Scene {
           this.ability.onCooldownUntil = nowT + 10000;
         } else if (abilityId === 'repulse') {
           this.deployRepulsionPulse();
-          this.ability.onCooldownUntil = nowT + 3000;
+          this.ability.onCooldownUntil = nowT + 10000;
+        }
+      }
+    }
 
     // Update active gadgets (ADS)
     if (this._gadgets && this._gadgets.length) {
@@ -871,6 +919,7 @@ export default class CombatScene extends Phaser.Scene {
             const b = arr[i]; if (!b?.active) continue;
             const dx = b.x - g.x; const dy = b.y - g.y; const d2 = dx * dx + dy * dy;
             if (d2 <= r2 && d2 < bestD2) { best = b; bestD2 = d2; }
+          }
           if (best) {
             // Draw instant blue laser then destroy the projectile
             try {
@@ -883,13 +932,17 @@ export default class CombatScene extends Phaser.Scene {
                 this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
               } catch (_) {
                 this.time.delayedCall(320, () => { try { lg.destroy(); } catch (__ ) {} });
+              }
               // Tiny blue particle at impact point
               try { impactBurst(this, best.x, best.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
             } catch (_) {}
             try { best.destroy(); } catch (_) {}
             g.nextZapAt = nowT + 100; // 10 per second
+          }
+        }
         return true;
       });
+    }
 
     // Ability cooldown progress for UI
     try {
@@ -922,10 +975,12 @@ export default class CombatScene extends Phaser.Scene {
           dx = this.player.x - bit.x; dy = this.player.y - bit.y; len = Math.hypot(dx, dy) || 1;
           if (len < 12) { try { bit.g.destroy(); } catch (_) {} return false; }
           return true;
+        }
         // Spawn scatter animation: keep initial outward motion briefly before any idle/lock logic
         if (bit.spawnScatterUntil && now < bit.spawnScatterUntil) {
           bit.x += (bit.vx || 0) * dt; bit.y += (bit.vy || 0) * dt;           try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}          try { const ang = (trg ? Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI : Math.atan2(bit.vy, bit.vx) + Math.PI);  } catch (_) {}          try { bit.g.setRotation(Math.atan2((bit.vy || 0), (bit.vx || 0)) + Math.PI); } catch (_) {}
           return true;
+        }
         // Acquire or validate target (short lock range)
         const lockR = 180; const lockR2 = lockR * lockR;
         if (!bit.target || !bit.target.active) {
@@ -935,11 +990,13 @@ export default class CombatScene extends Phaser.Scene {
             const e = enemiesArr[i]; if (!e?.active) continue;
             const dx = e.x - bit.x; const dy = e.y - bit.y; const d2 = dx * dx + dy * dy;
             if (d2 <= lockR2 && d2 < bestD2) { best = e; bestD2 = d2; }
+          }
           bit.target = best;
         } else {
           // Drop target if it moved out of lock range
           const dx = bit.target.x - bit.x; const dy = bit.target.y - bit.y; const d2 = dx * dx + dy * dy;
           if (d2 > lockR2) bit.target = null;
+        }
         const trg = bit.target;
         if (!trg) {
           // Idle: hover closely around the player in a small orbit until a target enters lock range
@@ -956,11 +1013,13 @@ export default class CombatScene extends Phaser.Scene {
           bit.x += bit.vx * dt; bit.y += bit.vy * dt;          try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
                     try { const ang = (trg ? Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI : Math.atan2(bit.vy, bit.vx) + Math.PI);  } catch (_) {}          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
           return true;
+        }
         // Firing hold
         if (now < (bit.holdUntil || 0)) {
           // stay still; face target if present
           if (trg) { try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {} }
           return true;
+        }
         // Decide next action
         if (!bit.moveUntil || now >= bit.moveUntil) {
           // Either fire (if in range) or choose a new dash around target
@@ -985,6 +1044,7 @@ export default class CombatScene extends Phaser.Scene {
             bit.holdUntil = now + 400; // hold for 0.4s
             bit.moveUntil = now + 400; // next plan after hold
             return true;
+          }
           // Plan a quick straight movement around target
           const angTo = Math.atan2(bit.y - trg.y, bit.x - trg.x);
           const off = Phaser.Math.FloatBetween(-Math.PI / 2, Math.PI / 2);
@@ -997,8 +1057,10 @@ export default class CombatScene extends Phaser.Scene {
         } else {
           // Move step
           bit.x += bit.vx * dt; bit.y += bit.vy * dt;          try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}           try { const ang = (trg ? Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI : Math.atan2(bit.vy, bit.vx) + Math.PI);  } catch (_) {}          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
+        }
         return true;
       });
+    }
 
     // Rebuild nav grid periodically so enemies can re-route around obstacles
     if (!this._nav) this._nav = { grid: null, builtAt: 0 };
@@ -1007,6 +1069,7 @@ export default class CombatScene extends Phaser.Scene {
         this._nav.grid = buildNavGrid(this, this.arenaRect, 16);
         this._nav.builtAt = this.time.now;
       } catch (_) {}
+    }
 
     // Update enemies: melee chase; shooters chase gently and fire at intervals; snipers aim then fire
     this.enemies.getChildren().forEach((e) => {
@@ -1039,6 +1102,7 @@ export default class CombatScene extends Phaser.Scene {
               e._path = findPath(this._nav.grid, sgx, sgy, ggx, ggy) || null;
               e._pathIdx = 0; e._lastPathAt = now;
             } catch (_) {}
+          }
           const wp = (e._path && e._path[e._pathIdx || 0]) || null;
           if (wp) {
             const tx = wp[0], ty = wp[1];
@@ -1046,6 +1110,8 @@ export default class CombatScene extends Phaser.Scene {
             const pd = Math.hypot(pdx, pdy) || 1;
             if (pd < 10) { e._pathIdx = (e._pathIdx || 0) + 1; }
             else { const px = pdx / pd; const py = pdy / pd; vx = px * speed; vy = py * speed; usingPath = true; }
+          }
+        }
         // Treat snipers like shooters for movement behavior
         if (!usingPath && (e.isShooter || e.isSniper)) {
           // Random wander; approach if far, back off if too close
@@ -1056,6 +1122,7 @@ export default class CombatScene extends Phaser.Scene {
             const mag = Phaser.Math.FloatBetween(0.6, 1.0);
             e._wanderVX = Math.cos(ang) * speed * mag;
             e._wanderVY = Math.sin(ang) * speed * mag;
+          }
           // Desired velocity combines wander and a gentle bias toward/away from player
           vx = (e._wanderVX || 0);
           vy = (e._wanderVY || 0);
@@ -1078,10 +1145,13 @@ export default class CombatScene extends Phaser.Scene {
               const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
               e._wanderVX = Math.cos(a) * speed * 0.6;
               e._wanderVY = Math.sin(a) * speed * 0.6;
+            }
             if (e._mode === 'zig') {
               // Choose a smooth frequency and strafe amplitude for this zig session
               e._zigFreq = Phaser.Math.FloatBetween(1.0, 2.0); // Hz
               e._zigAmp = Phaser.Math.FloatBetween(0.5, 0.75); // strafe weight (slightly reduced)
+            }
+          }
           if (e._mode === 'zig') {
             // Perpendicular wiggle to dodge
             const px = -ny, py = nx;
@@ -1102,6 +1172,8 @@ export default class CombatScene extends Phaser.Scene {
             vx = nx * speed; vy = ny * speed;
           } else { // flee
             vx = -nx * speed * 0.9; vy = -ny * speed * 0.9;
+          }
+        }
         // Smooth velocity to avoid twitching (inertia/acceleration)
         const smooth = 0.12; // approaching target ~12% per frame
         if (e._svx === undefined) e._svx = 0;
@@ -1115,6 +1187,8 @@ export default class CombatScene extends Phaser.Scene {
           const md = Math.hypot((e.x - (e._lx || e.x)), (e.y - (e._ly || e.y)));
           e._lx = e.x; e._ly = e.y; e._lastPosT = now;
           if (md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
+        }
+      }
       // Clamp enemies to screen bounds as a failsafe
       try {
         const pad = (e.body?.halfWidth || 6);
@@ -1132,6 +1206,7 @@ export default class CombatScene extends Phaser.Scene {
             e._burstLeft = e.burstCount || 15;
             e._nextBurstShotAt = nowT;
             e._sprayPhase = 0;
+          }
           // Fire next bullet in the burst if it's time
           if (e._burstLeft && e._burstLeft > 0 && nowT >= (e._nextBurstShotAt || 0)) {
             const base = Math.atan2(dy, dx);
@@ -1154,11 +1229,14 @@ export default class CombatScene extends Phaser.Scene {
                 const view = this.cameras?.main?.worldView;
                 if (view && !view.contains(b.x, b.y)) { b.destroy(); }
               };
+            }
             e._burstLeft -= 1;
             if (e._burstLeft <= 0) {
               e.lastShotAt = nowT; // end of burst
             } else {
               e._nextBurstShotAt = nowT + (e.burstGapMs || 70);
+            }
+          }
         } else if (e.isRocketeer) {
           const nowT = this.time.now;
           if (nowT - e.lastShotAt > (e.fireRateMs || 2000)) {
@@ -1181,6 +1259,8 @@ export default class CombatScene extends Phaser.Scene {
                 const view = this.cameras?.main?.worldView;
                 if (view && !view.contains(b.x, b.y)) { b.destroy(); }
               };
+            }
+          }
         } else {
           const nowT = this.time.now;
           // Shooter: 2-round burst (one at a time)
@@ -1188,6 +1268,7 @@ export default class CombatScene extends Phaser.Scene {
             e._burstLeft = 2;
             e._nextBurstShotAt = nowT;
             e._burstGapMsS = e._burstGapMsS || 110; // per-shot gap within burst
+          }
           if (e._burstLeft && e._burstLeft > 0 && nowT >= (e._nextBurstShotAt || 0)) {
             const ang = Math.atan2(dy, dx);
             const vx = Math.cos(ang) * 240;
@@ -1203,11 +1284,16 @@ export default class CombatScene extends Phaser.Scene {
                 const view = this.cameras?.main?.worldView;
                 if (view && !view.contains(b.x, b.y)) { b.destroy(); }
               };
+            }
             e._burstLeft -= 1;
             if (e._burstLeft <= 0) {
               e.lastShotAt = nowT; // burst complete
             } else {
               e._nextBurstShotAt = nowT + (e._burstGapMsS || 110);
+            }
+          }
+        }
+      }
 
       // Sniper behavior
       if (e.isSniper) {
@@ -1257,8 +1343,11 @@ export default class CombatScene extends Phaser.Scene {
                         this.gs.nextScene = SceneKeys.Hub;
                         SaveManager.saveToLocal(this.gs);
                         this.scene.start(SceneKeys.Hub);
+                      }
+                    }
                     try { b.destroy(); } catch (_) {}
                     return;
+                  }
                 } catch (_) {}
                 // Lifetime via camera view when walls are disabled
                 const view = this.cameras?.main?.worldView;
@@ -1266,10 +1355,12 @@ export default class CombatScene extends Phaser.Scene {
                 // Update previous position for next frame
                 b._px = b.x; b._py = b.y;
               };
+            }
             // End aiming and start cooldown; remove laser
             e.aiming = false;
             e.lastShotAt = now;
             try { e._aimG?.clear(); e._aimG?.destroy(); e._aimG = null; } catch (_) {}
+          }
         } else {
           // Not aiming: use normal movement like other shooters; only manage aim trigger
           // Start aiming if cooldown passed
@@ -1277,6 +1368,9 @@ export default class CombatScene extends Phaser.Scene {
           if (now - e.lastShotAt >= (e.cooldownMs || 2000)) {
             e.aiming = true;
             e.aimStartedAt = now;
+          }
+        }
+      }
     });
 
     // Check clear (count only enemies that are active AND have HP left)
@@ -1287,6 +1381,7 @@ export default class CombatScene extends Phaser.Scene {
       this.exitRect = new Phaser.Geom.Rectangle(this.scale.width - 50, this.scale.height / 2 - 30, 40, 60);
       this.exitG.clear();
       this.exitG.fillStyle(0x22ff88, 1).fillRect(this.exitRect.x, this.exitRect.y, this.exitRect.width, this.exitRect.height);
+    }
 
     if (this.exitActive) {
       const playerRect = this.player.getBounds();
@@ -1296,6 +1391,10 @@ export default class CombatScene extends Phaser.Scene {
           SaveManager.saveToLocal(this.gs);
           const next = this.gs.nextScene === 'Boss' ? SceneKeys.Boss : SceneKeys.Combat;
           this.scene.start(next);
+        }
+      }
+    }
+  }
 
   createArenaWalls(room) {
     const { width, height } = this.scale;
@@ -1316,12 +1415,15 @@ export default class CombatScene extends Phaser.Scene {
       const top = this.physics.add.staticImage(wx, y + tile / 2, 'wall_tile');
       const bot = this.physics.add.staticImage(wx, y + h - tile / 2, 'wall_tile');
       this.walls.add(top); this.walls.add(bot);
+    }
     // Left & Right cols
     for (let j = 1; j < tilesY - 1; j += 1) {
       const wy = y + j * tile + tile / 2;
       const left = this.physics.add.staticImage(x + tile / 2, wy, 'wall_tile');
       const right = this.physics.add.staticImage(x + w - tile / 2, wy, 'wall_tile');
       this.walls.add(left); this.walls.add(right);
+    }
+  }
 
   // Returns the effective magazine capacity for the currently active weapon
   getActiveMagCapacity() {
@@ -1331,6 +1433,8 @@ export default class CombatScene extends Phaser.Scene {
       return cap;
     } catch (_) {
       return 1;
+    }
+  }
 
   // Ensure ammo entry exists for weaponId. If clampOnly, only caps ammo when above capacity
   ensureAmmoFor(weaponId, capacity, clampOnly = false) {
@@ -1338,8 +1442,11 @@ export default class CombatScene extends Phaser.Scene {
     if (this.ammoByWeapon[weaponId] == null) {
       this.ammoByWeapon[weaponId] = Math.max(0, capacity | 0);
       return;
+    }
     if (clampOnly) {
       if (this.ammoByWeapon[weaponId] > capacity) this.ammoByWeapon[weaponId] = capacity;
+    }
+  }
 
   // Returns reload time in ms for active weapon (default 1.5s, rocket 2s)
   getActiveReloadMs() {
@@ -1349,6 +1456,8 @@ export default class CombatScene extends Phaser.Scene {
       return (w.projectile === 'rocket') ? 1000 : 1500;
     } catch (_) {
       return 1500;
+    }
+  }
 
   deployADS() {
     const x = this.player.x; const y = this.player.y;
@@ -1357,6 +1466,7 @@ export default class CombatScene extends Phaser.Scene {
     try { g.setDepth(9000); } catch (_) {}
     const obj = { x, y, g, radius: 120, nextZapAt: 0, until: this.time.now + 8000 };
     this._gadgets.push(obj);
+  }
 
   deployBITs() {
     if (!this._bits) this._bits = [];
@@ -1373,6 +1483,8 @@ export default class CombatScene extends Phaser.Scene {
       const sp = Phaser.Math.Between(180, 260);
       bit.vx = Math.cos(a) * sp; bit.vy = Math.sin(a) * sp; bit.moveUntil = this.time.now + Phaser.Math.Between(200, 400);
       this._bits.push(bit);
+    }
+  }
 
   // Repulsion Pulse: expanding ring that blocks enemy projectiles and pushes enemies
   deployRepulsionPulse() {
@@ -1390,8 +1502,9 @@ export default class CombatScene extends Phaser.Scene {
       { x: rect.left, y: rect.bottom },
     ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const cx = corners[i].x; const cy = corners[i].y; const dx = cx - x; const dy = cy - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
-    const obj = { x, y, r: 0, band: 6, speed: 300, maxR: maxD + 24, g, lastDrawnAt: 0 };
+    const obj = { x, y, r: 0, band: 8, speed: 600, maxR: maxD + 24, g, lastDrawnAt: 0 };
     this._repulses.push(obj);
+  }
 
   // Railgun mechanics
   handleRailgunCharge(now, weapon, ptr) {
@@ -1403,6 +1516,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this.reload.active || ammo <= 0) {
       this.endRailAim();
       return;
+    }
     const maxMs = 1500;
     if (!this.rail) this.rail = { charging: false, startedAt: 0, aimG: null };
     const coreHold = !!weapon.railHold;
@@ -1413,6 +1527,8 @@ export default class CombatScene extends Phaser.Scene {
         if (!this.lastShot || (now - this.lastShot) > weapon.fireRateMs) {
           this.rail.charging = true;
           this.rail.startedAt = now;
+        }
+      }
     } else {
       // Released: fire if charging
       if (this.rail.charging) {
@@ -1420,7 +1536,9 @@ export default class CombatScene extends Phaser.Scene {
         this.fireRailgun(baseAngle, weapon, t);
         this.rail.charging = false;
         this.endRailAim();
+      }
       return;
+    }
 
     // While holding
     if (this.rail.charging) {
@@ -1431,6 +1549,9 @@ export default class CombatScene extends Phaser.Scene {
         this.fireRailgun(baseAngle, weapon, t);
         this.rail.charging = false;
         this.endRailAim();
+      }
+    }
+  }
 
   drawRailAim(angle, weapon, t) {
     try {
@@ -1445,10 +1566,12 @@ export default class CombatScene extends Phaser.Scene {
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath();
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath();
     } catch (_) {}
+  }
 
   endRailAim() {
     try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {}
     if (this.rail) this.rail.aimG = null;
+  }
 
   fireRailgun(baseAngle, weapon, t) {
     const wid = this.gs.activeWeapon;
@@ -1502,6 +1625,8 @@ export default class CombatScene extends Phaser.Scene {
             try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {}
             b._hitSet.add(e);
             if (e.hp <= 0) { try { this.killEnemy ? this.killEnemy(e) : e.destroy(); } catch (_) {} }
+          }
+        }
         // Railgun should pierce barricades and not damage them.
         // For non-rail bullets, use normal barricade handling; for rail, trigger only a pierce VFX once per barricade.
         if (!b._rail) {
@@ -1514,6 +1639,8 @@ export default class CombatScene extends Phaser.Scene {
               if (Phaser.Geom.Intersects.LineToRectangle(line, r)) {
                 try { this.onBulletHitBarricade(b, s); } catch (_) { try { b.destroy(); } catch (__ ) {} }
                 return true;
+              }
+            }
             return false;
           };
           if (hitBarricade(this.barricadesHard)) return;
@@ -1531,14 +1658,17 @@ export default class CombatScene extends Phaser.Scene {
               if (Phaser.Geom.Intersects.LineToRectangle(line, r)) {
                 b._piercedBarricades.add(s);
                 try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {}
+              }
+            }
           };
           pierceVfx(this.barricadesHard);
           pierceVfx(this.barricadesSoft);
+        }
       } catch (_) {}
 
       // Offscreen cleanup
       const view = this.cameras?.main?.worldView;
-      if (view && !view.contains(b.x, b.y)) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+      if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
       b._px = b.x; b._py = b.y;
     };
     b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
@@ -1554,10 +1684,10 @@ export default class CombatScene extends Phaser.Scene {
         this.reload.until = this.time.now + this.reload.duration;
         this.registry.set('reloadActive', true);
         this.registry.set('reloadProgress', 0);
-
-
-
-
+      }
+    }
+  }
+}
 
 
 
