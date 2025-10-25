@@ -41,6 +41,7 @@ export const weaponCores = [
     desc: [
       'Assault Rifle only',
       '+ Fires 3 rounds per click',
+      '+ Short gap between bursts',
       '+ Greatly increased bullet speed',
     ].join('\n'),
     apply: (w) => {
@@ -50,6 +51,8 @@ export const weaponCores = [
         singleFire: true,
         _burstN: 3,
         _burstGapMs: 70,
+        // Gap between bursts is governed by fireRateMs from initial shot
+        fireRateMs: 360,
         // Substantially increase muzzle velocity
         bulletSpeed: 800,
       };
