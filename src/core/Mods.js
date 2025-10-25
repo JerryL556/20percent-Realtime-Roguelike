@@ -35,6 +35,51 @@ export const weaponCores = [
     },
   },
   {
+    id: 'core_2tap_pistol',
+    name: '2Tap Trigger',
+    onlyFor: 'pistol',
+    desc: [
+      'Pistol only',
+      '+ Fires two quick, accurate rounds per click',
+      '+ Slightly increases time between clicks',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'pistol') return w;
+      const slower = Math.floor((w.fireRateMs || 220) * 1.2); // +20% interval between pulls
+      return { ...w, _twoTap: true, fireRateMs: slower };
+    },
+  },
+  {
+    id: 'core_smart_explosives',
+    name: 'Smart Explosives',
+    onlyFor: 'rocket',
+    desc: [
+      'Explosive weapons only',
+      '+ Proximity-detonates when enemies are near',
+      '+ Detect radius < blast radius',
+      '+ If no target at aim point, becomes a mine',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.projectile !== 'rocket') return w;
+      return { ...w, _smartExplosives: true, _detectScale: 0.65 };
+    },
+  },
+  {
+    id: 'core_smart_explosives_mgl',
+    name: 'Smart Explosives',
+    onlyFor: 'mgl',
+    desc: [
+      'Explosive weapons only',
+      '+ Proximity-detonates when enemies are near',
+      '+ Detect radius < blast radius',
+      '+ If no target at aim point, becomes a mine',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.projectile !== 'rocket') return w;
+      return { ...w, _smartExplosives: true, _detectScale: 0.65 };
+    },
+  },
+  {
     id: 'core_rail_hold',
     name: 'Rail Stabilizer',
     onlyFor: 'railgun',

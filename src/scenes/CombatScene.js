@@ -4,7 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing, pulseSpark } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
@@ -320,6 +320,8 @@ export default class CombatScene extends Phaser.Scene {
     });
 
     this.physics.add.overlap(this.player, this.enemies, (p, e) => {
+      // Ignore dummy collisions for player damage
+      if (e?.isDummy) return;
       if (this.time.now < this.player.iframesUntil) return;
       this.gs.hp -= e.damage;
       this.player.iframesUntil = this.time.now + 600;
@@ -580,6 +582,12 @@ export default class CombatScene extends Phaser.Scene {
         b._core = 'blast';
         b._blastRadius = weapon.blastRadius || 70;
         b._rocket = true;
+        // Smart Explosives core flags
+        b._smartExplosives = !!weapon._smartExplosives;
+        if (b._smartExplosives) {
+          const scale = (typeof weapon._detectScale === 'number') ? weapon._detectScale : 0.65;
+          b._detectR = Math.max(8, Math.floor((b._blastRadius || 70) * scale));
+        }
         b._startX = startX; b._startY = startY;
         b._targetX = targetX; b._targetY = targetY;
         const sx = targetX - startX; const sy = targetY - startY;
@@ -587,7 +595,83 @@ export default class CombatScene extends Phaser.Scene {
         b.update = () => {
           // Lifetime via camera view when walls are disabled
           const view = this.cameras?.main?.worldView;
-          if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+          if (view && !view.contains(b.x, b.y)) {
+            // Do not cull mines off-screen; allow them to persist
+            if (!b._mine) { try { b.destroy(); } catch (_) {} return; }
+          }
+          // Smart Explosives: proximity detection and mine behavior
+          if (b._smartExplosives) {
+            const detR = b._detectR || Math.max(8, Math.floor((b._blastRadius || 70) * 0.65));
+            const detR2 = detR * detR;
+            const now = this.time.now;
+            // If deployed as a mine, sit until enemy enters detection or expiry
+            if (b._mine) {
+              if (now >= (b._mineExpireAt || 0)) {
+                // Expire by detonating rather than disappearing silently
+                const ex = b.x; const ey = b.y;
+                try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: b._blastRadius || 40 }); } catch (_) {}
+                const radius = b._blastRadius || 70; const r2 = radius * radius;
+                this.enemies.getChildren().forEach((other) => {
+                  if (!other.active) return; const ddx = other.x - ex; const ddy = other.y - ey;
+                  if ((ddx * ddx + ddy * ddy) <= r2) {
+                    const aoe = (b._aoeDamage || b.damage || 10);
+                    if (other.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + aoe; }
+                    else { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= aoe; if (other.hp <= 0) { this.killEnemy(other); } }
+                  }
+                });
+                this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                try { b.destroy(); } catch (_) {}
+                return;
+              }
+              const arr = this.enemies?.getChildren?.() || [];
+              for (let i = 0; i < arr.length; i += 1) {
+                const e = arr[i]; if (!e?.active) continue;
+                const dx = e.x - b.x; const dy = e.y - b.y;
+                if ((dx * dx + dy * dy) <= detR2) {
+                  const ex = b.x; const ey = b.y;
+                  try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: b._blastRadius || 40 }); } catch (_) {}
+                  const radius = b._blastRadius || 70; const r2 = radius * radius;
+                  this.enemies.getChildren().forEach((other) => {
+                    if (!other.active) return; const ddx = other.x - ex; const ddy = other.y - ey;
+                    if ((ddx * ddx + ddy * ddy) <= r2) {
+                      const aoe = (b._aoeDamage || b.damage || 10);
+                      if (other.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + aoe; }
+                      else { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= aoe; if (other.hp <= 0) { this.killEnemy(other); } }
+                    }
+                  });
+                  this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                  try { b.destroy(); } catch (_) {}
+                  return;
+                }
+              }
+              // Stay as mine this frame
+              return;
+            }
+            // While flying: proximity-detonate if any enemy within detect radius
+            {
+              const arr = this.enemies?.getChildren?.() || [];
+              for (let i = 0; i < arr.length; i += 1) {
+                const e = arr[i]; if (!e?.active) continue;
+                const dx = e.x - b.x; const dy = e.y - b.y;
+                if ((dx * dx + dy * dy) <= detR2) {
+                  const ex = b.x; const ey = b.y;
+                  try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: b._blastRadius || 40 }); } catch (_) {}
+                  const radius = b._blastRadius || 70; const r2 = radius * radius;
+                  this.enemies.getChildren().forEach((other) => {
+                    if (!other.active) return; const ddx = other.x - ex; const ddy = other.y - ey;
+                    if ((ddx * ddx + ddy * ddy) <= r2) {
+                      const aoe = (b._aoeDamage || b.damage || 10);
+                      if (other.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + aoe; }
+                      else { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= aoe; if (other.hp <= 0) { this.killEnemy(other); } }
+                    }
+                  });
+                  this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                  try { b.destroy(); } catch (_) {}
+                  return;
+                }
+              }
+            }
+          }
           // Check if reached or passed target point
           const dxs = (b.x - b._startX); const dys = (b.y - b._startY);
           const prog = dxs * (sx) + dys * (sy);
@@ -595,6 +679,15 @@ export default class CombatScene extends Phaser.Scene {
           const nearTarget = (dx * dx + dy * dy) <= 64; // within 8px
           const passed = prog >= b._targetLen2 - 1;
           if (nearTarget || passed) {
+            if (b._smartExplosives) {
+              // Become a mine if no enemy in detection radius
+              b._mine = true;
+              b._mineExpireAt = this.time.now + 8000; // safety timeout
+              try { b.setVelocity(0, 0); } catch (_) {}
+              try { b.body?.setVelocity?.(0, 0); } catch (_) {}
+              try { b.setTint(0x55ff77); } catch (_) {}
+              return;
+            }
             // Explode at target/current pos
             const ex = b.x; const ey = b.y;
             try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: b._blastRadius || 40 }); } catch (_) {}
@@ -653,6 +746,39 @@ export default class CombatScene extends Phaser.Scene {
         if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
       };
       b.on('destroy', () => b._g?.destroy());
+    }
+    // 2Tap Trigger: schedule an automatic second accurate shot shortly after
+    if (weapon._twoTap) {
+      const wid = this.gs.activeWeapon;
+      const angle2 = baseAngle;
+      const sx2 = startX; const sy2 = startY;
+      this.time.delayedCall(70, () => {
+        if (this.gs.activeWeapon !== wid) return;
+        const cap = this.getActiveMagCapacity();
+        this.ensureAmmoFor(wid, cap);
+        const ammo = this.ammoByWeapon[wid] ?? 0;
+        if (ammo <= 0 || this.reload.active) return;
+        const effSpeed = Math.floor((weapon.bulletSpeed || 0) * 1.25);
+        const vx = Math.cos(angle2) * effSpeed;
+        const vy = Math.sin(angle2) * effSpeed;
+        const b2 = this.bullets.get(sx2, sy2, 'bullet');
+        if (!b2) return;
+        b2.setActive(true).setVisible(true);
+        b2.setCircle(2).setOffset(-2, -2);
+        b2.setVelocity(vx, vy);
+        b2.setTint(0xffffff);
+        b2.damage = weapon.damage;
+        b2._core = weapon._core || null;
+        if (b2._core === 'pierce') { b2._pierceLeft = 1; }
+        b2.update = () => {
+          const view = this.cameras?.main?.worldView;
+          if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} }
+        };
+        b2.on('destroy', () => b2._g?.destroy());
+        // consume ammo and sync UI
+        this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
+        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+      });
     }
   }
 
@@ -750,7 +876,8 @@ export default class CombatScene extends Phaser.Scene {
       const playerRect = this.player.getBounds();
       const nearTerminal = this.terminalZone && Phaser.Geom.Intersects.RectangleToRectangle(playerRect, this.terminalZone.getBounds());
       const nearPortal = this.portal && Phaser.Geom.Intersects.RectangleToRectangle(playerRect, this.portal.getBounds());
-      const nearDummy = this.dummy && Phaser.Geom.Intersects.RectangleToRectangle(playerRect, this.dummy.getBounds());
+      // Expand dummy interaction to a radius around it instead of strict sprite-bounds overlap
+      const nearDummy = !!(this.dummy && (() => { const dx = this.player.x - this.dummy.x; const dy = this.player.y - this.dummy.y; const r = 72; return (dx * dx + dy * dy) <= (r * r); })());
       if (nearTerminal) this.prompt.setText('E: Open Terminal');
       else if (nearDummy) this.prompt.setText('E: Reset Dummy Damage');
       else if (nearPortal) this.prompt.setText('E: Return to Hub');
@@ -868,11 +995,16 @@ export default class CombatScene extends Phaser.Scene {
         const abilityId = this.gs?.abilityId || 'ads';
         if (abilityId === 'ads') {
           this.deployADS();
-          // Cooldown 10s
-          this.ability.onCooldownUntil = nowT + 10000;
+          this.ability.cooldownMs = 10000;
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'bits') {
           this.deployBITs();
-          this.ability.onCooldownUntil = nowT + 10000;
+          this.ability.cooldownMs = 10000;
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
+        } else if (abilityId === 'repulse') {
+          this.deployRepulsionPulse();
+          this.ability.cooldownMs = 5000; // 5s for Repulsion Pulse
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
     }
@@ -921,12 +1053,100 @@ export default class CombatScene extends Phaser.Scene {
       const nowT2 = this.time.now;
       const until = this.ability?.onCooldownUntil || 0;
       const active = nowT2 < until;
-      const denom = 10000;
+      const denom = this.ability?.cooldownMs || 10000;
       const remaining = Math.max(0, until - nowT2);
       const prog = active ? (1 - Math.min(1, remaining / denom)) : 1;
       this.registry.set('abilityCooldownActive', active);
       this.registry.set('abilityCooldownProgress', prog);
     } catch (_) {}
+
+    // Update Repulsion Pulse effects (block enemy projectiles and push enemies)
+    if (this._repulses && this._repulses.length) {
+      const dt2 = (this.game?.loop?.delta || 16.7) / 1000;
+      this._repulses = this._repulses.filter((rp) => {
+        rp.r += rp.speed * dt2;
+        try {
+          rp.g.clear();
+          rp.g.setBlendMode?.(Phaser.BlendModes.ADD);
+          // Trail cache of previous radii for drag effect
+          const now = this.time.now;
+          if (rp._lastTrailR === undefined) rp._lastTrailR = 0;
+          if (!rp._trail) rp._trail = [];
+          if ((rp.r - rp._lastTrailR) > 10) { rp._trail.push({ r: rp.r, t: now }); rp._lastTrailR = rp.r; }
+          // Keep last few rings
+          while (rp._trail.length > 6) rp._trail.shift();
+          // Draw trail rings (older = fainter)
+          for (let i = 0; i < rp._trail.length; i += 1) {
+            const it = rp._trail[i];
+            const age = (now - it.t) / 300; // 0..~
+            const a = Math.max(0, 0.22 * (1 - Math.min(1, age)));
+            if (a <= 0) continue;
+            rp.g.lineStyle(6, 0xffaa33, a).strokeCircle(0, 0, it.r);
+          }
+          // Current ring: bright thin edge + faint outer halo
+          rp.g.lineStyle(8, 0xffaa33, 0.20).strokeCircle(0, 0, rp.r);
+          rp.g.lineStyle(3, 0xffdd88, 0.95).strokeCircle(0, 0, Math.max(1, rp.r - 1));
+          // Periodic sparks along the band (denser for a lively pulse)
+          if (!rp._nextSparkAt) rp._nextSparkAt = now;
+          if (now >= rp._nextSparkAt) {
+            const sparks = 8;
+            for (let s = 0; s < sparks; s += 1) {
+              const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              const sx = rp.x + Math.cos(a) * rp.r;
+              const sy = rp.y + Math.sin(a) * rp.r;
+              try { pulseSpark(this, sx, sy, { color: 0xffaa66, size: 2, life: 180 }); } catch (_) {}
+            }
+            rp._nextSparkAt = now + 28; // faster cadence
+          }
+        } catch (_) {}
+        const band = rp.band;
+        const r2min = (rp.r - band) * (rp.r - band);
+        const r2max = (rp.r + band) * (rp.r + band);
+        // Block enemy bullets in the band
+        try {
+          const arrB = this.enemyBullets?.getChildren?.() || [];
+          for (let i = 0; i < arrB.length; i += 1) {
+            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy;
+            if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+          }
+        } catch (_) {}
+        // Push enemies and apply 5 dmg once per enemy per pulse
+        try {
+          if (!rp._hitSet) rp._hitSet = new Set();
+          if (!rp._pushedSet) rp._pushedSet = new Set();
+          const arrE = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < arrE.length; i += 1) {
+            const e = arrE[i]; if (!e?.active) continue;
+            // If already pushed by this pulse, skip entirely; also skip while under any active knockback window
+            const nowPush = this.time.now;
+            if (rp._pushedSet.has(e)) continue;
+            if (nowPush < (e._repulseUntil || 0)) continue;
+            const dx = e.x - rp.x; const dy = e.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) {
+              const d = Math.sqrt(d2) || 1; const nx = dx / d; const ny = dy / d; const power = 240;
+              // Apply 1s knockback velocity; let physics/barricades handle collisions
+              if (!e.isDummy) {
+                e._repulseUntil = nowPush + 1000;
+                e._repulseVX = nx * power; e._repulseVY = ny * power;
+                try { e.body?.setVelocity?.(e._repulseVX, e._repulseVY); } catch (_) { try { e.setVelocity(e._repulseVX, e._repulseVY); } catch (_) {} }
+              }
+              // Mark this enemy as pushed for this pulse so re-contacts do not refresh/pile up
+              rp._pushedSet.add(e);
+              if (!rp._hitSet.has(e)) {
+                rp._hitSet.add(e);
+                if (e.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + 5; }
+                else {
+                  if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+                  e.hp -= 5;
+                  if (e.hp <= 0) { try { this.killEnemy(e); } catch (_) {} }
+                }
+              }
+            }
+          }
+        } catch (_) {}
+        if (rp.r >= rp.maxR) { try { rp.g.destroy(); } catch (_) {} return false; }
+        return true;
+      });
+    }
 
     // Update BIT units
     if (!this._bits) this._bits = [];
@@ -1007,9 +1227,13 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
             try { impactBurst(this, trg.x, trg.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
             try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {}
-            // Apply damage
-            if (typeof trg.hp !== 'number') trg.hp = trg.maxHp || 20;
-            trg.hp -= 7; if (trg.hp <= 0) { try { this.killEnemy(trg); } catch (_) {} }
+            // Apply damage (count on dummy instead of reducing HP)
+            if (trg.isDummy) {
+              this._dummyDamage = (this._dummyDamage || 0) + 7;
+            } else {
+              if (typeof trg.hp !== 'number') trg.hp = trg.maxHp || 20;
+              trg.hp -= 7; if (trg.hp <= 0) { try { this.killEnemy(trg); } catch (_) {} }
+            }
             bit.lastShotAt = now;
             bit.holdUntil = now + 400; // hold for 0.4s
             bit.moveUntil = now + 400; // next plan after hold
@@ -1047,6 +1271,12 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isDummy) { try { e.body.setVelocity(0, 0); } catch (_) {} return; }
       const now = this.time.now;
       const dt = (this.game?.loop?.delta || 16.7) / 1000; // seconds
+      // If under repulsion knockback, override movement for 1s to respect barricade physics
+      if (now < (e._repulseUntil || 0)) {
+        const vx = e._repulseVX || 0; const vy = e._repulseVY || 0;
+        try { e.body?.setVelocity?.(vx, vy); } catch (_) { try { e.setVelocity(vx, vy); } catch (_) {} }
+        return;
+      }
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
       const dist = Math.hypot(dx, dy) || 1;
@@ -1438,8 +1668,28 @@ export default class CombatScene extends Phaser.Scene {
     this._gadgets.push(obj);
   }
 
+  deployRepulsionPulse() {
+    if (!this._repulses) this._repulses = [];
+    const x = this.player.x; const y = this.player.y;
+    const g = this.add.graphics({ x, y });
+    try { g.setDepth?.(9000); } catch (_) {}
+    try { g.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+    const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
+    const corners = [
+      { x: rect.left, y: rect.top },
+      { x: rect.right, y: rect.top },
+      { x: rect.right, y: rect.bottom },
+      { x: rect.left, y: rect.bottom },
+    ];
+    let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
+    const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g };
+    this._repulses.push(obj);
+  }
+
   deployBITs() {
     if (!this._bits) this._bits = [];
+    // Green spawn ring for visual parity with Boss room
+    try { bitSpawnRing(this, this.player.x, this.player.y, { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 }); } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
