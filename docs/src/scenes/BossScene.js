@@ -83,6 +83,11 @@ export default class BossScene extends Phaser.Scene {
     try { this.gs.lastBossType = this.boss.bossType; SaveManager.saveToLocal(this.gs); } catch (_) {}
     this._dashSeq = null;
     this._dashNextAt = this.time.now + 3000;
+    // Reset transient boss ability state to avoid leaking across BossRush rounds
+    this._castingGrenades = false; // Shotgunner grenade volley gate
+    this._bossBurstLeft = 0; // Charger burst/shooting timers
+    this._bossNextBurstAt = 0;
+    this.lastBossShot = 0;
     // Group the boss into a physics group for consistent overlap handling
     this.bossGroup = this.physics.add.group();
     this.bossGroup.add(this.boss);
@@ -177,7 +182,13 @@ export default class BossScene extends Phaser.Scene {
       if (e.hp <= 0) this.killBoss(e);
     });
     // Player bullets collide with barricades (block and damage them)
-    this.physics.add.collider(this.bullets, this.barricadesSoft, (b, s) => this.onBulletHitBarricade(b, s));
+    this.physics.add.collider(
+      this.bullets,
+      this.barricadesSoft,
+      (b, s) => this.onBulletHitBarricade(b, s),
+      (b, s) => !(b && b._rail),
+      this,
+    );
 
     // Boss bullets (Arcade.Image pool)
     this.bossBullets = this.physics.add.group({
@@ -1155,12 +1166,12 @@ export default class BossScene extends Phaser.Scene {
       if (t >= 1 && !coreHold) { this.fireRailgun(baseAngle, weapon, t); this.rail.charging = false; this.endRailAim(); }
     }
   }
-  drawRailAim(angle, weapon, t) { try { if (!this.rail?.aimG) this.rail.aimG = this.add.graphics(); const g = this.rail.aimG; g.clear(); g.setDepth(9000); const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0)); const spread = spread0 * (1 - t); const len = 340; g.lineStyle(1, 0xffffff, 0.9); const a1 = angle - spread / 2; const a2 = angle + spread / 2; const x = this.player.x; const y = this.player.y; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath(); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath(); } catch (_) {} }
+  drawRailAim(angle, weapon, t) { try { if (!this.rail?.aimG) this.rail.aimG = this.add.graphics(); const g = this.rail.aimG; g.clear(); g.setDepth(9000); const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0)); const spread = spread0 * (1 - t); const diag = Math.hypot(this.scale.width, this.scale.height); const len = Math.ceil(diag + 32); g.lineStyle(0.5, 0xffffff, 0.9); const a1 = angle - spread / 2; const a2 = angle + spread / 2; const x = this.player.x; const y = this.player.y; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath(); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath(); } catch (_) {} }
   endRailAim() { try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {} if (this.rail) this.rail.aimG = null; }
   fireRailgun(baseAngle, weapon, t) {
     const wid = this.gs.activeWeapon; const cap = this.getActiveMagCapacity(); this.ensureAmmoFor(wid, cap); const ammo = this.ammoByWeapon[wid] ?? 0; if (ammo <= 0 || this.reload.active) return;
     const dmg = Math.floor(weapon.damage * (1 + 2 * t)); const speed = Math.floor(weapon.bulletSpeed * (1 + 2 * t)); const spreadRad = Phaser.Math.DegToRad(Math.max(0, (weapon.spreadDeg || 0))) * (1 - t); const off = (spreadRad > 0) ? Phaser.Math.FloatBetween(-spreadRad / 2, spreadRad / 2) : 0; const angle = baseAngle + off; const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
-    const b = this.bullets.get(this.player.x, this.player.y, 'bullet'); if (!b) return; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.damage = dmg; b.setTint(0x66aaff); b._core = 'pierce'; b._pierceLeft = 999; const trail = this.add.graphics(); b._g = trail; trail.setDepth(8000); b._px = b.x; b._py = b.y; b.update = () => { try { trail.clear(); trail.lineStyle(2, 0xaaddff, 0.9); const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02); trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath(); } catch (_) {} try { const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y); const boss = this.boss; if (boss && boss.active) { const rect = boss.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b.damage || 12); try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {} if (boss.hp <= 0) this.killBoss(boss); } } } catch (_) {} const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } b._px = b.x; b._py = b.y; }; b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+    const b = this.bullets.get(this.player.x, this.player.y, 'bullet'); if (!b) return; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.damage = dmg; b.setTint(0x66aaff); b._core = 'pierce'; b._pierceLeft = 999; b._rail = true; const trail = this.add.graphics(); b._g = trail; trail.setDepth(8000); b._px = b.x; b._py = b.y; b.update = () => { try { trail.clear(); trail.lineStyle(2, 0xaaddff, 0.9); const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02); trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath(); } catch (_) {} try { const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y); const boss = this.boss; if (boss && boss.active) { if (!b._hitSet) b._hitSet = new Set(); if (!b._hitSet.has(boss)) { const rect = boss.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b.damage || 12); try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {} b._hitSet.add(boss); if (boss.hp <= 0) this.killBoss(boss); } } } } catch (_) {} const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } b._px = b.x; b._py = b.y; }; b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
     this.ammoByWeapon[wid] = Math.max(0, (this.ammoByWeapon[wid] ?? cap) - 1);
     this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
     const nowT = this.time.now;

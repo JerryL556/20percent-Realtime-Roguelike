@@ -1792,8 +1792,11 @@ export default class CombatScene extends Phaser.Scene {
       const g = this.rail.aimG; g.clear(); g.setDepth(9000);
       const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0));
       const spread = spread0 * (1 - t);
-      const len = 340; // longer aim guide for railgun
-      g.lineStyle(1, 0xffffff, 0.9); // thinner lines
+      // Full-screen length: use screen diagonal with small margin
+      const diag = Math.hypot(this.scale.width, this.scale.height);
+      const len = Math.ceil(diag + 32);
+      // Thinner guide line
+      g.lineStyle(0.5, 0xffffff, 0.9);
       const a1 = angle - spread / 2; const a2 = angle + spread / 2;
       const x = this.player.x; const y = this.player.y;
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath();
@@ -1853,11 +1856,16 @@ export default class CombatScene extends Phaser.Scene {
           if (b._hitSet.has(e)) continue;
           const rect = e.getBounds();
           if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
-            if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
-            e.hp -= (b.damage || 10);
+            if (e.isDummy) {
+              // Railgun dummy recording: accumulate but do not change HP
+              this._dummyDamage = (this._dummyDamage || 0) + (b.damage || 10);
+            } else {
+              if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+              e.hp -= (b.damage || 10);
+            }
             try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {}
             b._hitSet.add(e);
-            if (e.hp <= 0) { try { this.killEnemy ? this.killEnemy(e) : e.destroy(); } catch (_) {} }
+            if (!e.isDummy && e.hp <= 0) { try { this.killEnemy ? this.killEnemy(e) : e.destroy(); } catch (_) {} }
           }
         }
         // Railgun should pierce barricades and not damage them.
