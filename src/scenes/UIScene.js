@@ -1,6 +1,7 @@
 import { SceneKeys } from '../core/SceneKeys.js';
 import { HpBar } from '../ui/HpBar.js';
 import { DashBar } from '../ui/DashBar.js';
+import { HeatBar } from '../ui/HeatBar.js';
 import { makeTextButton } from '../ui/Buttons.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { getPlayerEffects } from '../core/Loadout.js';
@@ -28,6 +29,10 @@ export default class UIScene extends Phaser.Scene {
     const uiTextY = Math.max(8, height - 32);
     this.weaponText = this.add.text(weaponX0, uiTextY, 'Weapon: -', { fontFamily: 'monospace', fontSize: 18, color: '#ffff66' }).setOrigin(0, 0);
     this.ammoText = this.add.text(weaponX0 + 180, uiTextY + 2, 'Ammo: -/-', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0, 0);
+    // Heat bar sits where ammo would be, shown only for laser
+    this.heatBar = new HeatBar(this, weaponX0 + 180, uiTextY + 6, 120, 6);
+    this.heatLabel = this.add.text(weaponX0 + 180, uiTextY - 8, 'HEAT', { fontFamily: 'monospace', fontSize: 10, color: '#ff6666' }).setOrigin(0, 0);
+    this.heatBar.setVisible(false); this.heatLabel.setVisible(false);
     // Ability label + cooldown square
     this.abilityText = this.add.text(weaponX0 + 340, uiTextY + 2, 'Ability: -', { fontFamily: 'monospace', fontSize: 14, color: '#66aaff' }).setOrigin(0, 0);
     this.abilityG = this.add.graphics();
@@ -93,6 +98,19 @@ export default class UIScene extends Phaser.Scene {
       const ammoStr = (typeof ammoInMag === 'number' && typeof magSize === 'number') ? `${ammoInMag}/${magSize}` : '-/-';
       this.ammoText.setText(`Ammo: ${ammoStr}`);
       this.ammoText.setPosition(wx + 180, uiTextY + 2);
+      // Heat bar for laser
+      const wDef = getWeaponById(gs.activeWeapon);
+      const isLaser = !!wDef?.isLaser;
+      this.ammoText.setVisible(!isLaser);
+      this.heatBar.setVisible(isLaser);
+      this.heatLabel.setVisible(isLaser);
+      if (isLaser) {
+        const heat = this.registry.get('laserHeat') ?? 0;
+        const overheated = !!this.registry.get('laserOverheated');
+        this.heatBar.x = wx + 180; this.heatBar.y = uiTextY + 6;
+        this.heatLabel.setPosition(wx + 180, uiTextY - 8);
+        this.heatBar.draw(heat, overheated);
+      }
       // Ability label + cooldown box
       try {
         const abilityName = (getAbilityById(gs.abilityId)?.name || '-');

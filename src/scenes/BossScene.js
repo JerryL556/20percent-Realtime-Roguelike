@@ -43,6 +43,9 @@ export default class BossScene extends Phaser.Scene {
     this.registry.set('magSize', cap0);
     this.registry.set('reloadActive', false);
     this.registry.set('reloadProgress', 0);
+    // Laser state for boss scene (heat/overheat and beam graphic)
+    this.laser = { heat: 0, firing: false, overheat: false, startedAt: 0, coolDelayUntil: 0, g: null, lastTickAt: 0 };
+    this._firefields = [];
 
     // Ability system (match normal rooms)
     this._gadgets = [];
@@ -258,6 +261,7 @@ export default class BossScene extends Phaser.Scene {
       this._won = true;
       try { this.win(); } catch (_) {}
     }
+    try { if (e._igniteIndicator) { e._igniteIndicator.destroy(); e._igniteIndicator = null; } } catch (_) {}
     try { e.destroy(); } catch (_) {}
   }
 
@@ -293,6 +297,8 @@ export default class BossScene extends Phaser.Scene {
         b._core = 'blast';
         b._blastRadius = weapon.blastRadius || 70;
         b._rocket = true;
+        b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
+        b._firefield = !!weapon._firefield;
         // Smart Explosives core flags
         b._smartExplosives = !!weapon._smartExplosives;
         if (b._smartExplosives) {
@@ -319,9 +325,10 @@ export default class BossScene extends Phaser.Scene {
                 const ex = b.x; const ey = b.y;
                 const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
                 if (this.boss?.active) {
-                  const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
+                  const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b._aoeDamage || b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
                 }
-                this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+                this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
+                if (b._firefield) this.spawnFireField(ex, ey, radius);
                 try { b.destroy(); } catch (_) {}
                 return;
               }
@@ -333,9 +340,10 @@ export default class BossScene extends Phaser.Scene {
                   const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
                   if (this.boss?.active) {
                     const ddx = this.boss.x - ex; const ddy = this.boss.y - ey;
-                    if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
+                    if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b._aoeDamage || b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
                   }
-                  this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+                  this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
+                  if (b._firefield) this.spawnFireField(ex, ey, radius);
                   try { b.destroy(); } catch (_) {}
                   return;
                 }
@@ -347,8 +355,9 @@ export default class BossScene extends Phaser.Scene {
               const dx = this.boss.x - b.x; const dy = this.boss.y - b.y;
               if ((dx * dx + dy * dy) <= detR2) {
                 const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
-                const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
-                this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+                const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b._aoeDamage || b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
+                this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
+                if (b._firefield) this.spawnFireField(ex, ey, radius);
                 try { b.destroy(); } catch (_) {}
                 return;
               }
@@ -376,12 +385,13 @@ export default class BossScene extends Phaser.Scene {
               const ddx = this.boss.x - ex; const ddy = this.boss.y - ey;
               if ((ddx * ddx + ddy * ddy) <= r2) {
                 if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300;
-                this.boss.hp -= b.damage || 12;
+                this.boss.hp -= (b._aoeDamage || b.damage || 12);
                 if (this.boss.hp <= 0) this.killBoss(this.boss);
               }
             }
             // Also damage nearby destructible barricades
-            this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+            this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
+            if (b._firefield) this.spawnFireField(ex, ey, radius);
             try { b.destroy(); } catch (_) {}
           }
         };
@@ -509,6 +519,7 @@ export default class BossScene extends Phaser.Scene {
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
     const isRail = !!weapon.isRailgun;
+    const isLaser = !!weapon.isLaser;
     // Finish reload if timer elapsed; update reload progress for UI
     if (this.reload?.active) {
       const now = time;
@@ -551,7 +562,7 @@ export default class BossScene extends Phaser.Scene {
     if (this._spreadHeat === undefined) this._spreadHeat = 0;
     const rampPerSec = 0.7;
     const coolPerSec = 1.2;
-    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail) {
+    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail && !isLaser) {
       this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
     } else {
       this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
@@ -561,7 +572,8 @@ export default class BossScene extends Phaser.Scene {
     const edgeDown = (!this._lmbWasDown) && !!ptr.isDown && ((ptr.buttons & 1) === 1);
     const wantsClick = !!ptr.justDown || edgeDown;
     if (isRail) { this.handleRailgunCharge(time, weapon, ptr); }
-    const wantsShot = (!isRail) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
+    if (isLaser) { this.handleLaser(time, weapon, ptr, dt); }
+    const wantsShot = (!isRail && !isLaser) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
     if (wantsShot && (!this.lastShot || time - this.lastShot > weapon.fireRateMs)) {
       const cap = this.getActiveMagCapacity();
       const wid = this.gs.activeWeapon;
@@ -604,6 +616,8 @@ export default class BossScene extends Phaser.Scene {
       this.registry.set('reloadActive', false);
       try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
       this.endRailAim?.();
+      // Clear laser beam if swapping away
+      try { this.laser?.g?.clear?.(); } catch (_) {}
     }
 
     // Manual reload (R)
@@ -611,7 +625,7 @@ export default class BossScene extends Phaser.Scene {
       const cap = this.getActiveMagCapacity();
       const wid = this.gs.activeWeapon;
       this.ensureAmmoFor(wid, cap);
-      if (!this.reload.active && (this.ammoByWeapon[wid] ?? 0) < cap) {
+      if (!weapon.isLaser && !this.reload.active && (this.ammoByWeapon[wid] ?? 0) < cap) {
         this.reload.active = true;
         this.reload.duration = this.getActiveReloadMs();
         this.reload.until = time + this.reload.duration;
@@ -670,6 +684,46 @@ export default class BossScene extends Phaser.Scene {
             try { impactBurst(this, best.x, best.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
             try { best.destroy(); } catch (_) {}
             g.nextZapAt = nowT + 100; // 10 per second
+          }
+        }
+        return true;
+      });
+    }
+
+    // Ignite burn ticking for boss (smooth 10Hz)
+    this._igniteTickAccum = (this._igniteTickAccum || 0) + dt;
+    const _burnTick = 0.1;
+    if (this._igniteTickAccum >= _burnTick) {
+      const stepIgn = this._igniteTickAccum; this._igniteTickAccum = 0;
+      const burnDps = 30; const dmg = Math.max(0, Math.round(burnDps * stepIgn));
+      const nowT = this.time.now; const e = this.boss;
+      if (e?.active && e._ignitedUntil && nowT < e._ignitedUntil) {
+        if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
+        e.hp -= dmg; if (e.hp <= 0) this.killBoss(e);
+        if (e._igniteIndicator?.setPosition) { try { e._igniteIndicator.setPosition(e.x, e.y - 20); } catch (_) {} }
+      } else {
+        if (e?._igniteIndicator) { try { e._igniteIndicator.destroy(); } catch (_) {} e._igniteIndicator = null; }
+      }
+    }
+
+    // Update fire fields in BossScene (ignite on boss)
+    if (!this._ffTickAccum) this._ffTickAccum = 0;
+    this._ffTickAccum += dt;
+    const ffTick = 0.1;
+    if (this._ffTickAccum >= ffTick) {
+      const step = this._ffTickAccum; this._ffTickAccum = 0;
+      const ignitePerSec = 10; const igniteAdd = ignitePerSec * step;
+      const nowT = this.time.now;
+      this._firefields = (this._firefields || []).filter((f) => {
+        if (nowT >= f.until) { try { f.g?.destroy(); } catch (_) {} return false; }
+        const e = this.boss; if (e?.active) {
+          const dx = e.x - f.x; const dy = e.y - f.y; if ((dx * dx + dy * dy) <= (f.r * f.r)) {
+            e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
+            if ((e._igniteValue || 0) >= 10) {
+              e._ignitedUntil = nowT + 2000;
+              if (!e._igniteIndicator) { e._igniteIndicator = this.add.graphics(); try { e._igniteIndicator.setDepth(9000); } catch (_) {} e._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2); }
+              try { e._igniteIndicator.setPosition(e.x, e.y - 20); } catch (_) {}
+            }
           }
         }
         return true;
@@ -1404,6 +1458,101 @@ export default class BossScene extends Phaser.Scene {
     } catch (_) {
       return 1500;
     }
+  }
+
+  // Laser mechanics (continuous, clip on boss/barricades, non-penetrating)
+  handleLaser(now, weapon, ptr, dt) {
+    if (!this.laser) this.laser = { heat: 0, firing: false, overheat: false, startedAt: 0, coolDelayUntil: 0, g: null, lastTickAt: 0 };
+    if (!this.laser.g) {
+      this.laser.g = this.add.graphics();
+      try { this.laser.g.setDepth(8000); this.laser.g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    }
+    const lz = this.laser;
+    const canPress = ptr?.isDown && ((ptr.buttons & 1) === 1);
+    const canFire = canPress && !lz.overheat;
+    const heatPerSec = 1 / 5; const coolDelay = 0.5; const coolFastPerSec = 2.5; const tickRate = 0.1;
+    if (canFire) {
+      if (!lz.firing) { lz.firing = true; lz.startedAt = now; }
+      lz.heat = Math.min(1, lz.heat + heatPerSec * dt);
+      if (lz.heat >= 1 && !lz.overheat) {
+        lz.overheat = true;
+        this.reload.active = true; this.reload.duration = this.getActiveReloadMs(); this.reload.until = now + this.reload.duration;
+        this.registry.set('reloadActive', true); this.registry.set('reloadProgress', 0);
+      }
+    } else {
+      if (lz.firing) { lz.firing = false; lz.coolDelayUntil = now + Math.floor(coolDelay * 1000); }
+      if (!lz.overheat) {
+        if (now >= lz.coolDelayUntil) lz.heat = Math.max(0, lz.heat - coolFastPerSec * dt);
+      } else {
+        if (!this.reload.active || now >= this.reload.until) {
+          lz.overheat = false; lz.heat = 0; this.reload.active = false; this.reload.duration = 0;
+          this.registry.set('reloadActive', false); this.registry.set('reloadProgress', 1);
+        } else {
+          const remaining = Math.max(0, this.reload.until - now); const dur = Math.max(1, this.reload.duration || this.getActiveReloadMs());
+          const prog = 1 - Math.min(1, remaining / dur); this.registry.set('reloadActive', true); this.registry.set('reloadProgress', prog);
+        }
+      }
+    }
+    this.registry.set('laserHeat', lz.heat); this.registry.set('laserOverheated', !!lz.overheat);
+    lz.g.clear();
+    if (canFire && !lz.overheat) {
+      const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
+      const hit = this.computeLaserEnd(angle);
+      const ex = hit.ex, ey = hit.ey; const e = hit.hitEnemy;
+      try {
+        lz.g.lineStyle(3, 0xff3333, 0.9).beginPath(); lz.g.moveTo(this.player.x, this.player.y); lz.g.lineTo(ex, ey); lz.g.strokePath();
+        lz.g.lineStyle(1, 0x66aaff, 1).beginPath(); lz.g.moveTo(this.player.x, this.player.y - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
+      } catch (_) {}
+      lz.lastTickAt = (lz.lastTickAt || 0) + dt;
+      if (lz.lastTickAt >= tickRate) {
+        const step = lz.lastTickAt; lz.lastTickAt = 0; const dps = 30; const ignitePerSec = 8; const dmg = Math.max(0, Math.round(dps * step)); const igniteAdd = ignitePerSec * step;
+        if (e && e.active) {
+          try { impactBurst(this, ex, ey, { color: 0xff4455, size: 'small' }); } catch (_) {}
+          if (typeof e.hp !== 'number') e.hp = e.maxHp || 300; e.hp -= dmg; if (e.hp <= 0) this.killBoss(e);
+          e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
+          if ((e._igniteValue || 0) >= 10) {
+            e._ignitedUntil = this.time.now + 2000;
+            if (!e._igniteIndicator) { e._igniteIndicator = this.add.graphics(); try { e._igniteIndicator.setDepth(9000); } catch (_) {} e._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2); }
+            try { e._igniteIndicator.setPosition(e.x, e.y - 20); } catch (_) {}
+          }
+        }
+      }
+    }
+  }
+
+  computeLaserEnd(angle) {
+    const maxLen = 1000; const sx = this.player.x; const sy = this.player.y; const ex0 = sx + Math.cos(angle) * maxLen; const ey0 = sy + Math.sin(angle) * maxLen; const ray = new Phaser.Geom.Line(sx, sy, ex0, ey0);
+    let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null;
+    // Barricades (soft only here)
+    const arr = this.barricadesSoft?.getChildren?.() || [];
+    for (let i = 0; i < arr.length; i += 1) {
+      const s = arr[i]; if (!s?.active) continue; const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+      const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
+      if (pts && pts.length) { const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy; if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; } }
+    }
+    // Boss hit
+    const e = this.boss; if (e?.active) {
+      const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 10, e.y - 10, 20, 20);
+      const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
+      if (pts && pts.length) { const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy; if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; } }
+    }
+    return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy };
+  }
+
+  // Spawn a temporary fire field that applies ignite to boss while inside
+  spawnFireField(x, y, radius, durationMs = 2000) {
+    if (!this._firefields) this._firefields = [];
+    const g = this.add.graphics();
+    try { g.setDepth(7000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    try {
+      g.clear();
+      g.fillStyle(0xff6633, 0.30);
+      g.fillCircle(x, y, radius);
+      g.lineStyle(2, 0xffaa33, 0.6).strokeCircle(x, y, radius);
+    } catch (_) {}
+    const obj = { x, y, r: radius, until: this.time.now + durationMs, g };
+    this._firefields.push(obj);
+    return obj;
   }
 }
 

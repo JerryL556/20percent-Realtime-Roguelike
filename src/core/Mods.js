@@ -104,6 +104,28 @@ export const weaponCores = [
     },
   },
   {
+    id: 'core_mgl_firefield',
+    name: 'Napalm Rounds',
+    onlyFor: 'mgl',
+    desc: [
+      'MGL only',
+      '+ Leaves fire field on explosion (2s)',
+      '+ Enemies inside gain 10 Ignite/s',
+      '- Explosion damage reduced to 25%',
+      '- Mag size set to 4',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'mgl') return w;
+      const newAoe = Math.max(1, Math.floor((w.aoeDamage || w.damage || 10) * 0.25));
+      return {
+        ...w,
+        aoeDamage: newAoe,
+        magSize: 4,
+        _firefield: true,
+      };
+    },
+  },
+  {
     id: 'core_rail_hold',
     name: 'Rail Stabilizer',
     onlyFor: 'railgun',

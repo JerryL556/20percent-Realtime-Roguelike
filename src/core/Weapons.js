@@ -16,6 +16,22 @@ export const weaponDefs = [
     singleFire: true,
   },
   {
+    id: 'laser',
+    name: 'Laser Beam',
+    // Continuous beam weapon: no magazine, uses heat/overheat
+    damage: 40, // DPS applied continuously in code
+    fireRateMs: 0, // handled continuously
+    bulletSpeed: 0,
+    pelletCount: 1,
+    spreadDeg: 0,
+    maxSpreadDeg: 0,
+    color: 0xff3344,
+    price: 220,
+    magSize: 1, // unused for laser; UI uses heat bar
+    isLaser: true,
+    reloadMs: 2000, // cooldown duration after overheat
+  },
+  {
     id: 'mgl',
     name: 'MGL',
     // 6-round mag grenade launcher; explosive rounds

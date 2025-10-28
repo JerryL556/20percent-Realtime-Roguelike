@@ -91,6 +91,10 @@ export default class CombatScene extends Phaser.Scene {
     this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon] ?? cap0);
     this.registry.set('magSize', cap0);
     this.registry.set('reloadActive', false);
+    // Laser state
+    this.laser = { heat: 0, firing: false, overheat: false, startedAt: 0, coolDelayUntil: 0, g: null, lastTickAt: 0 };
+    // Persistent fire fields from MGL core
+    this._firefields = [];
     this.registry.set('reloadProgress', 0);
 
     // Keep weapon sprite updated every frame without touching existing update()
@@ -418,6 +422,7 @@ export default class CombatScene extends Phaser.Scene {
       // Ensure HP reflects death for any downstream logic
       if (typeof e.hp === 'number' && e.hp > 0) e.hp = 0;
     } catch (_) {}
+    try { if (e._igniteIndicator) { e._igniteIndicator.destroy(); e._igniteIndicator = null; } } catch (_) {}
     // Reward gold per standard enemy kill
     try { this.gs.gold += 5; } catch (_) {}
     // Destroy the enemy sprite
@@ -584,6 +589,7 @@ export default class CombatScene extends Phaser.Scene {
         b._rocket = true;
         // Smart Explosives core flags
         b._smartExplosives = !!weapon._smartExplosives;
+        b._firefield = !!weapon._firefield;
         if (b._smartExplosives) {
           const scale = (typeof weapon._detectScale === 'number') ? weapon._detectScale : 0.65;
           b._detectR = Math.max(8, Math.floor((b._blastRadius || 70) * scale));
@@ -620,6 +626,7 @@ export default class CombatScene extends Phaser.Scene {
                   }
                 });
                 this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                if (b._firefield) this.spawnFireField(ex, ey, radius);
                 try { b.destroy(); } catch (_) {}
                 return;
               }
@@ -640,6 +647,7 @@ export default class CombatScene extends Phaser.Scene {
                     }
                   });
                   this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                  if (b._firefield) this.spawnFireField(ex, ey, radius);
                   try { b.destroy(); } catch (_) {}
                   return;
                 }
@@ -666,6 +674,7 @@ export default class CombatScene extends Phaser.Scene {
                     }
                   });
                   this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                  if (b._firefield) this.spawnFireField(ex, ey, radius);
                   try { b.destroy(); } catch (_) {}
                   return;
                 }
@@ -708,6 +717,7 @@ export default class CombatScene extends Phaser.Scene {
             });
             // Also damage nearby destructible barricades
             this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+            if (b._firefield) this.spawnFireField(ex, ey, radius);
             try { b.destroy(); } catch (_) {}
           }
         };
@@ -874,6 +884,7 @@ export default class CombatScene extends Phaser.Scene {
     // Shooting with LMB per weapon fireRate
     const weapon = getEffectiveWeapon(this.gs, this.gs.activeWeapon);
     const isRail = !!weapon.isRailgun;
+    const isLaser = !!weapon.isLaser;
     // Finish reload if timer elapsed; update reload progress for UI
     if (this.reload?.active) {
       const now = this.time.now;
@@ -948,7 +959,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this._spreadHeat === undefined) this._spreadHeat = 0;
     const rampPerSec = 0.7; // time to max ~1.4s holding
     const coolPerSec = 1.2; // cool to 0 in ~0.8s
-    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail) {
+    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail && !isLaser) {
       this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
     } else {
       this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
@@ -961,7 +972,11 @@ export default class CombatScene extends Phaser.Scene {
     if (isRail) {
       this.handleRailgunCharge(this.time.now, weapon, ptr);
     }
-    const wantsShot = (!isRail) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
+    // Laser handling (continuous)
+    if (isLaser) {
+      this.handleLaser(this.time.now, weapon, ptr, dt);
+    }
+    const wantsShot = (!isRail && !isLaser) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
     if (wantsShot && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
       const cap = this.getActiveMagCapacity();
       const wid = this.gs.activeWeapon;
@@ -1006,6 +1021,8 @@ export default class CombatScene extends Phaser.Scene {
       // Cancel rail charging/aim if any
       try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
       this.endRailAim?.();
+      // Clear laser beam if present
+      try { this.laser?.g?.clear?.(); } catch (_) {}
       }
     }
 
@@ -1014,12 +1031,16 @@ export default class CombatScene extends Phaser.Scene {
       const cap = this.getActiveMagCapacity();
       const wid = this.gs.activeWeapon;
       this.ensureAmmoFor(wid, cap);
-      if (!this.reload.active && (this.ammoByWeapon[wid] ?? 0) < cap) {
+      if (!weapon.isLaser && !this.reload.active && (this.ammoByWeapon[wid] ?? 0) < cap) {
         this.reload.active = true;
         this.reload.duration = this.getActiveReloadMs();
         this.reload.until = this.time.now + this.reload.duration;
         this.registry.set('reloadActive', true);
         this.registry.set('reloadProgress', 0);
+      }
+      // For laser: allow manual cooldown cancel if overheated
+      if (weapon.isLaser && this.laser?.overheat) {
+        // no-op: keep forced cooldown
       }
     }
 
@@ -1092,8 +1113,66 @@ export default class CombatScene extends Phaser.Scene {
       const remaining = Math.max(0, until - nowT2);
       const prog = active ? (1 - Math.min(1, remaining / denom)) : 1;
       this.registry.set('abilityCooldownActive', active);
-      this.registry.set('abilityCooldownProgress', prog);
+    this.registry.set('abilityCooldownProgress', prog);
     } catch (_) {}
+
+    // Ignite burn ticking (global): apply burn DPS to ignited enemies
+    this._igniteTickAccum = (this._igniteTickAccum || 0) + dt;
+    const burnTick = 0.1; // 10 Hz for smoothness without perf hit
+    if (this._igniteTickAccum >= burnTick) {
+      const step = this._igniteTickAccum; // accumulate any leftover
+      this._igniteTickAccum = 0;
+      const enemies = this.enemies?.getChildren?.() || [];
+      const burnDps = 30;
+      const dmg = Math.max(0, Math.round(burnDps * step));
+      const nowT = this.time.now;
+      for (let i = 0; i < enemies.length; i += 1) {
+        const e = enemies[i]; if (!e?.active) continue;
+        if (e._ignitedUntil && nowT < e._ignitedUntil) {
+          if (!e.isDummy) {
+            if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+            e.hp -= dmg;
+            if (e.hp <= 0) this.killEnemy(e);
+          } else {
+            this._dummyDamage = (this._dummyDamage || 0) + dmg;
+          }
+          // maintain indicator position
+          if (e._igniteIndicator?.setPosition) {
+            try { e._igniteIndicator.setPosition(e.x, e.y - 14); } catch (_) {}
+          }
+        } else {
+          // hide indicator if present
+          if (e._igniteIndicator) { try { e._igniteIndicator.destroy(); } catch (_) {} e._igniteIndicator = null; }
+        }
+      }
+    }
+
+    // Update fire fields (ignite zones)
+    if (!this._ffTickAccum) this._ffTickAccum = 0;
+    this._ffTickAccum += dt;
+    const ffTick = 0.1;
+    if (this._ffTickAccum >= ffTick) {
+      const step = this._ffTickAccum; this._ffTickAccum = 0;
+      const ignitePerSec = 10; const igniteAdd = ignitePerSec * step;
+      const nowT = this.time.now;
+      this._firefields = (this._firefields || []).filter((f) => {
+        if (nowT >= f.until) { try { f.g?.destroy(); } catch (_) {} return false; }
+        // Tick ignite within radius
+        const r2 = f.r * f.r; const arr = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const e = arr[i]; if (!e?.active) continue;
+          const dx = e.x - f.x; const dy = e.y - f.y; if ((dx * dx + dy * dy) <= r2) {
+            e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
+            if ((e._igniteValue || 0) >= 10) {
+              e._ignitedUntil = nowT + 2000; // refresh while inside
+              if (!e._igniteIndicator) { e._igniteIndicator = this.add.graphics(); try { e._igniteIndicator.setDepth(9000); } catch (_) {} e._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2); }
+              try { e._igniteIndicator.setPosition(e.x, e.y - 14); } catch (_) {}
+            }
+          }
+        }
+        return true;
+      });
+    }
 
     // Update Repulsion Pulse effects (block enemy projectiles and push enemies)
     if (this._repulses && this._repulses.length) {
@@ -1927,6 +2006,174 @@ export default class CombatScene extends Phaser.Scene {
         this.registry.set('reloadProgress', 0);
       }
     }
+  }
+
+  // Laser mechanics: continuous beam with heat/overheat and ignite buildup
+  handleLaser(now, weapon, ptr, dt) {
+    if (!this.laser) this.laser = { heat: 0, firing: false, overheat: false, startedAt: 0, coolDelayUntil: 0, g: null, lastTickAt: 0 };
+    // Initialize graphics once
+    if (!this.laser.g) {
+      this.laser.g = this.add.graphics();
+      try { this.laser.g.setDepth(8000); } catch (_) {}
+      try { this.laser.g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    }
+    const lz = this.laser;
+    const canPress = ptr?.isDown && ((ptr.buttons & 1) === 1);
+    const canFire = canPress && !lz.overheat;
+    const heatPerSec = 1 / 5; // overheat in 5s
+    const coolDelay = 0.5; // start cooling after 0.5s when not firing
+    const coolFastPerSec = 2.5; // fast cool
+    const tickRate = 0.1; // damage tick 10 Hz
+
+    // Update heat/overheat state
+    if (canFire) {
+      if (!lz.firing) { lz.firing = true; lz.startedAt = now; }
+      lz.heat = Math.min(1, lz.heat + heatPerSec * dt);
+      if (lz.heat >= 1 && !lz.overheat) {
+        // Force cooldown using reload bar
+        lz.overheat = true;
+        this.reload.active = true;
+        this.reload.duration = this.getActiveReloadMs();
+        this.reload.until = now + this.reload.duration;
+        this.registry.set('reloadActive', true);
+        this.registry.set('reloadProgress', 0);
+      }
+    } else {
+      if (lz.firing) { lz.firing = false; lz.coolDelayUntil = now + Math.floor(coolDelay * 1000); }
+      // cooling
+      if (!lz.overheat) {
+        if (now >= lz.coolDelayUntil) {
+          lz.heat = Math.max(0, lz.heat - coolFastPerSec * dt);
+        }
+      } else {
+        // During overheat, rely on reload to finish
+        if (!this.reload.active || now >= this.reload.until) {
+          // finish cooldown
+          lz.overheat = false;
+          lz.heat = 0;
+          this.reload.active = false;
+          this.reload.duration = 0;
+          this.registry.set('reloadActive', false);
+          this.registry.set('reloadProgress', 1);
+        } else {
+          // keep UI reload progress updated
+          const remaining = Math.max(0, this.reload.until - now);
+          const dur = Math.max(1, this.reload.duration || this.getActiveReloadMs());
+          const prog = 1 - Math.min(1, remaining / dur);
+          this.registry.set('reloadActive', true);
+          this.registry.set('reloadProgress', prog);
+        }
+      }
+    }
+
+    // Update UI registry for heat
+    this.registry.set('laserHeat', lz.heat);
+    this.registry.set('laserOverheated', !!lz.overheat);
+
+    // Draw and apply damage while firing and not overheated
+    lz.g.clear();
+    if (canFire && !lz.overheat) {
+      const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
+      const hit = this.computeLaserEnd(angle);
+      const ex = hit.ex, ey = hit.ey; const line = hit.line;
+      // Draw red & blue layered beam
+      try {
+        lz.g.lineStyle(3, 0xff3333, 0.9).beginPath(); lz.g.moveTo(this.player.x, this.player.y); lz.g.lineTo(ex, ey); lz.g.strokePath();
+        lz.g.lineStyle(1, 0x66aaff, 1).beginPath(); lz.g.moveTo(this.player.x, this.player.y - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
+      } catch (_) {}
+
+      // Damage ticking
+      lz.lastTickAt = (lz.lastTickAt || 0);
+      lz.lastTickAt += dt;
+      if (lz.lastTickAt >= tickRate) {
+        const step = lz.lastTickAt; lz.lastTickAt = 0;
+        const dps = 30; const ignitePerSec = 8;
+        const dmg = Math.max(0, Math.round(dps * step));
+        const igniteAdd = ignitePerSec * step;
+        // Only apply to the first hit enemy (no penetration)
+        const e = hit.hitEnemy;
+        if (e && e.active) {
+          // Hit VFX on enemy at contact point
+          try { impactBurst(this, ex, ey, { color: 0xff4455, size: 'small' }); } catch (_) {}
+          if (e.isDummy) {
+            this._dummyDamage = (this._dummyDamage || 0) + dmg;
+          } else {
+            if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+            e.hp -= dmg;
+            if (e.hp <= 0) { this.killEnemy(e); }
+          }
+          // Ignite buildup
+          e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
+          if ((e._igniteValue || 0) >= 10) {
+            e._ignitedUntil = this.time.now + 2000;
+            if (!e._igniteIndicator) {
+              e._igniteIndicator = this.add.graphics();
+              try { e._igniteIndicator.setDepth(9000); } catch (_) {}
+              e._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2);
+            }
+            try { e._igniteIndicator.setPosition(e.x, e.y - 14); } catch (_) {}
+          }
+        }
+      }
+    } else {
+      // not firing: clear beam
+      lz.g.clear();
+    }
+  }
+
+  computeLaserEnd(angle) {
+    // Ray from player towards angle; clip to nearest barricade
+    const maxLen = 1000;
+    const sx = this.player.x; const sy = this.player.y;
+    const ex0 = sx + Math.cos(angle) * maxLen;
+    const ey0 = sy + Math.sin(angle) * maxLen;
+    const ray = new Phaser.Geom.Line(sx, sy, ex0, ey0);
+    let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null;
+    const testGroups = [this.barricadesHard, this.barricadesSoft];
+    for (let gi = 0; gi < testGroups.length; gi += 1) {
+      const g = testGroups[gi]; if (!g) continue;
+      const arr = g.getChildren?.() || [];
+      for (let i = 0; i < arr.length; i += 1) {
+        const s = arr[i]; if (!s?.active) continue;
+        const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+        const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
+        if (pts && pts.length) {
+          const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; }
+        }
+      }
+    }
+    // Also stop at first enemy before barricade
+    const enemies = this.enemies?.getChildren?.() || [];
+    for (let i = 0; i < enemies.length; i += 1) {
+      const e = enemies[i]; if (!e?.active) continue;
+      const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 6, e.y - 6, 12, 12);
+      const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
+      if (pts && pts.length) {
+        const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; }
+      }
+    }
+    return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy };
+  }
+
+  // Spawn a temporary fire field that applies ignite to enemies inside
+  spawnFireField(x, y, radius, durationMs = 2000) {
+    if (!this._firefields) this._firefields = [];
+    const g = this.add.graphics();
+    try { g.setDepth(7000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    const draw = () => {
+      try {
+        g.clear();
+        g.fillStyle(0xff6633, 0.30);
+        g.fillCircle(x, y, radius);
+        g.lineStyle(2, 0xffaa33, 0.6).strokeCircle(x, y, radius);
+      } catch (_) {}
+    };
+    draw();
+    const obj = { x, y, r: radius, until: this.time.now + durationMs, g };
+    this._firefields.push(obj);
+    return obj;
   }
 }
 

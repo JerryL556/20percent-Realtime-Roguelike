@@ -10,6 +10,8 @@ export const WEAPON_TEXTURES = {
   shotgun: { key: 'weapon_shotgun', path: 'assets/SG.png', height: 8, mult: 1.1 }, // slightly larger
   smg: { key: 'weapon_smg', path: 'assets/SMG.png', height: 8, mult: 1.2 }, // slightly larger
   railgun: { key: 'weapon_railgun', path: 'assets/RG.png', height: 8, mult: 1.3 }, // increased
+  // Laser reuses railgun sprite for now
+  laser: { key: 'weapon_laser', path: 'assets/RG.png', height: 8, mult: 1.3 },
   rocket: { key: 'weapon_rocket', path: 'assets/RKT.png', height: 9, mult: 1.35 }, // larger
   mgl: { key: 'weapon_mgl', path: 'assets/MGL.png', height: 9, mult: 1.35 }, // dedicated MGL art
 };
