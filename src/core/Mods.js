@@ -17,6 +17,74 @@ export const weaponMods = [
     },
   },
   { id: 'w_speed_up', name: 'Advanced Propellant', desc: '+15% bullet speed', apply: (w) => ({ ...w, bulletSpeed: Math.floor(w.bulletSpeed * 1.15) }) },
+  // (Incendiary/Toxic moved to cores per design)
+  {
+    id: 'w_mag_improved',
+    name: 'Improved Magazine',
+    desc: [
+      '+ Mag size +10% (round up)',
+      '+ Reload time -30% (faster)',
+      'Not available for MGL, Railgun, Rocket, Laser',
+    ].join('\\n'),
+    allow: (base) => {
+      if (!base) return false;
+      const id = base.id;
+      const explosive = base.projectile === 'rocket' || id === 'mgl' || id === 'rocket';
+      return !base.isLaser && !base.isRailgun && !explosive;
+    },
+    apply: (w) => {
+      if (!w) return w;
+      const id = w.id; const explosive = w.projectile === 'rocket' || id === 'mgl' || id === 'rocket';
+      if (w.isLaser || w.isRailgun || explosive) return w;
+      const mag = Math.max(1, Math.ceil((w.magSize || 1) * 1.1));
+      const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : ((w.projectile === 'rocket') ? 1000 : 1500);
+      const reloadMs = Math.max(200, Math.floor(baseReload * 0.7));
+      return { ...w, magSize: mag, reloadMs, _magRoundUp: true };
+    },
+  },
+  {
+    id: 'w_mag_extended',
+    name: 'Extended Magazine',
+    desc: [
+      '+ Mag size +30% (round up)',
+      'Not available for MGL, Railgun, Rocket, Laser',
+    ].join('\\n'),
+    allow: (base) => {
+      if (!base) return false;
+      const id = base.id;
+      const explosive = base.projectile === 'rocket' || id === 'mgl' || id === 'rocket';
+      return !base.isLaser && !base.isRailgun && !explosive;
+    },
+    apply: (w) => {
+      if (!w) return w;
+      const id = w.id; const explosive = w.projectile === 'rocket' || id === 'mgl' || id === 'rocket';
+      if (w.isLaser || w.isRailgun || explosive) return w;
+      const mag = Math.max(1, Math.ceil((w.magSize || 1) * 1.3));
+      return { ...w, magSize: mag, _magRoundUp: true };
+    },
+  },
+  {
+    id: 'w_stun_ammo',
+    name: 'Stun Ammunitions',
+    desc: [
+      '+ Bullets apply Stun buildup on hit',
+      '+ +2 Stun per hit (10 for Railgun/MGL/Rocket)',
+      '- Bullet speed -10%',
+      'Not available for Laser',
+    ].join('\\n'),
+    allow: (base) => {
+      if (!base) return false;
+      return !base.isLaser;
+    },
+    apply: (w) => {
+      if (!w) return w;
+      if (w.isLaser) return w;
+      const heavy = (w.id === 'railgun') || (w.id === 'mgl') || (w.id === 'rocket') || (w.projectile === 'rocket');
+      const stun = heavy ? 10 : 2;
+      const bs = Math.max(0, Math.floor((w.bulletSpeed || 0) * 0.9));
+      return { ...w, bulletSpeed: bs, _stunOnHit: stun };
+    },
+  },
 ];
 
 // Weapon cores (1 slot)
@@ -171,6 +239,61 @@ export const weaponCores = [
       };
     },
   },
+  {
+    id: 'core_rifle_incendiary',
+    name: 'Incendiary Chamber',
+    onlyFor: 'rifle',
+    desc: [
+      'Assault Rifle only',
+      '+ +2 Ignite value per bullet on hit',
+      '- Fire rate reduced by 25%',
+      '- Direct damage -2',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'rifle') return w;
+      const slower = Math.floor((w.fireRateMs || 111) * 1.25);
+      const newDmg = Math.max(1, (w.damage || 0) - 2);
+      return { ...w, fireRateMs: slower, damage: newDmg, _igniteOnHit: 2 };
+    },
+  },
+  {
+    id: 'core_smg_toxin',
+    name: 'Toxic Rounds',
+    onlyFor: 'smg',
+    desc: [
+      'SMG only',
+      '+ +2 Toxin value per bullet on hit',
+      '- Direct damage -2',
+    ].join('\\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'smg') return w;
+      const newDmg = Math.max(1, (w.damage || 0) - 2);
+      return { ...w, damage: newDmg, _toxinOnHit: 2 };
+    },
+  },
+  // removed mistaken mod entry
+  {
+    id: 'w_stun_ammo',
+    name: 'Stun Ammunitions',
+    desc: [
+      '+ Bullets apply Stun buildup on hit',
+      '+ +2 Stun per hit (10 for Railgun/MGL/Rocket)',
+      '- Bullet speed -10%',
+      'Not available for Laser',
+    ].join('\n'),
+    allow: (base) => {
+      if (!base) return false;
+      return !base.isLaser; // cannot be used by laser
+    },
+    apply: (w) => {
+      if (!w) return w;
+      if (w.isLaser) return w; // disallowed
+      const heavy = (w.id === 'railgun') || (w.id === 'mgl') || (w.id === 'rocket') || (w.projectile === 'rocket');
+      const stun = heavy ? 10 : 2;
+      const bs = Math.max(0, Math.floor((w.bulletSpeed || 0) * 0.9));
+      return { ...w, bulletSpeed: bs, _stunOnHit: stun };
+    },
+  },
 ];
 
 // Armour mods (2 slots)
@@ -197,4 +320,5 @@ export const armourDefs = [
   { id: null, name: 'No Armour' },
   { id: 'leather', name: 'Leather Vest' },
   { id: 'kevlar', name: 'Kevlar Suit' },
+  { id: 'wasp_bits', name: 'WASP BITS' },
 ];

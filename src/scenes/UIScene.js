@@ -322,6 +322,16 @@ export default class UIScene extends Phaser.Scene {
     if (!gs.weaponBuilds[gs.activeWeapon]) gs.weaponBuilds[gs.activeWeapon] = { mods: [null, null, null], core: null };
     nodes.push(this.add.text(col2X, y2, `Mods for ${gs.activeWeapon}`, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' })); y2 += 28;
     const ensureBuild = () => { if (!gs.weaponBuilds[gs.activeWeapon]) gs.weaponBuilds[gs.activeWeapon] = { mods: [null, null, null], core: null }; };
+    // Sanitize any legacy mod ids that were moved to cores (e.g., w_smg_toxin, w_rifle_incendiary)
+    try {
+      const banned = new Set(['w_smg_toxin', 'w_rifle_incendiary']);
+      const modsArr = gs.weaponBuilds[gs.activeWeapon].mods || [];
+      let changed = false;
+      for (let i = 0; i < modsArr.length; i += 1) {
+        if (banned.has(modsArr[i])) { modsArr[i] = null; changed = true; }
+      }
+      if (changed) { gs.weaponBuilds[gs.activeWeapon].mods = modsArr; SaveManager.saveToLocal(gs); }
+    } catch (_) {}
     this.loadout.modLabels = [];
     const modLine = (idx) => {
       const wy = y2; y2 += 30;
@@ -336,7 +346,13 @@ export default class UIScene extends Phaser.Scene {
       this.loadout.modLabels.push(label);
       const btn = makeTextButton(this, col2X + 210, wy + 8, 'Choose…', () => {
         ensureBuild();
-        const opts = weaponMods.map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
+        const activeId = gs.activeWeapon;
+        const baseW = getWeaponById(activeId) || {};
+        const opts = weaponMods
+          .filter((m) => !m.onlyFor || m.onlyFor === activeId)
+          .filter((m) => !m.allow || m.allow(baseW))
+          .filter((m) => m.id !== 'w_smg_toxin' && m.id !== 'w_rifle_incendiary')
+          .map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
         this.openChoicePopup('Choose Mod', opts, gs.weaponBuilds[gs.activeWeapon].mods[idx], (chosenId) => {
           gs.weaponBuilds[gs.activeWeapon].mods[idx] = chosenId;
           label.setText(`Mod ${idx + 1}: ${(weaponMods.find((m) => m.id === chosenId) || weaponMods[0]).name}`);
@@ -349,6 +365,12 @@ export default class UIScene extends Phaser.Scene {
     };
     modLine(0); modLine(1); modLine(2);
     const coreWy = y2; y2 += 34;
+    try {
+      const savedCore = gs.weaponBuilds[gs.activeWeapon].core || null;
+      const exists = weaponCores.some((c) => c.id === savedCore);
+      const looksLikeMod = typeof savedCore === 'string' && savedCore.startsWith('w_');
+      if (savedCore && (!exists || looksLikeMod)) { gs.weaponBuilds[gs.activeWeapon].core = null; SaveManager.saveToLocal(gs); }
+    } catch (_) {}
     const coreLabel = this.add.text(col2X, coreWy, `Core: ${(weaponCores.find((c) => c.id === (gs.weaponBuilds[gs.activeWeapon].core || null)) || weaponCores[0]).name}`, { fontFamily: 'monospace', fontSize: 14, color: (!!gs.weaponBuilds[gs.activeWeapon].core) ? '#ffff33' : '#cccccc' }); nodes.push(coreLabel); this.loadout.coreLabel = coreLabel;
     const coreBtn = makeTextButton(this, col2X + 210, coreWy + 8, 'Choose…', () => {
       ensureBuild();
@@ -358,6 +380,7 @@ export default class UIScene extends Phaser.Scene {
       const opts = weaponCores
         .filter((c) => !c.onlyFor || c.onlyFor === activeId)
         .filter((c) => !(c.id === 'core_blast' && isExplosive))
+        .filter((c) => !String(c.id || '').startsWith('w_'))
         .map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
         gs.weaponBuilds[gs.activeWeapon].core = chosenId;
