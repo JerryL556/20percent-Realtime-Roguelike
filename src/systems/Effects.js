@@ -19,6 +19,16 @@ export function impactBurst(scene, x, y, opts = {}) {
     g.fillStyle(color, 0.6);
     g.fillCircle(0, 0, innerR);
     g.lineStyle(radius ? 3 : 2, color, 0.9).strokeCircle(0, 0, baseR);
+    // Add a fast outer shock ring for explosives
+    if (radius || size === 'large') {
+      try {
+        const shock = scene.add.graphics({ x, y });
+        shock.setDepth?.(9999);
+        shock.setBlendMode?.(Phaser.BlendModes.ADD);
+        shock.lineStyle(2, color, 0.8).strokeCircle(0, 0, Math.max(innerR + 2, Math.floor(baseR * 0.8)));
+        scene.tweens.add({ targets: shock, alpha: 0, scale: 1.25, duration: 160, ease: 'Cubic.Out', onComplete: () => { try { shock.destroy(); } catch (_) {} } });
+      } catch (_) {}
+    }
     scene.tweens.add({
       targets: g,
       alpha: 0,
@@ -30,6 +40,26 @@ export function impactBurst(scene, x, y, opts = {}) {
   } catch (e) {
     try { g.destroy(); } catch (_) {}
   }
+
+  // Radial pixel particle burst that flies outward from the center, matching color
+  try {
+    const n = radius ? Math.max(14, Math.min(42, Math.floor(radius / 2))) : (size === 'large' ? 20 : 10);
+    const spMin = radius ? 120 : 90;
+    const spMax = radius ? 260 : 160;
+    const life = radius ? 260 : 200;
+    for (let i = 0; i < n; i += 1) {
+      const a = (i / n) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
+      // small angular spread per ray for a thicker look
+      const spread = 10;
+      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: spread, speedMin: spMin, speedMax: spMax, lifeMs: life, color, size: 2, alpha: 0.95 });
+    }
+    // A few heavier chunks for visual weight
+    const heavyCount = radius ? Math.max(4, Math.min(10, Math.floor(radius / 10))) : (size === 'large' ? 6 : 3);
+    for (let i = 0; i < heavyCount; i += 1) {
+      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: 6, speedMin: spMin - 20, speedMax: spMax + 20, lifeMs: life + 60, color, size: 3, alpha: 0.95 });
+    }
+  } catch (_) {}
 }
 
 // Green particle burst used for BITs spawn: no outer ring, floating particles
