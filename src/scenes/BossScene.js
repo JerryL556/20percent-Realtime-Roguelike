@@ -1139,6 +1139,19 @@ export default class BossScene extends Phaser.Scene {
           f.g.fillStyle(0xffaa33, 0.14).fillCircle(f.x, f.y, r1);
           f.g.lineStyle(2, 0xffaa33, 0.45).strokeCircle(f.x, f.y, f.r + jitter);
         } catch (_) {}
+        // Orange pixel sparks rising from the field (railgun/muzzle-style particles)
+        try {
+          if (!f._sparkAt || nowT >= f._sparkAt) {
+            f._sparkAt = nowT + Phaser.Math.Between(40, 80);
+            for (let i = 0; i < 2; i += 1) {
+              const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              const rr = Phaser.Math.FloatBetween(0, f.r * 0.7);
+              const px = f.x + Math.cos(a) * rr;
+              const py = f.y + Math.sin(a) * rr;
+              pixelSparks(this, px, py, { angleRad: -Math.PI / 2, count: 1, spreadDeg: 24, speedMin: 50, speedMax: 110, lifeMs: 200, color: 0xffaa66, size: 2, alpha: 0.95 });
+            }
+          }
+        } catch (_) {}
 
         const e = this.boss; if (e?.active) {
           const dx = e.x - f.x; const dy = e.y - f.y; if ((dx * dx + dy * dy) <= (f.r * f.r)) {
@@ -2045,6 +2058,14 @@ export default class BossScene extends Phaser.Scene {
       g.fillStyle(0xff6633, 0.22).fillCircle(x, y, inner);
       g.fillStyle(0xffaa33, 0.14).fillCircle(x, y, Math.floor(radius * 0.85));
       g.lineStyle(2, 0xffaa33, 0.5).strokeCircle(x, y, radius);
+    } catch (_) {}
+    // Initial orange pixel spark burst (railgun/muzzle-style)
+    try {
+      const bases = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+      for (let i = 0; i < bases.length; i += 1) {
+        const base = bases[i] + Phaser.Math.FloatBetween(-0.2, 0.2);
+        pixelSparks(this, x, y, { angleRad: base, count: 6, spreadDeg: 38, speedMin: 80, speedMax: 160, lifeMs: 220, color: 0xffaa66, size: 2, alpha: 0.95 });
+      }
     } catch (_) {}
 
     const obj = { x, y, r: radius, until: this.time.now + durationMs, g, pm, em, _pulse: 0 };
