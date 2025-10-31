@@ -757,8 +757,8 @@ export default class CombatScene extends Phaser.Scene {
     // Trigger per-weapon recoil kick (no recoil for laser handled elsewhere)
     try {
       const wid = gs.activeWeapon;
-      const least = new Set(['smg', 'rifle', 'pistol']);
-      const medium = new Set(['mgl', 'battle_rifle', 'guided_missiles', 'smart_hmg']);
+      const least = new Set(['smg', 'rifle']);
+      const medium = new Set(['pistol', 'mgl', 'battle_rifle', 'guided_missiles', 'smart_hmg']);
       const high = new Set(['railgun', 'shotgun', 'rocket']);
       let kick = 0;
       if (least.has(wid)) kick = 2.0;      // least tier
