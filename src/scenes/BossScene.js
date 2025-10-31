@@ -1,11 +1,11 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing, pulseSpark } from '../systems/Effects.js';
-import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
+import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks } from '../systems/Effects.js';
+import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint } from '../systems/WeaponVisuals.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
@@ -343,10 +343,32 @@ export default class BossScene extends Phaser.Scene {
       else if (high.has(wid)) kick = 5.5;   // highest tier
       this._weaponRecoil = Math.max(this._weaponRecoil || 0, kick);
     } catch (_) {}
-    const startX = this.player.x;
-    const startY = this.player.y;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
     this.playerFacing = baseAngle;
+    const muzzle = getWeaponMuzzleWorld(this, 3);
+    const startX = muzzle.x;
+    const startY = muzzle.y;
+    try {
+      const wid = gs.activeWeapon;
+      const allowed = new Set(['pistol','mgl','rifle','battle_rifle','shotgun','smg','guided_missiles','smart_hmg','rocket']);
+      if (allowed.has(wid)) {
+        const heavy = new Set(['smart_hmg','guided_missiles','rocket','shotgun','mgl']);
+        if (heavy.has(wid)) muzzleFlashSplit(this, muzzle.x, muzzle.y, { angle: baseAngle, color: 0xffee66, count: 3, spreadDeg: 24, length: 16, thickness: 4 });
+        else if (wid === 'battle_rifle') muzzleFlash(this, muzzle.x, muzzle.y, { angle: baseAngle, color: 0xffee66, length: 14, thickness: 4 });
+        else muzzleFlash(this, muzzle.x, muzzle.y, { angle: baseAngle, color: 0xffee66, length: 10, thickness: 3 });
+        const base = baseAngle;
+        if (heavy.has(wid)) {
+          const burst = { spreadDeg: 36, speedMin: 130, speedMax: 260, lifeMs: 190, color: 0xffee66, size: 2, alpha: 0.75 };
+          pixelSparks(this, muzzle.x, muzzle.y, { angleRad: base, count: 14, ...burst });
+        } else if (wid === 'battle_rifle') {
+          const burst = { spreadDeg: 30, speedMin: 125, speedMax: 230, lifeMs: 185, color: 0xffee66, size: 2, alpha: 0.85 };
+          pixelSparks(this, muzzle.x, muzzle.y, { angleRad: base, count: 11, ...burst });
+        } else {
+          const burst = { spreadDeg: 28, speedMin: 100, speedMax: 190, lifeMs: 165, color: 0xffee66, size: 1, alpha: 0.7 };
+          pixelSparks(this, muzzle.x, muzzle.y, { angleRad: base, count: 9, ...burst });
+        }
+      }
+    } catch (_) {}
     const pellets = weapon.pelletCount || 1;
     // Dynamic spread similar to Combat
     const heat = this._spreadHeat || 0;
@@ -367,7 +389,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2°/frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2掳/frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -607,7 +629,6 @@ export default class BossScene extends Phaser.Scene {
     if (weapon._twoTap) {
       const wid = this.gs.activeWeapon;
       const angle2 = baseAngle;
-      const sx2 = startX; const sy2 = startY;
       this.time.delayedCall(70, () => {
         if (this.gs.activeWeapon !== wid) return;
         const cap = this.getActiveMagCapacity();
@@ -617,7 +638,28 @@ export default class BossScene extends Phaser.Scene {
         const effSpeed = Math.floor((weapon.bulletSpeed || 0) * 1.25);
         const vx = Math.cos(angle2) * effSpeed;
         const vy = Math.sin(angle2) * effSpeed;
-        const b2 = this.bullets.get(sx2, sy2, 'bullet');
+        const m2 = getWeaponMuzzleWorld(this, 3);
+        try {
+          const allowed = new Set(['pistol','mgl','rifle','battle_rifle','shotgun','smg','guided_missiles','smart_hmg','rocket']);
+          const heavy = new Set(['smart_hmg','guided_missiles','rocket','shotgun','mgl']);
+          if (allowed.has(wid)) {
+            if (heavy.has(wid)) muzzleFlashSplit(this, m2.x, m2.y, { angle: angle2, color: 0xffee66, count: 3, spreadDeg: 24, length: 16, thickness: 4 });
+            else if (wid === 'battle_rifle') muzzleFlash(this, m2.x, m2.y, { angle: angle2, color: 0xffee66, length: 14, thickness: 4 });
+            else muzzleFlash(this, m2.x, m2.y, { angle: angle2, color: 0xffee66, length: 10, thickness: 3 });
+            const base = angle2;
+            if (heavy.has(wid)) {
+              const burst = { spreadDeg: 36, speedMin: 130, speedMax: 260, lifeMs: 180, color: 0xffee66, size: 2, alpha: 0.75 };
+              pixelSparks(this, m2.x, m2.y, { angleRad: base, count: 12, ...burst });
+            } else if (wid === 'battle_rifle') {
+              const burst = { spreadDeg: 30, speedMin: 125, speedMax: 230, lifeMs: 185, color: 0xffee66, size: 2, alpha: 0.85 };
+              pixelSparks(this, m2.x, m2.y, { angleRad: base, count: 10, ...burst });
+            } else {
+              const burst = { spreadDeg: 28, speedMin: 100, speedMax: 190, lifeMs: 165, color: 0xffee66, size: 1, alpha: 0.7 };
+              pixelSparks(this, m2.x, m2.y, { angleRad: base, count: 8, ...burst });
+            }
+          }
+        } catch (_) {}
+        const b2 = this.bullets.get(m2.x, m2.y, 'bullet');
         if (!b2) return;
         b2.setActive(true).setVisible(true);
         b2.setCircle(2).setOffset(-2, -2);
@@ -866,9 +908,11 @@ export default class BossScene extends Phaser.Scene {
               const lg = this.add.graphics();
               lg.setDepth(9000);
               lg.lineStyle(1, 0x66aaff, 1);
-              lg.beginPath(); lg.moveTo(g.x, g.y - 4); lg.lineTo(best.x, best.y); lg.strokePath();
+              const sx = g.x, sy = g.y - 4;
+              lg.beginPath(); lg.moveTo(sx, sy); lg.lineTo(best.x, best.y); lg.strokePath();
               lg.setAlpha(1);
               this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
+              try { const ang = Phaser.Math.Angle.Between(sx, sy, best.x, best.y); pixelSparks(this, sx, sy, { angleRad: ang, count: 6, spreadDeg: 60, speedMin: 90, speedMax: 140, lifeMs: 110, color: 0x66aaff, size: 2, alpha: 0.9 }); } catch (_) {}
             } catch (_) { /* ignore */ }
             try { impactBurst(this, best.x, best.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
             try { best.destroy(); } catch (_) {}
@@ -924,8 +968,10 @@ export default class BossScene extends Phaser.Scene {
             const px = w.x; const py = w.y;
             w.x += (w.vx || 0) * dtw; w.y += (w.vy || 0) * dtw; try { w.g.setPosition(w.x, w.y); } catch (_) {}
             try { w.g.setRotation(Math.atan2(w.y - py, w.x - px) + Math.PI); } catch (_) {}
-            // Thruster while dashing
-            try { const g = w._thr; if (g) { g.clear(); const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 1; const ux = vx / spd, uy = vy / spd; const tail = 10; const stub = 5; const tx = w.x - ux * tail; const ty = w.y - uy * tail; const sx = w.x - ux * stub; const sy = w.y - uy * stub; g.lineStyle(1, 0xffee99, 0.9); g.beginPath(); g.moveTo(tx, ty); g.lineTo(w.x, w.y); g.strokePath(); g.lineStyle(3, 0xffcc66, 0.95); g.beginPath(); g.moveTo(sx, sy); g.lineTo(w.x, w.y); g.strokePath(); } } catch (_) {}
+            // Thruster while dashing: particles only (remove static lines)
+            try { const g = w._thr; if (g) { g.clear(); } } catch (_) {}
+            // Yellow compact thruster particles behind WASP bit while dashing (emit from rear with smoothing)
+            try { const sp2 = (w.vx||0)*(w.vx||0) + (w.vy||0)*(w.vy||0); const desired = (sp2 > 1) ? (Math.atan2(w.vy || 0, w.vx || 0) + Math.PI) : ((w._rot || 0) + Math.PI); w._thrBackAng = (typeof w._thrBackAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrBackAng, desired, Phaser.Math.DegToRad(12)) : desired; const ex = w.x + Math.cos(w._thrBackAng) * 6; const ey = w.y + Math.sin(w._thrBackAng) * 6; pixelSparks(this, ex, ey, { angleRad: w._thrBackAng, count: 1, spreadDeg: 4, speedMin: 70, speedMax: 120, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
             if (!w._lastSparkAt || (noww - w._lastSparkAt) >= 20) { try { pulseSpark(this, w.x, w.y, { color: 0x66aaff, size: 2, life: 140 }); } catch (_) {} w._lastSparkAt = noww; }
             try {
               if (!w._lastLineAt || (noww - w._lastLineAt) >= 16) {
@@ -979,7 +1025,17 @@ export default class BossScene extends Phaser.Scene {
           w.x += w.vx * dtw; w.y += w.vy * dtw; try { w.g.setPosition(w.x, w.y); } catch (_) {}
           try { const tAng = Math.atan2(w.vy, w.vx); w._rot = (typeof w._rot === 'number') ? Phaser.Math.Angle.RotateTo(w._rot, tAng, Phaser.Math.DegToRad(12)) : tAng; w.g.setRotation(w._rot); } catch (_) {}
           // Thruster draw (yellowish) with smoothing and speed threshold
-          try { const g = w._thr; if (g) { const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); w._thrAng = (typeof w._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(w._thrAng), uy = Math.sin(w._thrAng); const tail = 10, stub = 5; const tx = w.x - ux * tail; const ty = w.y - uy * tail; const sx2 = w.x - ux * stub; const sy2 = w.y - uy * stub; g.lineStyle(1, 0xffee99, 0.9).beginPath().moveTo(tx, ty).lineTo(w.x, w.y).strokePath(); g.lineStyle(3, 0xffcc66, 0.95).beginPath().moveTo(sx2, sy2).lineTo(w.x, w.y).strokePath(); } } } catch (_) {}
+          try { const g = w._thr; if (g) { g.clear(); } } catch (_) {}
+          // Yellow compact thruster particles during hover (emit from rear with smoothing; fallback to facing when nearly stationary)
+          try {
+            const sp2 = (w.vx||0)*(w.vx||0) + (w.vy||0)*(w.vy||0);
+            const base = (sp2 > 1) ? Math.atan2(w.vy || 0, w.vx || 0) : (w._rot || 0);
+            const desired = base + Math.PI;
+            w._thrBackAng = (typeof w._thrBackAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrBackAng, desired, Phaser.Math.DegToRad(12)) : desired;
+            const ex = w.x + Math.cos(w._thrBackAng) * 6;
+            const ey = w.y + Math.sin(w._thrBackAng) * 6;
+            pixelSparks(this, ex, ey, { angleRad: w._thrBackAng, count: 1, spreadDeg: 4, speedMin: 70, speedMax: 120, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 });
+          } catch (_) {}
           // Plan dash
           if (t && t.active) {
             const dxp2 = t.x - this.player.x; const dyp2 = t.y - this.player.y; const outOfRadius = (dxp2 * dxp2 + dyp2 * dyp2) > detectR2;
@@ -1117,7 +1173,9 @@ export default class BossScene extends Phaser.Scene {
           bit.x += bit.vx * dt2; bit.y += bit.vy * dt2;
           try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
           try { const tAng = Math.atan2(bit.vy, bit.vx); bit._rot = (typeof bit._rot === 'number') ? Phaser.Math.Angle.RotateTo(bit._rot, tAng, Phaser.Math.DegToRad(14)) : tAng; bit.g.setRotation(bit._rot); } catch (_) {}
-          try { const g = bit._thr; if (g) { const vx = bit.vx || 0, vy = bit.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); bit._thrAng = (typeof bit._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(bit._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng); const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub; g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath(); g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath(); } } } catch (_) {}
+          try { const g = bit._thr; if (g) { g.clear(); } } catch (_) {}
+          // Yellow compact thruster particles behind BIT while moving
+          try { const back = Math.atan2(bit.vy || 0, bit.vx || 0) + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
           dx = this.player.x - bit.x; dy = this.player.y - bit.y; len = Math.hypot(dx, dy) || 1;
           if (len < 12) { try { bit.g.destroy(); } catch (_) {} try { bit._thr?.destroy?.(); } catch (_) {} return false; }
           return true;
@@ -1127,7 +1185,9 @@ export default class BossScene extends Phaser.Scene {
           bit.x += (bit.vx || 0) * dt2; bit.y += (bit.vy || 0) * dt2;
           try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
           try { const tAng = Math.atan2((bit.vy || 0), (bit.vx || 0)); bit._rot = (typeof bit._rot === 'number') ? Phaser.Math.Angle.RotateTo(bit._rot, tAng, Phaser.Math.DegToRad(14)) : tAng; bit.g.setRotation(bit._rot); } catch (_) {}
-          try { const g = bit._thr; if (g) { const vx = bit.vx || 0, vy = bit.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); bit._thrAng = (typeof bit._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(bit._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng); const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub; g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath(); g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath(); } } } catch (_) {}
+          try { const g = bit._thr; if (g) { g.clear(); } } catch (_) {}
+          // Yellow compact thruster particles during scatter
+          try { const back = Math.atan2(bit.vy || 0, bit.vx || 0) + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
           return true;
         }
         // Emulate target acquisition: lock only if boss within lock range
@@ -1152,12 +1212,15 @@ export default class BossScene extends Phaser.Scene {
           // Face along orbit tangent for stable idle orientation
           try { const tangent = Math.atan2(ty - py, tx - px) + Math.PI / 2; bit._rot = (typeof bit._rot === 'number') ? Phaser.Math.Angle.RotateTo(bit._rot, tangent, Phaser.Math.DegToRad(12)) : tangent; bit.g.setRotation(bit._rot); } catch (_) {}
           // Thruster aligned with facing (single-sided)
-          try { const g = bit._thr; if (g) { g.clear(); const ux = Math.cos(bit._rot), uy = Math.sin(bit._rot); const tail = 8, stub = 4; const tx2 = bit.x - ux * tail, ty2 = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub; g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx2, ty2).lineTo(bit.x, bit.y).strokePath(); g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath(); } } catch (_) {}
+          try { const g = bit._thr; if (g) { g.clear(); } } catch (_) {}
+          // Yellow compact thruster particles aligned with facing (backwards)
+          try { const back = bit._rot + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
           return true;
         }
-        // Firing hold: face target
+        // Firing hold: face target and emit compact thruster away from enemy/laser direction
         if (now2 < (bit.holdUntil || 0)) {
           try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {}
+          try { const laserAng = Math.atan2(trg.y - bit.y, trg.x - bit.x); const back = laserAng + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
           return true;
         }
         // Decide next action
@@ -1167,12 +1230,9 @@ export default class BossScene extends Phaser.Scene {
           const ddx = trg.x - bit.x; const ddy = trg.y - bit.y; const dd2 = ddx * ddx + ddy * ddy;
           if ((!bit.lastShotAt || (now2 - bit.lastShotAt > 500)) && dd2 <= fireR2) {
             // Laser + damage
-            try {
-              const lg = this.add.graphics(); lg.setDepth(9000);
-              lg.lineStyle(1, 0x66aaff, 1);
-              lg.beginPath(); lg.moveTo(bit.x, bit.y); lg.lineTo(trg.x, trg.y); lg.strokePath();
-              this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
-            } catch (_) {}
+            try { const lg = this.add.graphics(); lg.setDepth(9000); lg.lineStyle(1, 0x66aaff, 1); lg.beginPath(); lg.moveTo(bit.x, bit.y); lg.lineTo(trg.x, trg.y); lg.strokePath(); this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } }); } catch (_) {}
+            // Blue pixel spray at bit laser origin (shorter, much wider, and more intense)
+            try { const ang2 = Phaser.Math.Angle.Between(bit.x, bit.y, trg.x, trg.y); pixelSparks(this, bit.x, bit.y, { angleRad: ang2, count: 12, spreadDeg: 70, speedMin: 110, speedMax: 200, lifeMs: 110, color: 0x66aaff, size: 2, alpha: 0.95 }); } catch (_) {}
             try { impactBurst(this, trg.x, trg.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
             try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {}
             if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300;
@@ -1239,6 +1299,7 @@ export default class BossScene extends Phaser.Scene {
               const sx = rp.x + Math.cos(a) * rp.r;
               const sy = rp.y + Math.sin(a) * rp.r;
               try { pulseSpark(this, sx, sy, { color: 0xffaa66, size: 2, life: 180 }); } catch (_) {}
+              try { pixelSparks(this, sx, sy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 90, speedMax: 160, lifeMs: 160, color: 0xffaa33, size: 2, alpha: 0.8 }); } catch (_) {}
             }
             rp._nextSparkAt = now3 + 28;
           }
@@ -1593,7 +1654,7 @@ export default class BossScene extends Phaser.Scene {
     const coreHold = !!weapon.railHold;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
     if (ptr.isDown && ((ptr.buttons & 1) === 1)) {
-      if (!this.rail.charging) { if (!this.lastShot || (now - this.lastShot) > weapon.fireRateMs) { this.rail.charging = true; this.rail.startedAt = now; } }
+      if (!this.rail.charging) { if (!this.lastShot || (now - this.lastShot) > weapon.fireRateMs) { this.rail.charging = true; this.rail.startedAt = now; try { const key = ensurePixelParticle(this, 'rail_px', 0x66aaff, 1) || 'rail_px'; this.rail._mgr = this.add.particles(key); try { this.rail._mgr.setDepth(9500); } catch (_) {} try { this.rail._mgr.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {} this.rail._em = this.rail._mgr.createEmitter({ speed: { min: 10, max: 60 }, lifespan: { min: 180, max: 320 }, alpha: { start: 1.0, end: 0 }, scale: 1, gravityY: 0, quantity: 0, }); } catch (_) {} } }
     } else {
       if (this.rail.charging) { const t = Math.min(1, (now - this.rail.startedAt) / maxMs); this.fireRailgun(baseAngle, weapon, t); this.rail.charging = false; this.endRailAim(); }
       return;
@@ -1603,12 +1664,14 @@ export default class BossScene extends Phaser.Scene {
       if (t >= 1 && !coreHold) { this.fireRailgun(baseAngle, weapon, t); this.rail.charging = false; this.endRailAim(); }
     }
   }
-  drawRailAim(angle, weapon, t) { try { if (!this.rail?.aimG) this.rail.aimG = this.add.graphics(); const g = this.rail.aimG; g.clear(); g.setDepth(9000); const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0)); const spread = spread0 * (1 - t); const diag = Math.hypot(this.scale.width, this.scale.height); const len = Math.ceil(diag + 32); g.lineStyle(0.5, 0xffffff, 0.9); const a1 = angle - spread / 2; const a2 = angle + spread / 2; const x = this.player.x; const y = this.player.y; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath(); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath(); } catch (_) {} }
-  endRailAim() { try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {} if (this.rail) this.rail.aimG = null; }
+  drawRailAim(angle, weapon, t) { try { if (!this.rail?.aimG) this.rail.aimG = this.add.graphics(); const g = this.rail.aimG; g.clear(); g.setDepth(9000); const spread0 = Phaser.Math.DegToRad(Math.max(0, weapon.spreadDeg || 0)); const spread = spread0 * (1 - t); const diag = Math.hypot(this.scale.width, this.scale.height); const len = Math.ceil(diag + 32); g.lineStyle(0.5, 0xffffff, 0.9); const a1 = angle - spread / 2; const a2 = angle + spread / 2; const x = this.player.x; const y = this.player.y; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath(); g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath(); try { const ts = [0.35, 0.55, 0.8]; const pick = Phaser.Math.Between(0, ts.length - 1); const pt = getWeaponBarrelPoint(this, ts[pick], 3); const common = { spreadDeg: 10, speedMin: 40, speedMax: 90, lifeMs: 140, color: 0x66aaff, size: 1, alpha: 0.45 }; pixelSparks(this, pt.x, pt.y, { angleRad: angle - Math.PI / 2, count: 1, ...common }); pixelSparks(this, pt.x, pt.y, { angleRad: angle + Math.PI / 2, count: 1, ...common }); } catch (_) {} } catch (_) {} }
+  endRailAim() { try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {} try { this.rail?._mgr?.destroy(); } catch (_) {} if (this.rail) { this.rail.aimG = null; this.rail._mgr = null; this.rail._em = null; } }
   fireRailgun(baseAngle, weapon, t) {
     const wid = this.gs.activeWeapon; const cap = this.getActiveMagCapacity(); this.ensureAmmoFor(wid, cap); const ammo = this.ammoByWeapon[wid] ?? 0; if (ammo <= 0 || this.reload.active) return;
     const dmg = Math.floor(weapon.damage * (1 + 2 * t)); const speed = Math.floor(weapon.bulletSpeed * (1 + 2 * t)); const spreadRad = Phaser.Math.DegToRad(Math.max(0, (weapon.spreadDeg || 0))) * (1 - t); const off = (spreadRad > 0) ? Phaser.Math.FloatBetween(-spreadRad / 2, spreadRad / 2) : 0; const angle = baseAngle + off; const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
     const b = this.bullets.get(this.player.x, this.player.y, 'bullet'); if (!b) return; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.damage = dmg; b.setTint(0x66aaff); b._core = 'pierce'; b._pierceLeft = 999; b._rail = true; b._stunOnHit = weapon._stunOnHit || 0; const trail = this.add.graphics(); b._g = trail; trail.setDepth(8000); b._px = b.x; b._py = b.y; b.update = () => { try { trail.clear(); trail.lineStyle(2, 0xaaddff, 0.9); const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02); trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath(); } catch (_) {} try { const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y); const boss = this.boss; if (boss && boss.active) { if (!b._hitSet) b._hitSet = new Set(); if (!b._hitSet.has(boss)) { const rect = boss.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b.damage || 12); if (b._stunOnHit && b._stunOnHit > 0) { const nowS = this.time.now; boss._stunValue = Math.min(10, (boss._stunValue || 0) + b._stunOnHit); if ((boss._stunValue || 0) >= 10) { boss._stunnedUntil = nowS + 200; boss._stunValue = 0; if (!boss._stunIndicator) { boss._stunIndicator = this.add.graphics(); try { boss._stunIndicator.setDepth(9000); } catch (_) {} boss._stunIndicator.fillStyle(0xffff33, 1).fillCircle(0, 0, 2); } try { boss._stunIndicator.setPosition(boss.x, boss.y - 24); } catch (_) {} } } try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {} b._hitSet.add(boss); if (boss.hp <= 0) this.killBoss(boss); } } } } catch (_) {} const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } b._px = b.x; b._py = b.y; }; b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+    // Rail muzzle VFX: big blue split flash + particle burst
+    try { const m = getWeaponMuzzleWorld(this, 3); muzzleFlashSplit(this, m.x, m.y, { angle, color: 0xaaddff, count: 4, spreadDeg: 30, length: 24, thickness: 5 }); const burst = { spreadDeg: 14, speedMin: 140, speedMax: 240, lifeMs: 280, color: 0x66aaff, size: 2, alpha: 0.9 }; pixelSparks(this, m.x, m.y, { angleRad: angle - Math.PI / 2, count: 10, ...burst }); pixelSparks(this, m.x, m.y, { angleRad: angle + Math.PI / 2, count: 10, ...burst }); if (this.rail?._em) { try { this.rail._em.explode?.(60, m.x, m.y); } catch (_) {} } try { this.rail?._mgr?.destroy(); } catch (_) {} if (this.rail) { this.rail._mgr = null; this.rail._em = null; } } catch (_) {}
     // High recoil kick for railgun
     try { this._weaponRecoil = Math.max(this._weaponRecoil || 0, 5.5); } catch (_) {}
     this.ammoByWeapon[wid] = Math.max(0, (this.ammoByWeapon[wid] ?? cap) - 1);
@@ -1775,6 +1838,7 @@ export default class BossScene extends Phaser.Scene {
     if (!this._bits) this._bits = [];
     // Green particle spawn burst around player
     try { bitSpawnRing(this, this.player.x, this.player.y, { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 }); } catch (_) {}
+    try { const cx = this.player.x, cy = this.player.y; for (let i = 0; i < 18; i += 1) { const a = Phaser.Math.FloatBetween(0, Math.PI * 2); pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 80, speedMax: 180, lifeMs: 240, color: 0x33ff66, size: 2, alpha: 0.8 }); } } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height

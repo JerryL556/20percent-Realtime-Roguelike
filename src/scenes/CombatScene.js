@@ -1,13 +1,13 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing, pulseSpark } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
-import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage } from '../systems/WeaponVisuals.js';
+import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint } from '../systems/WeaponVisuals.js';
 import { drawPanel } from '../ui/Panels.js';
 import { makeTextButton } from '../ui/Buttons.js';
 
@@ -766,10 +766,33 @@ export default class CombatScene extends Phaser.Scene {
       else if (high.has(wid)) kick = 5.5;   // highest tier
       this._weaponRecoil = Math.max(this._weaponRecoil || 0, kick);
     } catch (_) {}
-    const startX = this.player.x;
-    const startY = this.player.y;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
     this.playerFacing = baseAngle;
+    const muzzle = getWeaponMuzzleWorld(this, 3);
+    const startX = muzzle.x;
+    const startY = muzzle.y;
+    try {
+      const wid = gs.activeWeapon;
+      const allowed = new Set(['pistol','mgl','rifle','battle_rifle','shotgun','smg','guided_missiles','smart_hmg','rocket']);
+      if (allowed.has(wid)) {
+        const heavy = new Set(['smart_hmg','guided_missiles','rocket','shotgun','mgl']);
+        if (heavy.has(wid)) muzzleFlashSplit(this, startX, startY, { angle: baseAngle, color: 0xffee66, count: 3, spreadDeg: 24, length: 16, thickness: 4 });
+        else if (wid === 'battle_rifle') muzzleFlash(this, startX, startY, { angle: baseAngle, color: 0xffee66, length: 14, thickness: 4 });
+        else muzzleFlash(this, startX, startY, { angle: baseAngle, color: 0xffee66, length: 10, thickness: 3 });
+        // Add yellow pixel spray from muzzle (wider angle overall; special tuning for heavy and battle rifle)
+        const base = baseAngle;
+        if (heavy.has(wid)) {
+          const burst = { spreadDeg: 36, speedMin: 130, speedMax: 260, lifeMs: 190, color: 0xffee66, size: 2, alpha: 0.75 };
+          pixelSparks(this, startX, startY, { angleRad: base, count: 14, ...burst });
+        } else if (wid === 'battle_rifle') {
+          const burst = { spreadDeg: 30, speedMin: 125, speedMax: 230, lifeMs: 185, color: 0xffee66, size: 2, alpha: 0.85 };
+          pixelSparks(this, startX, startY, { angleRad: base, count: 11, ...burst });
+        } else {
+          const burst = { spreadDeg: 28, speedMin: 100, speedMax: 190, lifeMs: 165, color: 0xffee66, size: 1, alpha: 0.7 };
+          pixelSparks(this, startX, startY, { angleRad: base, count: 9, ...burst });
+        }
+      }
+    } catch (_) {}
     const pellets = weapon.pelletCount || 1;
     // Dynamic spread: increases while holding fire, recovers when released
     const heat = this._spreadHeat || 0;
@@ -791,7 +814,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2°/frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2掳/frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -855,8 +878,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1°/frame
-          b._fov = Phaser.Math.DegToRad(90); // 90° cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1掳/frame
+          b._fov = Phaser.Math.DegToRad(90); // 90掳 cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -881,7 +904,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45° half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45掳 half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -1204,7 +1227,7 @@ export default class CombatScene extends Phaser.Scene {
     // Burst Fire core: schedule additional shots within a short window
     if (weapon._burstN && weapon._burstN > 1) {
       const wid = this.gs.activeWeapon;
-      const sx = startX; const sy = startY; const ang = baseAngle;
+      const ang = baseAngle;
       const perGap = Math.max(30, weapon._burstGapMs || 70);
       for (let k = 1; k < weapon._burstN; k += 1) {
         this.time.delayedCall(perGap * k, () => {
@@ -1216,7 +1239,30 @@ export default class CombatScene extends Phaser.Scene {
           const effSpeed = Math.floor((weapon.bulletSpeed || 0) * 1.25);
           const vx = Math.cos(ang) * effSpeed;
           const vy = Math.sin(ang) * effSpeed;
-          const bN = this.bullets.get(sx, sy, 'bullet');
+          const m = getWeaponMuzzleWorld(this, 3);
+          try {
+            const wid = this.gs.activeWeapon;
+            const allowed = new Set(['pistol','mgl','rifle','battle_rifle','shotgun','smg','guided_missiles','smart_hmg','rocket']);
+            if (allowed.has(wid)) {
+              const heavy = new Set(['smart_hmg','guided_missiles','rocket','shotgun','mgl']);
+              if (heavy.has(wid)) muzzleFlashSplit(this, m.x, m.y, { angle: ang, color: 0xffee66, count: 3, spreadDeg: 24, length: 16, thickness: 4 });
+              else if (wid === 'battle_rifle') muzzleFlash(this, m.x, m.y, { angle: ang, color: 0xffee66, length: 14, thickness: 4 });
+              else muzzleFlash(this, m.x, m.y, { angle: ang, color: 0xffee66, length: 10, thickness: 3 });
+              // Burst yellow muzzle pixels for bursts (wider overall, special battle rifle)
+              const base = ang;
+              if (heavy.has(wid)) {
+                const burst = { spreadDeg: 36, speedMin: 130, speedMax: 260, lifeMs: 180, color: 0xffee66, size: 2, alpha: 0.75 };
+                pixelSparks(this, m.x, m.y, { angleRad: base, count: 12, ...burst });
+              } else if (wid === 'battle_rifle') {
+                const burst = { spreadDeg: 30, speedMin: 125, speedMax: 230, lifeMs: 185, color: 0xffee66, size: 2, alpha: 0.85 };
+                pixelSparks(this, m.x, m.y, { angleRad: base, count: 10, ...burst });
+              } else {
+                const burst = { spreadDeg: 28, speedMin: 100, speedMax: 190, lifeMs: 165, color: 0xffee66, size: 1, alpha: 0.7 };
+                pixelSparks(this, m.x, m.y, { angleRad: base, count: 8, ...burst });
+              }
+            }
+          } catch (_) {}
+          const bN = this.bullets.get(m.x, m.y, 'bullet');
           if (!bN) return;
           bN.setActive(true).setVisible(true);
           bN.setCircle(2).setOffset(-2, -2);
@@ -1243,7 +1289,6 @@ export default class CombatScene extends Phaser.Scene {
     if (weapon._twoTap) {
       const wid = this.gs.activeWeapon;
       const angle2 = baseAngle;
-      const sx2 = startX; const sy2 = startY;
       this.time.delayedCall(70, () => {
         if (this.gs.activeWeapon !== wid) return;
         const cap = this.getActiveMagCapacity();
@@ -1253,7 +1298,29 @@ export default class CombatScene extends Phaser.Scene {
         const effSpeed = Math.floor((weapon.bulletSpeed || 0) * 1.25);
         const vx = Math.cos(angle2) * effSpeed;
         const vy = Math.sin(angle2) * effSpeed;
-        const b2 = this.bullets.get(sx2, sy2, 'bullet');
+        const m2 = getWeaponMuzzleWorld(this, 3);
+        try {
+          const wid = this.gs.activeWeapon;
+          const allowed = new Set(['pistol','mgl','rifle','battle_rifle','shotgun','smg','guided_missiles','smart_hmg','rocket']);
+          if (allowed.has(wid)) {
+            const heavy = new Set(['smart_hmg','guided_missiles','rocket','shotgun','mgl']);
+            if (heavy.has(wid)) muzzleFlashSplit(this, m2.x, m2.y, { angle: angle2, color: 0xffee66, count: 3, spreadDeg: 24, length: 16, thickness: 4 });
+            else if (wid === 'battle_rifle') muzzleFlash(this, m2.x, m2.y, { angle: angle2, color: 0xffee66, length: 14, thickness: 4 });
+            else muzzleFlash(this, m2.x, m2.y, { angle: angle2, color: 0xffee66, length: 10, thickness: 3 });
+            const base = angle2;
+            if (heavy.has(wid)) {
+              const burst = { spreadDeg: 36, speedMin: 130, speedMax: 260, lifeMs: 180, color: 0xffee66, size: 2, alpha: 0.75 };
+              pixelSparks(this, m2.x, m2.y, { angleRad: base, count: 12, ...burst });
+            } else if (wid === 'battle_rifle') {
+              const burst = { spreadDeg: 30, speedMin: 125, speedMax: 230, lifeMs: 185, color: 0xffee66, size: 2, alpha: 0.85 };
+              pixelSparks(this, m2.x, m2.y, { angleRad: base, count: 10, ...burst });
+            } else {
+              const burst = { spreadDeg: 28, speedMin: 100, speedMax: 190, lifeMs: 165, color: 0xffee66, size: 1, alpha: 0.7 };
+              pixelSparks(this, m2.x, m2.y, { angleRad: base, count: 8, ...burst });
+            }
+          }
+        } catch (_) {}
+        const b2 = this.bullets.get(m2.x, m2.y, 'bullet');
         if (!b2) return;
         b2.setActive(true).setVisible(true);
         b2.setCircle(2).setOffset(-2, -2);
@@ -1564,7 +1631,8 @@ export default class CombatScene extends Phaser.Scene {
               const lg = this.add.graphics();
               lg.setDepth(9000);
               lg.lineStyle(1, 0x66aaff, 1);
-              lg.beginPath(); lg.moveTo(g.x, g.y - 4); lg.lineTo(best.x, best.y); lg.strokePath();
+              const sx = g.x, sy = g.y - 4;
+              lg.beginPath(); lg.moveTo(sx, sy); lg.lineTo(best.x, best.y); lg.strokePath();
               lg.setAlpha(1);
               try {
                 this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
@@ -1573,6 +1641,8 @@ export default class CombatScene extends Phaser.Scene {
               }
               // Tiny blue particle at impact point
               try { impactBurst(this, best.x, best.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
+              // Blue pixel spray at laser origin (shorter but much wider)
+              try { const ang = Phaser.Math.Angle.Between(sx, sy, best.x, best.y); pixelSparks(this, sx, sy, { angleRad: ang, count: 6, spreadDeg: 60, speedMin: 90, speedMax: 140, lifeMs: 110, color: 0x66aaff, size: 2, alpha: 0.9 }); } catch (_) {}
             } catch (_) {}
             try { best.destroy(); } catch (_) {}
             g.nextZapAt = nowT + 100; // 10 per second
@@ -1755,6 +1825,7 @@ export default class CombatScene extends Phaser.Scene {
               const sx = rp.x + Math.cos(a) * rp.r;
               const sy = rp.y + Math.sin(a) * rp.r;
               try { pulseSpark(this, sx, sy, { color: 0xffaa66, size: 2, life: 180 }); } catch (_) {}
+              try { pixelSparks(this, sx, sy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 90, speedMax: 160, lifeMs: 160, color: 0xffaa33, size: 2, alpha: 0.8 }); } catch (_) {}
             }
             rp._nextSparkAt = now + 28; // faster cadence
           }
@@ -1841,8 +1912,10 @@ export default class CombatScene extends Phaser.Scene {
                 const tail = 8, stub = 4;
                 const tx = bit.x - ux * tail, ty = bit.y - uy * tail;
                 const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub;
-                g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath();
-                g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath();
+                try { const back = tAng + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
+                // removed static blue thruster lines (use particles only)
+                // Yellow compact thruster particles (smaller/shorter)
+                try { const back = tAng + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
               }
             }
           } catch (_) {}
@@ -1867,9 +1940,8 @@ export default class CombatScene extends Phaser.Scene {
                 const tAng = Math.atan2(vy, vx);
                 bit._thrAng = (typeof bit._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(bit._thrAng, tAng, Phaser.Math.DegToRad(10)) : tAng;
                 const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng);
-                const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub;
-                g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath();
-                g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath();
+                // removed static blue thruster lines (use particles only)
+                try { const back = tAng + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
               }
             }
           } catch (_) {}
@@ -1920,8 +1992,9 @@ export default class CombatScene extends Phaser.Scene {
               const tail = 8, stub = 4;
               const tx2 = bit.x - ux * tail, ty2 = bit.y - uy * tail;
               const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub;
-              g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx2, ty2).lineTo(bit.x, bit.y).strokePath();
-              g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath();
+                try { const back = tAng + Math.PI; pixelSparks(this, bit.x, bit.y, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
+              // Only yellow compact thruster particles in idle orbit
+              try { const back = bit._rot + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
             }
           } catch (_) {}
           return true;
@@ -1930,6 +2003,12 @@ export default class CombatScene extends Phaser.Scene {
         if (now < (bit.holdUntil || 0)) {
           // stay still; face target if present
           if (trg) { try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {} }
+          // emit compact yellow thruster while attacking (opposite the laser/enemy direction)
+          try {
+            const laserAng = trg ? Math.atan2(trg.y - bit.y, trg.x - bit.x) : Math.atan2(bit.vy || 0, bit.vx || 0);
+            const back = laserAng + Math.PI;
+            { const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); }
+          } catch (_) {}
           return true;
         }
         // Decide next action
@@ -1945,6 +2024,8 @@ export default class CombatScene extends Phaser.Scene {
               lg.beginPath(); lg.moveTo(bit.x, bit.y); lg.lineTo(trg.x, trg.y); lg.strokePath();
               this.tweens.add({ targets: lg, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => { try { lg.destroy(); } catch (_) {} } });
             } catch (_) {}
+            // Blue pixel spray at bit laser origin (shorter, much wider, and more intense)
+            try { const ang = Phaser.Math.Angle.Between(bit.x, bit.y, trg.x, trg.y); pixelSparks(this, bit.x, bit.y, { angleRad: ang, count: 12, spreadDeg: 70, speedMin: 110, speedMax: 200, lifeMs: 110, color: 0x66aaff, size: 2, alpha: 0.95 }); } catch (_) {}
             try { impactBurst(this, trg.x, trg.y, { color: 0x66aaff, size: 'small' }); } catch (_) {}
             try { bit.g.setRotation(Math.atan2(trg.y - bit.y, trg.x - bit.x) + Math.PI); } catch (_) {}
             // Apply damage (count on dummy instead of reducing HP)
@@ -1985,8 +2066,8 @@ export default class CombatScene extends Phaser.Scene {
                 bit._thrAng = (typeof bit._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(bit._thrAng, tAng, Phaser.Math.DegToRad(10)) : tAng;
                 const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng);
                 const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub;
-                g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath();
-                g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath();
+                try { const back = tAng + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
+                // particles-only thruster (remove static blue lines)\r\n                try { const back = tAng + Math.PI; pixelSparks(this, bit.x, bit.y, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
               }
             }
           } catch (_) {}
@@ -2058,7 +2139,16 @@ export default class CombatScene extends Phaser.Scene {
             w.x += (w.vx || 0) * dt; w.y += (w.vy || 0) * dt; try { w.g.setPosition(w.x, w.y); } catch (_) {}
             try { w.g.setRotation(Math.atan2(w.y - py, w.x - px) + Math.PI); } catch (_) {}
             // Thruster while dashing as well (subtle)
-            try { const g = w._thr; if (g) { g.clear(); const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 1; const ux = vx / spd, uy = vy / spd; const tail = 10; const stub = 5; const tx = w.x - ux * tail; const ty = w.y - uy * tail; const sx = w.x - ux * stub; const sy = w.y - uy * stub; g.lineStyle(1, 0xffee99, 0.9); g.beginPath(); g.moveTo(tx, ty); g.lineTo(w.x, w.y); g.strokePath(); g.lineStyle(3, 0xffcc66, 0.95); g.beginPath(); g.moveTo(sx, sy); g.lineTo(w.x, w.y); g.strokePath(); } } catch (_) {}
+            try { const g = w._thr; if (g) { g.clear(); const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 1; const ux = vx / spd, uy = vy / spd; const tail = 10; const stub = 5; const tx = w.x - ux * tail; const ty = w.y - uy * tail; const sx = w.x - ux * stub; const sy = w.y - uy * stub; try { const g = w._thr; if (g) { g.clear(); } } catch (_) {} } } catch (_) {}
+            // Yellow compact thruster particles behind WASP bit while dashing (emit from rear with smoothing)
+            try {
+              const sp2 = (w.vx||0)*(w.vx||0) + (w.vy||0)*(w.vy||0);
+              const desired = (sp2 > 1) ? (Math.atan2(w.vy || 0, w.vx || 0) + Math.PI) : ((w._rot || 0) + Math.PI);
+              w._thrBackAng = (typeof w._thrBackAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrBackAng, desired, Phaser.Math.DegToRad(12)) : desired;
+              const ex = w.x + Math.cos(w._thrBackAng) * 6;
+              const ey = w.y + Math.sin(w._thrBackAng) * 6;
+              pixelSparks(this, ex, ey, { angleRad: w._thrBackAng, count: 1, spreadDeg: 4, speedMin: 70, speedMax: 120, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 });
+            } catch (_) {}
             // Ensure visible blue spark trail as fallback
             if (!w._lastSparkAt || (now - w._lastSparkAt) >= 20) {
               try { pulseSpark(this, w.x, w.y, { color: 0x66aaff, size: 2, life: 140 }); } catch (_) {}
@@ -2156,7 +2246,17 @@ export default class CombatScene extends Phaser.Scene {
           // Smooth hover rotation
           try { const tAng = Math.atan2(w.vy, w.vx); w._rot = (typeof w._rot === 'number') ? Phaser.Math.Angle.RotateTo(w._rot, tAng, Phaser.Math.DegToRad(12)) : tAng; w.g.setRotation(w._rot); } catch (_) {}
           // Thruster draw (yellowish) with smoothing and speed threshold
-          try { const g = w._thr; if (g) { const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); w._thrAng = (typeof w._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(w._thrAng), uy = Math.sin(w._thrAng); const tail = 10, stub = 5; const tx = w.x - ux * tail, ty = w.y - uy * tail; const sx2 = w.x - ux * stub, sy2 = w.y - uy * stub; g.lineStyle(1, 0xffee99, 0.9).beginPath().moveTo(tx, ty).lineTo(w.x, w.y).strokePath(); g.lineStyle(3, 0xffcc66, 0.95).beginPath().moveTo(sx2, sy2).lineTo(w.x, w.y).strokePath(); } } } catch (_) {}
+          try { const g = w._thr; if (g) { const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); w._thrAng = (typeof w._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(w._thrAng), uy = Math.sin(w._thrAng); const tail = 10, stub = 5; const tx = w.x - ux * tail, ty = w.y - uy * tail; const sx2 = w.x - ux * stub, sy2 = w.y - uy * stub; try { const g = w._thr; if (g) { g.clear(); } } catch (_) {} } } } catch (_) {}
+          // Yellow compact thruster particles during hover (emit from rear with smoothing; fallback to facing when nearly stationary)
+          try {
+            const sp2 = (w.vx||0)*(w.vx||0) + (w.vy||0)*(w.vy||0);
+            const base = (sp2 > 1) ? Math.atan2(w.vy || 0, w.vx || 0) : (w._rot || 0);
+            const desired = base + Math.PI;
+            w._thrBackAng = (typeof w._thrBackAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrBackAng, desired, Phaser.Math.DegToRad(12)) : desired;
+            const ex = w.x + Math.cos(w._thrBackAng) * 6;
+            const ey = w.y + Math.sin(w._thrBackAng) * 6;
+            pixelSparks(this, ex, ey, { angleRad: w._thrBackAng, count: 1, spreadDeg: 4, speedMin: 70, speedMax: 120, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 });
+          } catch (_) {}
 
           // Plan dash when locked
           if (t && t.active) {
@@ -2442,7 +2542,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors — sweeping beam, and special aim-then-beam
+          // Prism: two behaviors 鈥?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -3038,6 +3138,14 @@ export default class CombatScene extends Phaser.Scene {
     if (!this._bits) this._bits = [];
     // Green spawn ring for visual parity with Boss room
     try { bitSpawnRing(this, this.player.x, this.player.y, { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 }); } catch (_) {}
+    // Green pixel burst around player on release
+    try {
+      const cx = this.player.x, cy = this.player.y;
+      for (let i = 0; i < 18; i += 1) {
+        const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 80, speedMax: 180, lifeMs: 240, color: 0x33ff66, size: 2, alpha: 0.8 });
+      }
+    } catch (_) {}
     const count = 6;
     for (let i = 0; i < count; i += 1) {
       // Use asset sprite for BIT unit and fit to moderate height
@@ -3075,6 +3183,20 @@ export default class CombatScene extends Phaser.Scene {
         if (!this.lastShot || (now - this.lastShot) > weapon.fireRateMs) {
           this.rail.charging = true;
           this.rail.startedAt = now;
+          try {
+            const key = ensurePixelParticle(this, 'rail_px', 0x66aaff, 1) || 'rail_px';
+            this.rail._mgr = this.add.particles(key);
+            try { this.rail._mgr.setDepth(9500); } catch (_) {}
+            try { this.rail._mgr.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+            this.rail._em = this.rail._mgr.createEmitter({
+              speed: { min: 10, max: 60 },
+              lifespan: { min: 180, max: 320 },
+              alpha: { start: 1.0, end: 0 },
+              scale: 1,
+              gravityY: 0,
+              quantity: 0,
+            });
+          } catch (_) {}
         }
       }
     } else {
@@ -3116,12 +3238,22 @@ export default class CombatScene extends Phaser.Scene {
       const x = this.player.x; const y = this.player.y;
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a1) * len, y + Math.sin(a1) * len); g.strokePath();
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a2) * len, y + Math.sin(a2) * len); g.strokePath();
+      // Blue pixel sparks from multiple points along barrel (very subtle while charging)
+      try {
+        const ts = [0.35, 0.55, 0.8];
+        const pick = Phaser.Math.Between(0, ts.length - 1);
+        const pt = getWeaponBarrelPoint(this, ts[pick], 3);
+        const common = { spreadDeg: 10, speedMin: 40, speedMax: 90, lifeMs: 140, color: 0x66aaff, size: 1, alpha: 0.45 };
+        pixelSparks(this, pt.x, pt.y, { angleRad: angle - Math.PI / 2, count: 1, ...common });
+        pixelSparks(this, pt.x, pt.y, { angleRad: angle + Math.PI / 2, count: 1, ...common });
+      } catch (_) {}
     } catch (_) {}
   }
 
   endRailAim() {
     try { this.rail?.aimG?.clear(); this.rail?.aimG?.destroy(); } catch (_) {}
-    if (this.rail) this.rail.aimG = null;
+    try { this.rail?._mgr?.destroy(); } catch (_) {}
+    if (this.rail) { this.rail.aimG = null; this.rail._mgr = null; this.rail._em = null; }
   }
 
   fireRailgun(baseAngle, weapon, t) {
@@ -3249,6 +3381,18 @@ export default class CombatScene extends Phaser.Scene {
       b._px = b.x; b._py = b.y;
     };
     b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+    // Rail muzzle VFX: big blue split flash + particle burst
+    try {
+      const m = getWeaponMuzzleWorld(this, 3);
+      muzzleFlashSplit(this, m.x, m.y, { angle, color: 0xaaddff, count: 4, spreadDeg: 30, length: 24, thickness: 5 });
+      // Stronger pixel spark burst on fire
+      const burst = { spreadDeg: 14, speedMin: 140, speedMax: 240, lifeMs: 280, color: 0x66aaff, size: 2, alpha: 0.9 };
+      pixelSparks(this, m.x, m.y, { angleRad: angle - Math.PI / 2, count: 10, ...burst });
+      pixelSparks(this, m.x, m.y, { angleRad: angle + Math.PI / 2, count: 10, ...burst });
+      if (this.rail?._em) { try { this.rail._em.explode?.(60, m.x, m.y); } catch (_) {} }
+      try { this.rail?._mgr?.destroy(); } catch (_) {}
+      if (this.rail) { this.rail._mgr = null; this.rail._em = null; }
+    } catch (_) {}
     // High recoil kick for railgun on fire
     try { this._weaponRecoil = Math.max(this._weaponRecoil || 0, 5.5); } catch (_) {}
     // consume ammo and start cooldown
@@ -3275,6 +3419,11 @@ export default class CombatScene extends Phaser.Scene {
       this.laser.g = this.add.graphics();
       try { this.laser.g.setDepth(8000); } catch (_) {}
       try { this.laser.g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    }
+    if (!this.laser.mg) {
+      this.laser.mg = this.add.graphics();
+      try { this.laser.mg.setDepth(9000); } catch (_) {}
+      try { this.laser.mg.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
     }
     const lz = this.laser;
     const canPress = ptr?.isDown && ((ptr.buttons & 1) === 1);
@@ -3331,19 +3480,35 @@ export default class CombatScene extends Phaser.Scene {
 
     // Draw and apply damage while firing and not overheated
     lz.g.clear();
+    try { lz.mg.clear(); } catch (_) {}
     if (canFire && !lz.overheat) {
       const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
-      // Start the beam at the weapon sprite (muzzle-ish) instead of player center
-      const wx = (this.weaponSprite?.x ?? this.player.x);
-      const wy = (this.weaponSprite?.y ?? this.player.y);
-      const sx = wx + Math.cos(angle) * 4;
-      const sy = wy + Math.sin(angle) * 4;
+      // Start exactly at the barrel tip using weapon sprite + origin
+      const muzzle = getWeaponMuzzleWorld(this, 2);
+      const sx = muzzle.x;
+      const sy = muzzle.y;
       const hit = this.computeLaserEnd(angle, sx, sy);
       const ex = hit.ex, ey = hit.ey; const line = hit.line;
       // Draw blue layered beam (player laser), under weapon layer
       try {
         lz.g.lineStyle(3, 0x66aaff, 0.95).beginPath(); lz.g.moveTo(sx, sy); lz.g.lineTo(ex, ey); lz.g.strokePath();
         lz.g.lineStyle(1, 0xaaddff, 1).beginPath(); lz.g.moveTo(sx, sy - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
+      } catch (_) {}
+
+      // Laser muzzle twitch: larger white split rays (5) with subtle jitter
+      try {
+        const base = angle + Phaser.Math.DegToRad(Phaser.Math.Between(-3, 3));
+        const offs = [-28, -14, 0, 14, 28].map((d) => Phaser.Math.DegToRad(d + Phaser.Math.Between(-3, 3)));
+        for (let i = 0; i < offs.length; i += 1) {
+          const a = base + offs[i];
+          const len = 12 + (i === 2 ? 1 : 0);
+          const hx = sx + Math.cos(a) * len;
+          const hy = sy + Math.sin(a) * len;
+          const thick = (i === 2) ? 2 : 1;
+          lz.mg.lineStyle(thick, 0xffffff, 0.55).beginPath(); lz.mg.moveTo(sx, sy); lz.mg.lineTo(hx, hy); lz.mg.strokePath();
+        }
+        // smaller bloom at muzzle
+        lz.mg.fillStyle(0xffffff, 0.5).fillCircle(sx, sy, 1.5);
       } catch (_) {}
 
       // Damage ticking
@@ -3381,8 +3546,9 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     } else {
-      // not firing: clear beam
+      // not firing: clear beam and muzzle twitch
       lz.g.clear();
+      try { lz.mg.clear(); } catch (_) {}
     }
   }
 

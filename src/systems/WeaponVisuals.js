@@ -27,6 +27,12 @@ const OPTIONAL_ASSETS = [
   { key: 'ability_bit', path: 'assets/BIT.png' },
 ];
 
+// Optional per-weapon fine-tuning for muzzle alignment (in on-screen pixels)
+// forward: extra distance along barrel; side: perpendicular offset (- up, + down in screen coords)
+const MUZZLE_OFFSETS = {
+  pistol: { forward: 0, side: -2 },
+};
+
 export function preloadWeaponAssets(scene) {
   try {
     Object.values(WEAPON_TEXTURES).forEach(({ key, path }) => {
@@ -144,6 +150,53 @@ export function updateWeaponSprite(scene) {
   const deg = Phaser.Math.RadToDeg(angle);
   const pointingLeft = (deg > 90 || deg < -90);
   try { scene.weaponSprite.setFlipY(pointingLeft); } catch (_) {}
+}
+
+// Compute an approximate world-space muzzle position at the end of the barrel
+// Uses the weapon sprite position, origin, displayWidth, and current facing.
+// padding reduces overshoot so the spawn is slightly inside the sprite edge.
+export function getWeaponMuzzleWorld(scene, padding = 2) {
+  try {
+    const s = scene?.weaponSprite;
+    const p = scene?.player;
+    if (!s || !p) return { x: p?.x ?? 0, y: p?.y ?? 0 };
+    const angle = scene.playerFacing ?? s.rotation ?? 0;
+    const originX = (typeof s.originX === 'number') ? s.originX : 0.5;
+    const dw = (typeof s.displayWidth === 'number' && s.displayWidth > 0)
+      ? s.displayWidth
+      : (s.width || 0) * (s.scaleX || 1);
+    const forward = Math.max(0, (1 - originX) * dw - Math.max(0, padding));
+    let x = s.x + Math.cos(angle) * forward;
+    let y = s.y + Math.sin(angle) * forward;
+    // Apply per-weapon fine-tuning
+    try {
+      const wid = scene?.gs?.activeWeapon ?? scene?.registry?.get?.('gameState')?.activeWeapon ?? scene?._lastActiveWeapon;
+      const off = MUZZLE_OFFSETS[wid];
+      if (off) {
+        if (off.forward) { x += Math.cos(angle) * off.forward; y += Math.sin(angle) * off.forward; }
+        if (off.side) { const nx = -Math.sin(angle); const ny = Math.cos(angle); x += nx * off.side; y += ny * off.side; }
+      }
+    } catch (_) {}
+    return { x, y };
+  } catch (_) {
+    const p = scene?.player; return { x: p?.x ?? 0, y: p?.y ?? 0 };
+  }
+}
+
+// Point along the barrel from grip toward muzzle.
+// t in [0,1]: 0 = at grip origin, 1 = at muzzle (same as getWeaponMuzzleWorld without padding)
+export function getWeaponBarrelPoint(scene, t = 0.5, padding = 2) {
+  try {
+    const s = scene?.weaponSprite; const p = scene?.player; if (!s || !p) return { x: p?.x ?? 0, y: p?.y ?? 0 };
+    const angle = scene.playerFacing ?? s.rotation ?? 0;
+    const originX = (typeof s.originX === 'number') ? s.originX : 0.5;
+    const dw = (typeof s.displayWidth === 'number' && s.displayWidth > 0) ? s.displayWidth : (s.width || 0) * (s.scaleX || 1);
+    const forward = Math.max(0, (1 - originX) * dw - Math.max(0, padding));
+    const dist = Math.max(0, Math.min(1, t)) * forward;
+    const x = s.x + Math.cos(angle) * dist;
+    const y = s.y + Math.sin(angle) * dist;
+    return { x, y };
+  } catch (_) { const p = scene?.player; return { x: p?.x ?? 0, y: p?.y ?? 0 }; }
 }
 
 // Generic helpers for sizing arbitrary images by desired pixel height
