@@ -103,6 +103,27 @@ export const weaponCores = [
     },
   },
   {
+    id: 'core_smart_missiles',
+    name: 'Smart Missiles',
+    onlyFor: 'guided_missiles',
+    desc: [
+      'Guided Missiles only',
+      '+ Lock-on to nearest enemy within 90° cone',
+      '+ Tracks enemies instead of cursor',
+      '- Reduced turn rate for tighter arcs',
+      'Missiles still collide with walls/barricades',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'guided_missiles') return w;
+      // Enable smart seeking and reduce per-frame turn rate
+      // Base guided turn is ~2°/frame; reduce further
+      // Make turning significantly harder: reduce per-frame turn to ~25%
+      const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 2000;
+      const reloadMs = Math.max(200, Math.floor(baseReload * 0.9));
+      return { ...w, _smartMissiles: true, _smartTurnMult: 0.4, reloadMs };
+    },
+  },
+  {
     id: 'core_burst_rifle',
     name: 'Burst Fire',
     onlyFor: 'rifle',

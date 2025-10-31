@@ -5,7 +5,7 @@ export const weaponDefs = [
     id: 'pistol',
     name: 'Pistol',
     damage: 18,
-    fireRateMs: 220,
+    fireRateMs: 160,
     bulletSpeed: 450,
     pelletCount: 1,
     spreadDeg: 0,
@@ -133,6 +133,44 @@ export const weaponDefs = [
     projectile: 'rocket',
     blastRadius: 80,
     magSize: 1,
+    // Further reduced reload time (faster reload)
+    reloadMs: 600,
+  },
+  {
+    id: 'guided_missiles',
+    name: 'Guided Missiles',
+    // Micro homing rockets that follow the cursor with limited turn rate
+    damage: 10,           // increased direct hit
+    aoeDamage: 10,        // reduced splash
+    fireRateMs: 400,      // slightly faster ROF
+    bulletSpeed: 220,     // low velocity
+    pelletCount: 1,
+    spreadDeg: 0,
+    maxSpreadDeg: 0,
+    color: 0xffaa33,
+    price: 180,
+    singleFire: false,
+    projectile: 'guided', // custom homing projectile
+    blastRadius: 40,      // smaller than MGL (52)
+    magSize: 10,
+    reloadMs: 1800,       // slightly faster reload
+  },
+  {
+    id: 'smart_hmg',
+    name: 'Smart HMG',
+    // High-capacity HMG that fires smart bullets with limited turning
+    damage: 8,
+    fireRateMs: 133,      // reduced ROF (~450 RPM)
+    bulletSpeed: 480,     // faster than micro missiles
+    pelletCount: 1,
+    spreadDeg: 0,
+    maxSpreadDeg: 6,
+    color: 0xffaa33,
+    price: 260,
+    singleFire: false,
+    projectile: 'smart',  // custom smart bullet (non-explosive)
+    magSize: 40,
+    reloadMs: 2400,
   },
 ];
 

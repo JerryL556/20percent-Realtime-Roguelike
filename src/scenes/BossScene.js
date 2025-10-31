@@ -312,9 +312,37 @@ export default class BossScene extends Phaser.Scene {
     try { e.destroy(); } catch (_) {}
   }
 
+  applyNapalmIgniteToBoss(ex, ey, radius) {
+    try {
+      const boss = this.boss; if (!boss?.active) return;
+      const dx = boss.x - ex; const dy = boss.y - ey; const r2 = radius * radius;
+      if ((dx * dx + dy * dy) <= r2) {
+        const nowI = this.time.now;
+        boss._igniteValue = Math.min(10, (boss._igniteValue || 0) + 5);
+        if ((boss._igniteValue || 0) >= 10) {
+          boss._ignitedUntil = nowI + 2000; boss._igniteValue = 0;
+          if (!boss._igniteIndicator) { boss._igniteIndicator = this.add.graphics(); try { boss._igniteIndicator.setDepth(9000); } catch (_) {} boss._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2); }
+          try { boss._igniteIndicator.setPosition(boss.x, boss.y - 20); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   shoot() {
     const gs = this.gs;
     const weapon = getEffectiveWeapon(gs, gs.activeWeapon);
+    // Recoil kick per weapon (no recoil for laser)
+    try {
+      const wid = gs.activeWeapon;
+      const least = new Set(['smg', 'rifle', 'pistol']);
+      const medium = new Set(['mgl', 'battle_rifle', 'guided_missiles', 'smart_hmg']);
+      const high = new Set(['railgun', 'shotgun', 'rocket']);
+      let kick = 0;
+      if (least.has(wid)) kick = 2.0;      // least tier
+      else if (medium.has(wid)) kick = 3.5; // medium tier
+      else if (high.has(wid)) kick = 5.5;   // highest tier
+      this._weaponRecoil = Math.max(this._weaponRecoil || 0, kick);
+    } catch (_) {}
     const startX = this.player.x;
     const startY = this.player.y;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.inputMgr.pointer.worldX, this.inputMgr.pointer.worldY);
@@ -325,6 +353,102 @@ export default class BossScene extends Phaser.Scene {
     const maxExtra = (typeof weapon.maxSpreadDeg === 'number') ? weapon.maxSpreadDeg : 20;
     const extraDeg = weapon.singleFire ? 0 : (maxExtra * heat);
     const totalSpreadRad = Phaser.Math.DegToRad((weapon.spreadDeg || 0) + extraDeg);
+    // Smart HMG bullets: limited enemy-seeking (non-explosive)
+    if (weapon.projectile === 'smart') {
+      const angle0 = baseAngle;
+      const b = this.bullets.get(startX, startY, 'bullet');
+      if (b) {
+        b.setActive(true).setVisible(true);
+        b.setCircle(2).setOffset(-2, -2);
+        b.setTint(weapon.color || 0xffaa33);
+        b.damage = weapon.damage;
+        b._core = null;
+        b._stunOnHit = weapon._stunOnHit || 0;
+
+        b._angle = angle0;
+        b._speed = Math.max(40, weapon.bulletSpeed | 0);
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2°/frame
+        b._fov = Phaser.Math.DegToRad(60);
+        b._noTurnUntil = this.time.now + 120;
+        b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
+
+        const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+        b.update = () => {
+          const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+          try {
+            let desired = b._angle; const nowG = this.time.now;
+            if (nowG >= (b._noTurnUntil || 0)) {
+              const enemies = [this.boss].filter((e) => e && e.active);
+              const half = (b._fov || Math.PI / 2) / 2; const norm = (a) => Phaser.Math.Angle.Wrap(a); const ang = norm(b._angle);
+              const valid = (t) => { if (!t?.active) return false; const a2 = Phaser.Math.Angle.Between(b.x, b.y, t.x, t.y); return Math.abs(norm(a2 - ang)) <= half; };
+              if (!valid(b._target)) { b._target = enemies.find((e) => valid(e)) || null; }
+              if (b._target && b._target.active) desired = Phaser.Math.Angle.Between(b.x, b.y, b._target.x, b._target.y);
+            }
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, b._maxTurn);
+            const vx = Math.cos(b._angle) * b._speed; const vy = Math.sin(b._angle) * b._speed; b.setVelocity(vx, vy);
+          } catch (_) {}
+          try {
+            g.clear();
+            const headX = b.x + Math.cos(b._angle) * 1.5; const headY = b.y + Math.sin(b._angle) * 1.5;
+            const tailX = b.x - Math.cos(b._angle) * 6; const tailY = b.y - Math.sin(b._angle) * 6;
+            g.lineStyle(2, 0xff8800, 0.95).beginPath().moveTo(tailX + Math.cos(b._angle) * 3, tailY + Math.sin(b._angle) * 3).lineTo(headX, headY).strokePath();
+            g.lineStyle(1, 0xffddaa, 0.9).beginPath().moveTo(tailX, tailY).lineTo(b.x, b.y).strokePath();
+          } catch (_) {}
+        };
+        b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+      }
+      return;
+    }
+
+    // Guided micro-missiles: cursor or smart lock depending on core
+    if (weapon.projectile === 'guided') {
+      const angle0 = baseAngle;
+      const b = this.bullets.get(startX, startY, 'bullet');
+      if (b) {
+        b.setActive(true).setVisible(true);
+        // Match normal room micro-rocket size
+        b.setCircle(2).setOffset(-2, -2);
+        b.setTint(weapon.color || 0xffaa33);
+        b.damage = weapon.damage;
+        b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
+        b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
+        b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0); b._maxTurn = Phaser.Math.DegToRad(2);
+        // Smart core support
+        b._smart = !!weapon._smartMissiles;
+        if (b._smart) { const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5; b._maxTurn *= mult; b._fov = Phaser.Math.DegToRad(90); }
+        b._noTurnUntil = this.time.now + 200;
+        b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
+        const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+        b.update = () => {
+          const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+          try {
+            let desired = b._angle; const nowG = this.time.now;
+            if (nowG >= (b._noTurnUntil || 0)) {
+              if (b._smart) {
+                const enemies = [this.boss].filter((e) => e && e.active);
+                const half = (b._fov || Math.PI / 2) / 2; const norm = (a) => Phaser.Math.Angle.Wrap(a); const ang = norm(b._angle);
+                const valid = (t) => { if (!t?.active) return false; const a2 = Phaser.Math.Angle.Between(b.x, b.y, t.x, t.y); return Math.abs(norm(a2 - ang)) <= half; };
+                if (!valid(b._target)) { b._target = enemies.find((e) => valid(e)) || null; }
+                if (b._target && b._target.active) desired = Phaser.Math.Angle.Between(b.x, b.y, b._target.x, b._target.y);
+              } else {
+                const ptr = this.inputMgr?.pointer; const tx = ptr?.worldX ?? (this.player.x + Math.cos(this.playerFacing) * 2000); const ty = ptr?.worldY ?? (this.player.y + Math.sin(this.playerFacing) * 2000);
+                desired = Phaser.Math.Angle.Between(b.x, b.y, tx, ty);
+              }
+            }
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, b._maxTurn);
+            const vx = Math.cos(b._angle) * b._speed; const vy = Math.sin(b._angle) * b._speed; b.setVelocity(vx, vy);
+          } catch (_) {}
+          try {
+            g.clear();
+            const headX = b.x + Math.cos(b._angle) * 2; const headY = b.y + Math.sin(b._angle) * 2; const tailX = b.x - Math.cos(b._angle) * 8; const tailY = b.y - Math.sin(b._angle) * 8;
+            g.lineStyle(3, 0xff8800, 0.95).beginPath().moveTo(tailX + Math.cos(b._angle) * 4, tailY + Math.sin(b._angle) * 4).lineTo(headX, headY).strokePath();
+            g.lineStyle(1, 0xffddaa, 0.9).beginPath().moveTo(tailX, tailY).lineTo(b.x, b.y).strokePath();
+          } catch (_) {}
+        };
+        b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+      }
+      return;
+    }
     // Rocket projectile for boss scene too
     if (weapon.projectile === 'rocket') {
       const targetX = this.inputMgr.pointer.worldX;
@@ -377,7 +501,7 @@ export default class BossScene extends Phaser.Scene {
                   const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b._aoeDamage || b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
                 }
                 this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
-                if (b._firefield) this.spawnFireField(ex, ey, radius);
+                if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); }
                 try { b.destroy(); } catch (_) {}
                 return;
               }
@@ -392,7 +516,7 @@ export default class BossScene extends Phaser.Scene {
                     if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b._aoeDamage || b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
                   }
                   this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
-                  if (b._firefield) this.spawnFireField(ex, ey, radius);
+                  if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); }
                   try { b.destroy(); } catch (_) {}
                   return;
                 }
@@ -406,7 +530,7 @@ export default class BossScene extends Phaser.Scene {
                 const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius; try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
                 const ddx = this.boss.x - ex; const ddy = this.boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; this.boss.hp -= (b._aoeDamage || b.damage || 12); if (this.boss.hp <= 0) this.killBoss(this.boss); }
                 this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
-                if (b._firefield) this.spawnFireField(ex, ey, radius);
+                if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); }
                 try { b.destroy(); } catch (_) {}
                 return;
               }
@@ -440,7 +564,7 @@ export default class BossScene extends Phaser.Scene {
             }
             // Also damage nearby destructible barricades
             this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12));
-            if (b._firefield) this.spawnFireField(ex, ey, radius);
+            if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); }
             try { b.destroy(); } catch (_) {}
           }
         };
@@ -647,6 +771,16 @@ export default class BossScene extends Phaser.Scene {
         this.lastShot = time;
         this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
         this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+        // Auto-reload for rocket launcher after shot
+        if (wid === 'rocket' && this.ammoByWeapon[wid] <= 0) {
+          if (!this.reload.active) {
+            this.reload.active = true;
+            this.reload.duration = this.getActiveReloadMs();
+            this.reload.until = time + this.reload.duration;
+            this.registry.set('reloadActive', true);
+            this.registry.set('reloadProgress', 0);
+          }
+        }
       }
     }
     this._lmbWasDown = !!ptr.isDown;
@@ -749,7 +883,7 @@ export default class BossScene extends Phaser.Scene {
     const hasWaspArmour = (this.gs?.armour?.id === 'wasp_bits');
     if (!hasWaspArmour) {
       if (this._wasps && this._wasps.length) {
-        try { this._wasps.forEach((w) => w?.g?.destroy?.()); } catch (_) {}
+        try { this._wasps.forEach((w) => { try { w?.g?.destroy?.(); } catch (_) {} try { w?._thr?.destroy?.(); } catch (_) {} }); } catch (_) {}
         this._wasps = [];
       }
     } else {
@@ -762,6 +896,7 @@ export default class BossScene extends Phaser.Scene {
         const w = { x: this.player.x, y: this.player.y, vx: 0, vy: 0, g,
           state: 'idle', target: null, lastDashAt: 0, dashUntil: 0, dashHit: false,
           _hoverAngle: Phaser.Math.FloatBetween(0, Math.PI * 2), _hoverR: Phaser.Math.Between(16, 36), _hoverChangeAt: 0 };
+        try { w._thr = this.add.graphics(); w._thr.setDepth(8800); w._thr.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
         this._wasps.push(w);
       }
       // Update wasps
@@ -770,7 +905,7 @@ export default class BossScene extends Phaser.Scene {
         const detectR = 160; const detectR2 = detectR * detectR;
         const boss = (this.boss && this.boss.active) ? this.boss : null;
         this._wasps = this._wasps.filter((w) => {
-          if (!w?.g?.active) return false;
+          if (!w?.g?.active) { try { w?._thr?.destroy?.(); } catch (_) {} return false; }
           // Acquire/validate
           if (!w.target || !w.target.active) {
             w.target = null;
@@ -789,6 +924,8 @@ export default class BossScene extends Phaser.Scene {
             const px = w.x; const py = w.y;
             w.x += (w.vx || 0) * dtw; w.y += (w.vy || 0) * dtw; try { w.g.setPosition(w.x, w.y); } catch (_) {}
             try { w.g.setRotation(Math.atan2(w.y - py, w.x - px) + Math.PI); } catch (_) {}
+            // Thruster while dashing
+            try { const g = w._thr; if (g) { g.clear(); const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 1; const ux = vx / spd, uy = vy / spd; const tail = 10; const stub = 5; const tx = w.x - ux * tail; const ty = w.y - uy * tail; const sx = w.x - ux * stub; const sy = w.y - uy * stub; g.lineStyle(1, 0xffee99, 0.9); g.beginPath(); g.moveTo(tx, ty); g.lineTo(w.x, w.y); g.strokePath(); g.lineStyle(3, 0xffcc66, 0.95); g.beginPath(); g.moveTo(sx, sy); g.lineTo(w.x, w.y); g.strokePath(); } } catch (_) {}
             if (!w._lastSparkAt || (noww - w._lastSparkAt) >= 20) { try { pulseSpark(this, w.x, w.y, { color: 0x66aaff, size: 2, life: 140 }); } catch (_) {} w._lastSparkAt = noww; }
             try {
               if (!w._lastLineAt || (noww - w._lastLineAt) >= 16) {
@@ -840,7 +977,9 @@ export default class BossScene extends Phaser.Scene {
           const dxh = hx - w.x; const dyh = hy - w.y; const llen = Math.hypot(dxh, dyh) || 1;
           const hsp = t ? 320 : 280; w.vx = (dxh / llen) * hsp; w.vy = (dyh / llen) * hsp;
           w.x += w.vx * dtw; w.y += w.vy * dtw; try { w.g.setPosition(w.x, w.y); } catch (_) {}
-          try { w.g.setRotation(Math.atan2(w.vy, w.vx) + Math.PI); } catch (_) {}
+          try { const tAng = Math.atan2(w.vy, w.vx); w._rot = (typeof w._rot === 'number') ? Phaser.Math.Angle.RotateTo(w._rot, tAng, Phaser.Math.DegToRad(12)) : tAng; w.g.setRotation(w._rot); } catch (_) {}
+          // Thruster draw (yellowish) with smoothing and speed threshold
+          try { const g = w._thr; if (g) { const vx = w.vx || 0, vy = w.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); w._thrAng = (typeof w._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(w._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(w._thrAng), uy = Math.sin(w._thrAng); const tail = 10, stub = 5; const tx = w.x - ux * tail; const ty = w.y - uy * tail; const sx2 = w.x - ux * stub; const sy2 = w.y - uy * stub; g.lineStyle(1, 0xffee99, 0.9).beginPath().moveTo(tx, ty).lineTo(w.x, w.y).strokePath(); g.lineStyle(3, 0xffcc66, 0.95).beginPath().moveTo(sx2, sy2).lineTo(w.x, w.y).strokePath(); } } } catch (_) {}
           // Plan dash
           if (t && t.active) {
             const dxp2 = t.x - this.player.x; const dyp2 = t.y - this.player.y; const outOfRadius = (dxp2 * dxp2 + dyp2 * dyp2) > detectR2;
@@ -967,26 +1106,28 @@ export default class BossScene extends Phaser.Scene {
       const now2 = this.time.now;
       const boss = (this.boss && this.boss.active) ? this.boss : null;
       this._bits = this._bits.filter((bit) => {
-        if (!bit || !bit.g) return false;
+        if (!bit || !bit.g) { try { bit?._thr?.destroy?.(); } catch (_) {} return false; }
         // Expire: return-to-player phase, despawn on contact
         if (now2 >= (bit.despawnAt || 0)) {
           let dx = this.player.x - bit.x; let dy = this.player.y - bit.y;
           let len = Math.hypot(dx, dy) || 1;
-          if (len < 12) { try { bit.g.destroy(); } catch (_) {} return false; }
+          if (len < 12) { try { bit.g.destroy(); } catch (_) {} try { bit._thr?.destroy?.(); } catch (_) {} return false; }
           const sp = 420;
           bit.vx = (dx / len) * sp; bit.vy = (dy / len) * sp;
           bit.x += bit.vx * dt2; bit.y += bit.vy * dt2;
           try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
-          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
+          try { const tAng = Math.atan2(bit.vy, bit.vx); bit._rot = (typeof bit._rot === 'number') ? Phaser.Math.Angle.RotateTo(bit._rot, tAng, Phaser.Math.DegToRad(14)) : tAng; bit.g.setRotation(bit._rot); } catch (_) {}
+          try { const g = bit._thr; if (g) { const vx = bit.vx || 0, vy = bit.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); bit._thrAng = (typeof bit._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(bit._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng); const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub; g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath(); g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath(); } } } catch (_) {}
           dx = this.player.x - bit.x; dy = this.player.y - bit.y; len = Math.hypot(dx, dy) || 1;
-          if (len < 12) { try { bit.g.destroy(); } catch (_) {} return false; }
+          if (len < 12) { try { bit.g.destroy(); } catch (_) {} try { bit._thr?.destroy?.(); } catch (_) {} return false; }
           return true;
         }
         // Spawn scatter: keep initial outward motion briefly
         if (bit.spawnScatterUntil && now2 < bit.spawnScatterUntil) {
           bit.x += (bit.vx || 0) * dt2; bit.y += (bit.vy || 0) * dt2;
           try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
-          try { bit.g.setRotation(Math.atan2((bit.vy || 0), (bit.vx || 0)) + Math.PI); } catch (_) {}
+          try { const tAng = Math.atan2((bit.vy || 0), (bit.vx || 0)); bit._rot = (typeof bit._rot === 'number') ? Phaser.Math.Angle.RotateTo(bit._rot, tAng, Phaser.Math.DegToRad(14)) : tAng; bit.g.setRotation(bit._rot); } catch (_) {}
+          try { const g = bit._thr; if (g) { const vx = bit.vx || 0, vy = bit.vy || 0; const spd = Math.hypot(vx, vy) || 0; g.clear(); if (spd > 40) { const tAng2 = Math.atan2(vy, vx); bit._thrAng = (typeof bit._thrAng === 'number') ? Phaser.Math.Angle.RotateTo(bit._thrAng, tAng2, Phaser.Math.DegToRad(10)) : tAng2; const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng); const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub; g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx, ty).lineTo(bit.x, bit.y).strokePath(); g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath(); } } } catch (_) {}
           return true;
         }
         // Emulate target acquisition: lock only if boss within lock range
@@ -1008,7 +1149,10 @@ export default class BossScene extends Phaser.Scene {
           const dx = tx - bit.x; const dy = ty - bit.y; const len = Math.hypot(dx, dy) || 1; const sp = 260;
           bit.vx = (dx / len) * sp; bit.vy = (dy / len) * sp;
           bit.x += bit.vx * dt2; bit.y += bit.vy * dt2; try { bit.g.setPosition(bit.x, bit.y); } catch (_) {}
-          try { bit.g.setRotation(Math.atan2(bit.vy, bit.vx) + Math.PI); } catch (_) {}
+          // Face along orbit tangent for stable idle orientation
+          try { const tangent = Math.atan2(ty - py, tx - px) + Math.PI / 2; bit._rot = (typeof bit._rot === 'number') ? Phaser.Math.Angle.RotateTo(bit._rot, tangent, Phaser.Math.DegToRad(12)) : tangent; bit.g.setRotation(bit._rot); } catch (_) {}
+          // Thruster aligned with facing (single-sided)
+          try { const g = bit._thr; if (g) { g.clear(); const ux = Math.cos(bit._rot), uy = Math.sin(bit._rot); const tail = 8, stub = 4; const tx2 = bit.x - ux * tail, ty2 = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub; g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx2, ty2).lineTo(bit.x, bit.y).strokePath(); g.lineStyle(3, 0x66aaff, 0.95).beginPath().moveTo(sx2, sy2).lineTo(bit.x, bit.y).strokePath(); } } catch (_) {}
           return true;
         }
         // Firing hold: face target
@@ -1373,7 +1517,7 @@ export default class BossScene extends Phaser.Scene {
       // Also damage nearby destructible barricades
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
       // Ensure fire field spawns on any explosive detonation, not only at target
-      try { if (b._firefield) this.spawnFireField(ex, ey, radius); } catch (_) {}
+      try { if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); } } catch (_) {}
     }
     if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
     try { b.destroy(); } catch (_) {}
@@ -1465,6 +1609,8 @@ export default class BossScene extends Phaser.Scene {
     const wid = this.gs.activeWeapon; const cap = this.getActiveMagCapacity(); this.ensureAmmoFor(wid, cap); const ammo = this.ammoByWeapon[wid] ?? 0; if (ammo <= 0 || this.reload.active) return;
     const dmg = Math.floor(weapon.damage * (1 + 2 * t)); const speed = Math.floor(weapon.bulletSpeed * (1 + 2 * t)); const spreadRad = Phaser.Math.DegToRad(Math.max(0, (weapon.spreadDeg || 0))) * (1 - t); const off = (spreadRad > 0) ? Phaser.Math.FloatBetween(-spreadRad / 2, spreadRad / 2) : 0; const angle = baseAngle + off; const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
     const b = this.bullets.get(this.player.x, this.player.y, 'bullet'); if (!b) return; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.damage = dmg; b.setTint(0x66aaff); b._core = 'pierce'; b._pierceLeft = 999; b._rail = true; b._stunOnHit = weapon._stunOnHit || 0; const trail = this.add.graphics(); b._g = trail; trail.setDepth(8000); b._px = b.x; b._py = b.y; b.update = () => { try { trail.clear(); trail.lineStyle(2, 0xaaddff, 0.9); const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02); trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath(); } catch (_) {} try { const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y); const boss = this.boss; if (boss && boss.active) { if (!b._hitSet) b._hitSet = new Set(); if (!b._hitSet.has(boss)) { const rect = boss.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b.damage || 12); if (b._stunOnHit && b._stunOnHit > 0) { const nowS = this.time.now; boss._stunValue = Math.min(10, (boss._stunValue || 0) + b._stunOnHit); if ((boss._stunValue || 0) >= 10) { boss._stunnedUntil = nowS + 200; boss._stunValue = 0; if (!boss._stunIndicator) { boss._stunIndicator = this.add.graphics(); try { boss._stunIndicator.setDepth(9000); } catch (_) {} boss._stunIndicator.fillStyle(0xffff33, 1).fillCircle(0, 0, 2); } try { boss._stunIndicator.setPosition(boss.x, boss.y - 24); } catch (_) {} } } try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {} b._hitSet.add(boss); if (boss.hp <= 0) this.killBoss(boss); } } } } catch (_) {} const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } b._px = b.x; b._py = b.y; }; b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+    // High recoil kick for railgun
+    try { this._weaponRecoil = Math.max(this._weaponRecoil || 0, 5.5); } catch (_) {}
     this.ammoByWeapon[wid] = Math.max(0, (this.ammoByWeapon[wid] ?? cap) - 1);
     this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
     const nowT = this.time.now;
@@ -1635,6 +1781,7 @@ export default class BossScene extends Phaser.Scene {
       const g = createFittedImage(this, this.player.x, this.player.y, 'ability_bit', 14);
       try { g.setDepth(9000); } catch (_) {}
       const bit = { x: this.player.x, y: this.player.y, vx: 0, vy: 0, g, target: null, lastShotAt: 0, holdUntil: 0, moveUntil: 0, despawnAt: this.time.now + 7000, spawnScatterUntil: this.time.now + Phaser.Math.Between(260, 420) };
+      try { bit._thr = this.add.graphics(); bit._thr.setDepth(8800); bit._thr.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
       // initial scatter velocity
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const sp = Phaser.Math.Between(180, 260);
@@ -1706,6 +1853,7 @@ export default class BossScene extends Phaser.Scene {
     if (!this.laser) this.laser = { heat: 0, firing: false, overheat: false, startedAt: 0, coolDelayUntil: 0, g: null, lastTickAt: 0 };
     if (!this.laser.g) {
       this.laser.g = this.add.graphics();
+      // Keep beam under weapon layer; weapon is set to a very high depth
       try { this.laser.g.setDepth(8000); this.laser.g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
     }
     const lz = this.laser;
@@ -1738,11 +1886,16 @@ export default class BossScene extends Phaser.Scene {
     lz.g.clear();
     if (canFire && !lz.overheat) {
       const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
-      const hit = this.computeLaserEnd(angle);
+      // Start from weapon sprite location for more natural origin
+      const wx = (this.weaponSprite?.x ?? this.player.x);
+      const wy = (this.weaponSprite?.y ?? this.player.y);
+      const sx = wx + Math.cos(angle) * 4;
+      const sy = wy + Math.sin(angle) * 4;
+      const hit = this.computeLaserEnd(angle, sx, sy);
       const ex = hit.ex, ey = hit.ey; const e = hit.hitEnemy;
       try {
-        lz.g.lineStyle(3, 0xff3333, 0.9).beginPath(); lz.g.moveTo(this.player.x, this.player.y); lz.g.lineTo(ex, ey); lz.g.strokePath();
-        lz.g.lineStyle(1, 0x66aaff, 1).beginPath(); lz.g.moveTo(this.player.x, this.player.y - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
+        lz.g.lineStyle(3, 0xff3333, 0.9).beginPath(); lz.g.moveTo(sx, sy); lz.g.lineTo(ex, ey); lz.g.strokePath();
+        lz.g.lineStyle(1, 0x66aaff, 1).beginPath(); lz.g.moveTo(sx, sy - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
       } catch (_) {}
       lz.lastTickAt = (lz.lastTickAt || 0) + dt;
       if (lz.lastTickAt >= tickRate) {
@@ -1753,6 +1906,7 @@ export default class BossScene extends Phaser.Scene {
           e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
           if ((e._igniteValue || 0) >= 10) {
             e._ignitedUntil = this.time.now + 2000;
+            e._igniteValue = 0; // reset on trigger
             if (!e._igniteIndicator) { e._igniteIndicator = this.add.graphics(); try { e._igniteIndicator.setDepth(9000); } catch (_) {} e._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2); }
             try { e._igniteIndicator.setPosition(e.x, e.y - 20); } catch (_) {}
           }
@@ -1761,8 +1915,10 @@ export default class BossScene extends Phaser.Scene {
     }
   }
 
-  computeLaserEnd(angle) {
-    const maxLen = 1000; const sx = this.player.x; const sy = this.player.y; const ex0 = sx + Math.cos(angle) * maxLen; const ey0 = sy + Math.sin(angle) * maxLen; const ray = new Phaser.Geom.Line(sx, sy, ex0, ey0);
+  computeLaserEnd(angle, sxOverride = null, syOverride = null) {
+    const sx = (typeof sxOverride === 'number') ? sxOverride : this.player.x;
+    const sy = (typeof syOverride === 'number') ? syOverride : this.player.y;
+    const maxLen = 1000; const ex0 = sx + Math.cos(angle) * maxLen; const ey0 = sy + Math.sin(angle) * maxLen; const ray = new Phaser.Geom.Line(sx, sy, ex0, ey0);
     let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null;
     // Barricades (soft only here)
     const arr = this.barricadesSoft?.getChildren?.() || [];

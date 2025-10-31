@@ -10,10 +10,12 @@ export const WEAPON_TEXTURES = {
   shotgun: { key: 'weapon_shotgun', path: 'assets/SG.png', height: 8, mult: 1.1 }, // slightly larger
   smg: { key: 'weapon_smg', path: 'assets/SMG.png', height: 8, mult: 1.2 }, // slightly larger
   railgun: { key: 'weapon_railgun', path: 'assets/RG.png', height: 8, mult: 1.3 }, // increased
-  // Laser reuses railgun sprite for now
-  laser: { key: 'weapon_laser', path: 'assets/RG.png', height: 8, mult: 1.3 },
-  rocket: { key: 'weapon_rocket', path: 'assets/RKT.png', height: 9, mult: 1.35 }, // larger
+  // Laser now uses dedicated art (slightly larger)
+  laser: { key: 'weapon_laser', path: 'assets/Laser.png', height: 8, mult: 1.05 },
+  rocket: { key: 'weapon_rocket', path: 'assets/RKT.png', height: 9, mult: 1.7 }, // slightly larger
   mgl: { key: 'weapon_mgl', path: 'assets/MGL.png', height: 9, mult: 1.35 }, // dedicated MGL art
+  guided_missiles: { key: 'weapon_guided_missiles', path: 'assets/MicroMissile.png', height: 9, mult: 1.25 }, // slightly smaller guided missiles
+  smart_hmg: { key: 'weapon_smart_hmg', path: 'assets/HMG.png', height: 9, mult: 1.35 }, // slightly smaller HMG
 };
 
 // Global multiplier to tweak all weapon sprite sizes uniformly
@@ -73,8 +75,8 @@ export function createPlayerWeaponSprite(scene) {
   const s = scene.add.image(scene.player.x, scene.player.y, hasDesired ? desired : 'player_square');
   // Set origin near the grip so rotation looks natural
   s.setOrigin(0.15, 0.5);
-  // Place above player square
-  try { s.setDepth((scene.player.depth || 0) + 1); } catch (_) { s.setDepth(10); }
+  // Place clearly above beam/effects layers so beams render under weapon
+  try { s.setDepth(9001); } catch (_) { s.setDepth(9001); }
   // Auto scale to a small on-screen height so it fits the 12x12 player
   applyWeaponScale(scene, s, gs.activeWeapon);
   scene.weaponSprite = s;
@@ -102,10 +104,38 @@ export function updateWeaponSprite(scene) {
   } catch (_) {}
   scene.playerFacing = angle;
 
-  // Offset in front of the player
-  const dist = 10;
-  const x = px + Math.cos(angle) * dist;
-  const y = py + Math.sin(angle) * dist;
+  // Reload lowering animation: lower the weapon while reloading and raise it back up after
+  const isReloading = !!scene.registry?.get?.('reloadActive');
+  if (scene._weaponReloadLowerT === undefined) scene._weaponReloadLowerT = 0;
+  const targetT = isReloading ? 1 : 0;
+  // Smoothly ease toward target (simple critically-damped-ish approach)
+  scene._weaponReloadLowerT += (targetT - scene._weaponReloadLowerT) * 0.15;
+  const t = scene._weaponReloadLowerT;
+
+  // Offset in front of the player, slightly shorten while lowered
+  const baseDist = 10;
+  const dist = baseDist * (1 - 0.25 * t);
+  let x = px + Math.cos(angle) * dist;
+  // Lower vertically on-screen as t increases
+  const lowerPx = 8; // max drop in pixels
+  let y = py + Math.sin(angle) * dist + lowerPx * t;
+
+  // Recoil kick: apply a brief backward offset that decays quickly
+  if (scene._weaponRecoil === undefined) scene._weaponRecoil = 0;
+  // Only apply recoil for non-laser weapons
+  try {
+    const gs = scene.registry?.get?.('gameState');
+    const wid = gs?.activeWeapon;
+    const isLaser = (wid === 'laser');
+    if (!isLaser && scene._weaponRecoil > 0) {
+      x -= Math.cos(angle) * scene._weaponRecoil;
+      y -= Math.sin(angle) * scene._weaponRecoil;
+      // Exponential decay toward 0
+      scene._weaponRecoil *= 0.78;
+      if (scene._weaponRecoil < 0.05) scene._weaponRecoil = 0;
+    }
+  } catch (_) {}
+
   scene.weaponSprite.setPosition(x, y);
   scene.weaponSprite.setRotation(angle);
 
