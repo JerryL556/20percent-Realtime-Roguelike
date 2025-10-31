@@ -133,8 +133,8 @@ export const weaponDefs = [
     projectile: 'rocket',
     blastRadius: 80,
     magSize: 1,
-    // Further reduced reload time (faster reload)
-    reloadMs: 600,
+    // Increased reload to better balance explosive power
+    reloadMs: 1800,
   },
   {
     id: 'guided_missiles',

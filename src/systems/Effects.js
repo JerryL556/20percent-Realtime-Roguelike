@@ -14,10 +14,24 @@ export function impactBurst(scene, x, y, opts = {}) {
     g.setDepth?.(9999);
     g.alpha = 1;
     g.scale = 1;
-    // Draw inner fill and outer ring; if radius provided, match that ring to the damage radius
+    // Draw layered fills and outer ring; if radius provided, use it for ring, scale layers inside
     const innerR = radius ? Math.max(6, Math.floor(baseR * 0.35)) : Math.max(1, baseR - 1);
-    g.fillStyle(color, 0.6);
-    g.fillCircle(0, 0, innerR);
+    const midR   = Math.max(innerR + 2, Math.floor(baseR * 0.60));
+    const glowR  = Math.max(midR + 2, Math.floor(baseR * 0.85));
+    // Build a simple palette around the base color
+    const blend = (c1, c2, t) => {
+      const r = ((c1 >> 16) & 0xff) * (1 - t) + ((c2 >> 16) & 0xff) * t;
+      const g2 = ((c1 >> 8) & 0xff) * (1 - t) + ((c2 >> 8) & 0xff) * t;
+      const b = (c1 & 0xff) * (1 - t) + (c2 & 0xff) * t;
+      return ((r & 0xff) << 16) | ((g2 & 0xff) << 8) | (b & 0xff);
+    };
+    const hotCore = blend(color, 0xffffff, 0.80);
+    const midCol  = blend(color, 0xffff66, 0.35);
+    const glowCol = blend(color, 0x000000, 0.15);
+    // Layered fill: hot core -> mid -> glow
+    g.fillStyle(hotCore, 0.95).fillCircle(0, 0, innerR);
+    g.fillStyle(midCol, 0.55).fillCircle(0, 0, midR);
+    g.fillStyle(glowCol, 0.25).fillCircle(0, 0, glowR);
     g.lineStyle(radius ? 3 : 2, color, 0.9).strokeCircle(0, 0, baseR);
     // Add a fast outer shock ring for explosives
     if (radius || size === 'large') {
@@ -43,21 +57,38 @@ export function impactBurst(scene, x, y, opts = {}) {
 
   // Radial pixel particle burst that flies outward from the center, matching color
   try {
-    const n = radius ? Math.max(14, Math.min(42, Math.floor(radius / 2))) : (size === 'large' ? 20 : 10);
-    const spMin = radius ? 120 : 90;
-    const spMax = radius ? 260 : 160;
-    const life = radius ? 260 : 200;
+    // Scale by radius and vary per explosion
+    const n = radius ? Math.max(14, Math.min(46, Math.floor(radius * 0.7))) : (size === 'large' ? 22 : 12);
+    const spMin = radius ? Math.max(80, Math.floor(radius * 1.5)) : 90;
+    const spMax = radius ? Math.max(spMin + 60, Math.floor(radius * 3.2)) : 180;
+    const life = radius ? Math.min(420, Math.max(200, Math.floor(radius * 3.2))) : 220;
+    // Build palette variations for particles
+    const blend = (c1, c2, t) => {
+      const r = ((c1 >> 16) & 0xff) * (1 - t) + ((c2 >> 16) & 0xff) * t;
+      const g2 = ((c1 >> 8) & 0xff) * (1 - t) + ((c2 >> 8) & 0xff) * t;
+      const b = (c1 & 0xff) * (1 - t) + (c2 & 0xff) * t;
+      return ((r & 0xff) << 16) | ((g2 & 0xff) << 8) | (b & 0xff);
+    };
+    const palette = [
+      color,
+      blend(color, 0xffffff, 0.5),
+      blend(color, 0xffffaa, 0.3),
+      blend(color, 0x000000, 0.25),
+    ];
     for (let i = 0; i < n; i += 1) {
       const a = (i / n) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
       // small angular spread per ray for a thicker look
-      const spread = 10;
-      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: spread, speedMin: spMin, speedMax: spMax, lifeMs: life, color, size: 2, alpha: 0.95 });
+      const spread = Phaser.Math.Between(8, 16);
+      const col = palette[Phaser.Math.Between(0, palette.length - 1)];
+      const sz = Phaser.Math.Between(1, 2);
+      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: spread, speedMin: spMin, speedMax: spMax, lifeMs: life, color: col, size: sz, alpha: 0.95 });
     }
-    // A few heavier chunks for visual weight
-    const heavyCount = radius ? Math.max(4, Math.min(10, Math.floor(radius / 10))) : (size === 'large' ? 6 : 3);
+    // A few heavier chunks for visual weight (also color-varied)
+    const heavyCount = radius ? Math.max(4, Math.min(10, Math.floor(radius / 9))) : (size === 'large' ? 6 : 3);
     for (let i = 0; i < heavyCount; i += 1) {
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: 6, speedMin: spMin - 20, speedMax: spMax + 20, lifeMs: life + 60, color, size: 3, alpha: 0.95 });
+      const col = palette[Phaser.Math.Between(0, palette.length - 1)];
+      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: 6, speedMin: spMin - 20, speedMax: spMax + 20, lifeMs: life + 60, color: col, size: 3, alpha: 0.95 });
     }
   } catch (_) {}
 }
