@@ -6,7 +6,9 @@ export function impactBurst(scene, x, y, opts = {}) {
   const color = opts.color ?? 0xffffff;
   const size = opts.size ?? 'small';
   const radius = typeof opts.radius === 'number' ? Math.max(1, opts.radius) : null;
-  const baseR = radius || (size === 'large' ? 10 : 5);
+  // Make non-explosive hits (no radius, small size) visually smaller
+  const isTinyHit = (!radius && size !== 'large');
+  const baseR = radius || (size === 'large' ? 10 : (isTinyHit ? 4 : 5));
   const scaleTarget = radius ? 1.1 : (size === 'large' ? 1.8 : 1.5);
 
   const g = scene.add.graphics({ x, y });
@@ -15,9 +17,9 @@ export function impactBurst(scene, x, y, opts = {}) {
     g.alpha = 1;
     g.scale = 1;
     // Draw layered fills and outer ring; if radius provided, use it for ring, scale layers inside
-    const innerR = radius ? Math.max(6, Math.floor(baseR * 0.35)) : Math.max(1, baseR - 1);
-    const midR   = Math.max(innerR + 2, Math.floor(baseR * 0.60));
-    const glowR  = Math.max(midR + 2, Math.floor(baseR * 0.85));
+    const innerR = radius ? Math.max(6, Math.floor(baseR * 0.35)) : Math.max(1, Math.floor(baseR * 0.5));
+    const midR   = Math.max(innerR + 1, Math.floor(baseR * 0.70));
+    const glowR  = Math.max(midR + 1, Math.floor(baseR * 0.95));
     // Build a simple palette around the base color
     const blend = (c1, c2, t) => {
       const r = ((c1 >> 16) & 0xff) * (1 - t) + ((c2 >> 16) & 0xff) * t;
@@ -32,7 +34,8 @@ export function impactBurst(scene, x, y, opts = {}) {
     g.fillStyle(hotCore, 0.95).fillCircle(0, 0, innerR);
     g.fillStyle(midCol, 0.55).fillCircle(0, 0, midR);
     g.fillStyle(glowCol, 0.25).fillCircle(0, 0, glowR);
-    g.lineStyle(radius ? 3 : 2, color, 0.9).strokeCircle(0, 0, baseR);
+    const lineW = radius ? 3 : (isTinyHit ? 1 : 2);
+    g.lineStyle(lineW, color, 0.9).strokeCircle(0, 0, baseR);
     // Add a fast outer shock ring for explosives
     if (radius || size === 'large') {
       try {
@@ -57,11 +60,11 @@ export function impactBurst(scene, x, y, opts = {}) {
 
   // Radial pixel particle burst that flies outward from the center, matching color
   try {
-    // Scale by radius and vary per explosion
-    const n = radius ? Math.max(14, Math.min(46, Math.floor(radius * 0.7))) : (size === 'large' ? 22 : 12);
-    const spMin = radius ? Math.max(80, Math.floor(radius * 1.5)) : 90;
-    const spMax = radius ? Math.max(spMin + 60, Math.floor(radius * 3.2)) : 180;
-    const life = radius ? Math.min(420, Math.max(200, Math.floor(radius * 3.2))) : 220;
+    // Scale by radius and vary per explosion; shrink non-explosive bullet/laser impacts
+    const n = radius ? Math.max(14, Math.min(46, Math.floor(radius * 0.7))) : (size === 'large' ? 22 : (isTinyHit ? 6 : 12));
+    const spMin = radius ? Math.max(80, Math.floor(radius * 1.5)) : (isTinyHit ? 50 : 90);
+    const spMax = radius ? Math.max(spMin + 60, Math.floor(radius * 3.2)) : (isTinyHit ? 120 : 180);
+    const life = radius ? Math.min(420, Math.max(200, Math.floor(radius * 3.2))) : (isTinyHit ? 160 : 220);
     // Build palette variations for particles
     const blend = (c1, c2, t) => {
       const r = ((c1 >> 16) & 0xff) * (1 - t) + ((c2 >> 16) & 0xff) * t;
@@ -78,17 +81,17 @@ export function impactBurst(scene, x, y, opts = {}) {
     for (let i = 0; i < n; i += 1) {
       const a = (i / n) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
       // small angular spread per ray for a thicker look
-      const spread = Phaser.Math.Between(8, 16);
+      const spread = Phaser.Math.Between(isTinyHit ? 6 : 8, isTinyHit ? 12 : 16);
       const col = palette[Phaser.Math.Between(0, palette.length - 1)];
-      const sz = Phaser.Math.Between(1, 2);
+      const sz = Phaser.Math.Between(1, isTinyHit ? 1 : 2);
       pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: spread, speedMin: spMin, speedMax: spMax, lifeMs: life, color: col, size: sz, alpha: 0.95 });
     }
-    // A few heavier chunks for visual weight (also color-varied)
-    const heavyCount = radius ? Math.max(4, Math.min(10, Math.floor(radius / 9))) : (size === 'large' ? 6 : 3);
+    // A few heavier chunks for visual weight (also color-varied); minimal for tiny hits
+    const heavyCount = radius ? Math.max(4, Math.min(10, Math.floor(radius / 9))) : (size === 'large' ? 6 : (isTinyHit ? 1 : 3));
     for (let i = 0; i < heavyCount; i += 1) {
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const col = palette[Phaser.Math.Between(0, palette.length - 1)];
-      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: 6, speedMin: spMin - 20, speedMax: spMax + 20, lifeMs: life + 60, color: col, size: 3, alpha: 0.95 });
+      pixelSparks(scene, x, y, { angleRad: a, count: 1, spreadDeg: 6, speedMin: spMin - 20, speedMax: spMax + 20, lifeMs: life + (isTinyHit ? 20 : 60), color: col, size: (isTinyHit ? 2 : 3), alpha: 0.95 });
     }
   } catch (_) {}
 }
