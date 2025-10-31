@@ -1967,7 +1967,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!trg) {
           // Idle: hover closely around the player in a small orbit until a target enters lock range
           if (bit._idleAngle === undefined) bit._idleAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-          if (bit._idleRadius === undefined) bit._idleRadius = Phaser.Math.Between(48, 84);
+          if (bit._idleRadius === undefined) bit._idleRadius = Phaser.Math.Between(28, 48);
           if (bit._idleSpeed === undefined) bit._idleSpeed = Phaser.Math.FloatBetween(2.0, 3.2); // rad/s
           bit._idleAngle += bit._idleSpeed * dt;
           const px = this.player.x; const py = this.player.y;
