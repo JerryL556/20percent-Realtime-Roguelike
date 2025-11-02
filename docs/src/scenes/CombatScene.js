@@ -1009,6 +1009,18 @@ export default class CombatScene extends Phaser.Scene {
             // Do not cull mines off-screen; allow them to persist
             if (!b._mine) { try { b.destroy(); } catch (_) {} return; }
           }
+          // Napalm (MGL incendiary) rocket: add orange tracer particles behind projectile
+          try {
+            if (b._firefield) {
+              const vx0 = b.body?.velocity?.x || 0; const vy0 = b.body?.velocity?.y || 0;
+              const spd2 = (vx0*vx0 + vy0*vy0) || 0;
+              if (spd2 > 1) {
+                const back = Math.atan2(vy0, vx0) + Math.PI;
+                const ex = b.x + Math.cos(back) * 6; const ey = b.y + Math.sin(back) * 6;
+                pixelSparks(this, ex, ey, { angleRad: back, count: 2, spreadDeg: 8, speedMin: 90, speedMax: 180, lifeMs: 110, color: 0xffaa33, size: 2, alpha: 0.95 });
+              }
+            }
+          } catch (_) {}
           // Smart Explosives: proximity detection and mine behavior
           if (b._smartExplosives) {
             const detR = b._detectR || Math.max(8, Math.floor((b._blastRadius || 70) * 0.65));
@@ -1210,18 +1222,73 @@ export default class CombatScene extends Phaser.Scene {
       b.setActive(true).setVisible(true);
       b.setCircle(2).setOffset(-2, -2);
       b.setVelocity(vx, vy);
-      b.setTint(0xffffff); // player bullets are white
+      // Bullet tint: default white; Explosive Core uses orange bullets
+      if (weapon._core === 'blast') b.setTint(0xff8800); else b.setTint(0xffffff);
       b.damage = weapon.damage;
       b._core = weapon._core || null;
       b._igniteOnHit = weapon._igniteOnHit || 0;
       b._toxinOnHit = weapon._toxinOnHit || 0;
       b._stunOnHit = weapon._stunOnHit || 0;
       if (b._core === 'pierce') { b._pierceLeft = 1; }
-      b.update = () => {
-        // Lifetime via camera view when walls are disabled
-        const view = this.cameras?.main?.worldView;
-        if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
-      };
+      // Tracer setup: particle thruster for stun/toxin/incendiary; blue line for pierce core
+      try {
+        // Particle tracer colors
+        const tracerColor = (() => {
+          if (b._toxinOnHit > 0) return 0x33ff66; // green
+          if (b._igniteOnHit > 0) return 0xffaa33; // orange
+          if (b._stunOnHit > 0) return 0xffee66; // yellow
+          return null;
+        })();
+        if (b._core === 'pierce') {
+          const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+          b.update = () => {
+            const view = this.cameras?.main?.worldView;
+            if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
+            try {
+              g.clear();
+              const vx0 = b.body?.velocity?.x || vx; const vy0 = b.body?.velocity?.y || vy;
+              const ang = Math.atan2(vy0, vx0);
+              const tail = 10;
+              const tx = b.x - Math.cos(ang) * tail; const ty = b.y - Math.sin(ang) * tail;
+              g.lineStyle(3, 0x2266ff, 0.5).beginPath().moveTo(tx, ty).lineTo(b.x, b.y).strokePath();
+              g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx + Math.cos(ang) * 2, ty + Math.sin(ang) * 2).lineTo(b.x, b.y).strokePath();
+            } catch (_) {}
+          };
+          b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+        } else if (tracerColor && weapon._core !== 'blast') {
+          // Emit stronger thruster-like particles behind the bullet each frame
+          b.update = () => {
+            const view = this.cameras?.main?.worldView;
+            if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
+            try {
+              const vx0 = b.body?.velocity?.x || vx; const vy0 = b.body?.velocity?.y || vy;
+              const back = Math.atan2(vy0, vx0) + Math.PI;
+              const ex = b.x + Math.cos(back) * 5; const ey = b.y + Math.sin(back) * 5;
+              // Scale tracer strength by effect type
+              const isIgnite = (b._igniteOnHit || 0) > 0;
+              const isToxin  = (b._toxinOnHit  || 0) > 0;
+              const isStun   = (b._stunOnHit   || 0) > 0;
+              let count = 2, size = 2, lifeMs = 100, speedMin = 90, speedMax = 180, alpha = 0.9;
+              if (isIgnite) { count = 3; size = 2; lifeMs = 120; speedMin = 100; speedMax = 200; alpha = 0.95; }
+              else if (isToxin) { count = 2; size = 2; lifeMs = 110; speedMin = 90; speedMax = 190; alpha = 0.92; }
+              else if (isStun) { count = 2; size = 2; lifeMs = 100; speedMin = 90; speedMax = 180; alpha = 0.9; }
+              pixelSparks(this, ex, ey, { angleRad: back, count, spreadDeg: 8, speedMin, speedMax, lifeMs, color: tracerColor, size, alpha });
+            } catch (_) {}
+          };
+          b.on('destroy', () => b._g?.destroy());
+        } else {
+          b.update = () => {
+            const view = this.cameras?.main?.worldView;
+            if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
+          };
+          b.on('destroy', () => b._g?.destroy());
+        }
+      } catch (_) {
+        b.update = () => {
+          const view = this.cameras?.main?.worldView;
+          if (view && !view.contains(b.x, b.y)) { b.destroy(); return; }
+        };
+      }
       b.on('destroy', () => b._g?.destroy());
     }
     // Burst Fire core: schedule additional shots within a short window
@@ -1325,17 +1392,67 @@ export default class CombatScene extends Phaser.Scene {
         b2.setActive(true).setVisible(true);
         b2.setCircle(2).setOffset(-2, -2);
         b2.setVelocity(vx, vy);
-         b2.setTint(0xffffff);
+         // Tint rules match primary: Explosive Core turns bullet orange
+         if (weapon._core === 'blast') b2.setTint(0xff8800); else b2.setTint(0xffffff);
          b2.damage = weapon.damage;
          b2._core = weapon._core || null;
          b2._igniteOnHit = weapon._igniteOnHit || 0;
          b2._toxinOnHit = weapon._toxinOnHit || 0;
          b2._stunOnHit = weapon._stunOnHit || 0;
          if (b2._core === 'pierce') { b2._pierceLeft = 1; }
-        b2.update = () => {
-          const view = this.cameras?.main?.worldView;
-          if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} }
-        };
+        try {
+          const tracerColor2 = (() => {
+            if (b2._toxinOnHit > 0) return 0x33ff66; // green
+            if (b2._igniteOnHit > 0) return 0xffaa33; // orange
+            if (b2._stunOnHit > 0) return 0xffee66; // yellow
+            return null;
+          })();
+          if (b2._core === 'pierce') {
+            const g2 = this.add.graphics(); b2._g = g2; try { g2.setDepth(8000); g2.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+            b2.update = () => {
+              const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} return; }
+              try {
+                g2.clear();
+                const vx0 = b2.body?.velocity?.x || vx; const vy0 = b2.body?.velocity?.y || vy;
+                const ang = Math.atan2(vy0, vx0);
+                const tail = 10;
+                const tx = b2.x - Math.cos(ang) * tail; const ty = b2.y - Math.sin(ang) * tail;
+                g2.lineStyle(3, 0x2266ff, 0.5).beginPath().moveTo(tx, ty).lineTo(b2.x, b2.y).strokePath();
+                g2.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx + Math.cos(ang) * 2, ty + Math.sin(ang) * 2).lineTo(b2.x, b2.y).strokePath();
+              } catch (_) {}
+            };
+            b2.on('destroy', () => { try { b2._g?.destroy(); } catch (_) {} });
+          } else if (tracerColor2 && weapon._core !== 'blast') {
+            // Stronger tracer on burst bullets too
+            b2.update = () => {
+              const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} return; }
+              try {
+                const vx0 = b2.body?.velocity?.x || vx; const vy0 = b2.body?.velocity?.y || vy;
+                const back = Math.atan2(vy0, vx0) + Math.PI;
+                const ex = b2.x + Math.cos(back) * 5; const ey = b2.y + Math.sin(back) * 5;
+                const isIgnite = (b2._igniteOnHit || 0) > 0;
+                const isToxin  = (b2._toxinOnHit  || 0) > 0;
+                const isStun   = (b2._stunOnHit   || 0) > 0;
+                let count = 2, size = 2, lifeMs = 100, speedMin = 90, speedMax = 180, alpha = 0.9;
+                if (isIgnite) { count = 3; size = 2; lifeMs = 120; speedMin = 100; speedMax = 200; alpha = 0.95; }
+                else if (isToxin) { count = 2; size = 2; lifeMs = 110; speedMin = 90; speedMax = 190; alpha = 0.92; }
+                else if (isStun) { count = 2; size = 2; lifeMs = 100; speedMin = 90; speedMax = 180; alpha = 0.9; }
+                pixelSparks(this, ex, ey, { angleRad: back, count, spreadDeg: 8, speedMin, speedMax, lifeMs, color: tracerColor2, size, alpha });
+              } catch (_) {}
+            };
+            b2.on('destroy', () => b2._g?.destroy());
+          } else {
+            b2.update = () => {
+              const view = this.cameras?.main?.worldView;
+              if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} }
+            };
+            b2.on('destroy', () => b2._g?.destroy());
+          }
+        } catch (_) {
+          b2.update = () => {
+            const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} }
+          };
+        }
         b2.on('destroy', () => b2._g?.destroy());
         // consume ammo and sync UI
         this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
@@ -2384,7 +2501,7 @@ export default class CombatScene extends Phaser.Scene {
         let usingPath = false;
         const losBlocked = this.isLineBlocked(e.x, e.y, this.player.x, this.player.y);
         if (losBlocked && this._nav?.grid) {
-          const needRepath = (!e._path || (e._pathIdx == null) || (e._pathIdx >= e._path.length) || (now - (e._lastPathAt || 0) > 800));
+          const needRepath = (!e._path || (e._pathIdx == null) || (e._pathIdx >= e._path.length) || (now - (e._lastPathAt || 0) > ((e.isGrenadier && e._charging) ? 300 : 800)));
           if (needRepath) {
             try {
               const [sgx, sgy] = worldToGrid(this._nav.grid, e.x, e.y);
@@ -2528,12 +2645,12 @@ export default class CombatScene extends Phaser.Scene {
         e._svx += (vx - e._svx) * smooth;
         e._svy += (vy - e._svy) * smooth;
         e.body.setVelocity(e._svx, e._svy);
-        // Stuck detection triggers repath
+        // Stuck detection triggers repath (more aggressive during Grenadier charge)
         if (e._lastPosT === undefined) { e._lastPosT = now; e._lx = e.x; e._ly = e.y; }
         if (now - e._lastPosT > 400) {
           const md = Math.hypot((e.x - (e._lx || e.x)), (e.y - (e._ly || e.y)));
           e._lx = e.x; e._ly = e.y; e._lastPosT = now;
-          if (md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
+          const stuckWhileCharging = (e.isGrenadier && e._charging && md < 3); if ((md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) || stuckWhileCharging) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
         }
       }
       // Grenadier: detonate if reached player while charging
@@ -3659,6 +3776,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 

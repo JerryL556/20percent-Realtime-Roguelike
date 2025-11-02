@@ -330,6 +330,20 @@ export default class UIScene extends Phaser.Scene {
       for (let i = 0; i < modsArr.length; i += 1) {
         if (banned.has(modsArr[i])) { modsArr[i] = null; changed = true; }
       }
+      // Enforce: unique mods and only one magazine mod per weapon
+      const seen = new Set();
+      let magTaken = false;
+      for (let i = 0; i < modsArr.length; i += 1) {
+        const id = modsArr[i];
+        if (!id) continue;
+        if (seen.has(id)) { modsArr[i] = null; changed = true; continue; }
+        const isMag = String(id).startsWith('w_mag_');
+        if (isMag) {
+          if (magTaken) { modsArr[i] = null; changed = true; continue; }
+          magTaken = true;
+        }
+        seen.add(id);
+      }
       if (changed) { gs.weaponBuilds[gs.activeWeapon].mods = modsArr; SaveManager.saveToLocal(gs); }
     } catch (_) {}
     this.loadout.modLabels = [];
@@ -352,6 +366,15 @@ export default class UIScene extends Phaser.Scene {
           .filter((m) => !m.onlyFor || m.onlyFor === activeId)
           .filter((m) => !m.allow || m.allow(baseW))
           .filter((m) => m.id !== 'w_smg_toxin' && m.id !== 'w_rifle_incendiary')
+          // Prevent choosing duplicates and second magazine mod
+          .filter((m) => {
+            const others = (gs.weaponBuilds[gs.activeWeapon].mods || []).filter((_, j) => j !== idx);
+            const selectedSet = new Set(others.filter(Boolean));
+            const hasMag = others.some((mm) => typeof mm === 'string' && mm.startsWith('w_mag_'));
+            if (m.id && selectedSet.has(m.id)) return false;
+            if (m.id && String(m.id).startsWith('w_mag_') && hasMag) return false;
+            return true;
+          })
           .map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
         this.openChoicePopup('Choose Mod', opts, gs.weaponBuilds[gs.activeWeapon].mods[idx], (chosenId) => {
           gs.weaponBuilds[gs.activeWeapon].mods[idx] = chosenId;
