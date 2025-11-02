@@ -313,29 +313,51 @@ export default class BossScene extends Phaser.Scene {
     try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); g.setAlpha(1); } catch (_) {}
     const startedAt = this.time.now;
     const tail = [];
+    let prevA = baseAngle + (altStart ? half : -half);
+    let flared = false;
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
       try { g.setPosition(caster.x, caster.y); gTrail.setPosition(caster.x, caster.y); } catch (_) {}
       try { g.clear(); gTrail.clear(); } catch (_) {}
+
+      // One-time origin flare to mimic muzzle flash
+      if (!flared) { try { muzzleFlashSplit(this, caster.x, caster.y, { angle: baseAngle, color: 0xffffff, count: 3, spreadDeg: 26, length: 16, thickness: 4 }); } catch (_) {} flared = true; }
       // Tail history for fading drag
-      tail.push({ a: angNow, t: now });
-      while (tail.length > 24) tail.shift();
+      try {
+        const dA = Phaser.Math.Angle.Wrap(angNow - prevA);
+        const steps = Math.max(3, Math.min(8, Math.ceil(Math.abs(dA) / Phaser.Math.DegToRad(4))));
+        for (let s = 1; s <= steps; s += 1) {
+          const a = prevA + (dA * (s / steps));
+          const ts = now - ((steps - s) * 6);
+          tail.push({ a, t: ts });
+        }
+        prevA = angNow;
+      } catch (_) { tail.push({ a: angNow, t: now }); prevA = angNow; }
+      while (tail.length > 36) tail.shift();
       try {
         for (let i = 0; i < tail.length; i += 1) {
           const samp = tail[i];
-          const life = Math.max(0, 1 - ((now - samp.t) / 420));
+          const life = Math.max(0, 1 - ((now - samp.t) / 480));
           if (life <= 0) continue;
           const w = 8 * life; const a = 0.55 * life;
           const hx = Math.cos(samp.a) * range, hy = Math.sin(samp.a) * range;
           gTrail.lineStyle(Math.max(1, w), color, Math.min(1, a));
           gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.lineTo(hx, hy); gTrail.strokePath();
+          // Tip tail
+          const tipBack = 10 * life; const tipFwd = 18 * life;
+          const tx1 = Math.cos(samp.a) * Math.max(0, range - tipBack);
+          const ty1 = Math.sin(samp.a) * Math.max(0, range - tipBack);
+          const tx2 = Math.cos(samp.a) * (range + tipFwd);
+          const ty2 = Math.sin(samp.a) * (range + tipFwd);
+          gTrail.lineStyle(Math.max(1, w * 0.9), 0xffffff, Math.min(1, a * 0.85));
+          gTrail.beginPath(); gTrail.moveTo(tx1, ty1); gTrail.lineTo(tx2, ty2); gTrail.strokePath();
         }
       } catch (_) {}
       try {
         const hx = Math.cos(angNow) * range, hy = Math.sin(angNow) * range;
-        g.lineStyle(6, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        g.lineStyle(2, color, 0.85); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        g.lineStyle(7, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        g.lineStyle(3, 0xffffff, 0.9); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
         if (Math.random() < 0.25) { const back = angNow + Math.PI; const ex = caster.x + hx, ey = caster.y + hy; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); }
       } catch (_) {}
       if (t >= 1) {
