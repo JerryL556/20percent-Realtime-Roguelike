@@ -94,19 +94,35 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
-  // Shared melee VFX: single moving gun-flare beam only (no trail)
+  // Shared melee VFX: single moving beam that follows caster (no trail)
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     const half = Phaser.Math.DegToRad(totalDeg / 2);
     const dir = altStart ? -1 : 1;
     const start = baseAngle + (altStart ? half : -half);
     const startedAt = this.time.now;
+    const g = this.add.graphics({ x: caster.x, y: caster.y });
+    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
-      // Exactly like gun flare; use provided color and match melee range as beam length
-      try { muzzleFlash(this, caster.x, caster.y, { angle: angNow, color: (color ?? 0xffffff), length: Math.max(1, range | 0), thickness: 4 }); } catch (_) {}
+      try {
+        g.setPosition(caster.x, caster.y);
+        g.clear();
+        const len = Math.max(1, range | 0);
+        const hx = Math.cos(angNow) * len;
+        const hy = Math.sin(angNow) * len;
+        // Outer bright beam
+        g.lineStyle(4, (color ?? 0xffffff), 0.98);
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        // Inner hot core (white)
+        g.lineStyle(2, 0xffffff, 0.95);
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(hx * 0.85, hy * 0.85); g.strokePath();
+        // Small bloom at origin
+        g.fillStyle((color ?? 0xffffff), 0.85).fillCircle(0, 0, 2);
+      } catch (_) {}
       if (t >= 1) {
         this.events.off('update', onUpdate, this);
+        try { g.destroy(); } catch (_) {}
       }
     };
     this.events.on('update', onUpdate, this);
