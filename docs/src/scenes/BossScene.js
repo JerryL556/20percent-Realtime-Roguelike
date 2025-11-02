@@ -302,7 +302,7 @@ export default class BossScene extends Phaser.Scene {
     }
   }
 
-  // Shared melee VFX (robust): per-frame via scene update listener
+  // Shared melee VFX (laser-like): thick beam with fading drag
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     const half = Phaser.Math.DegToRad(totalDeg / 2);
     const dir = altStart ? -1 : 1;
@@ -312,19 +312,30 @@ export default class BossScene extends Phaser.Scene {
     try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); gTrail.setAlpha(1); } catch (_) {}
     try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); g.setAlpha(1); } catch (_) {}
     const startedAt = this.time.now;
+    const tail = [];
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
       try { g.setPosition(caster.x, caster.y); gTrail.setPosition(caster.x, caster.y); } catch (_) {}
-      try { g.clear(); } catch (_) {}
+      try { g.clear(); gTrail.clear(); } catch (_) {}
+      // Tail history for fading drag
+      tail.push({ a: angNow, t: now });
+      while (tail.length > 8) tail.shift();
       try {
-        gTrail.fillStyle(color, 0.2);
-        gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.arc(0, 0, range, angNow - 0.05 * dir, angNow, dir < 0); gTrail.closePath(); gTrail.fillPath();
+        for (let i = 0; i < tail.length; i += 1) {
+          const samp = tail[i];
+          const life = Math.max(0, 1 - ((now - samp.t) / 160));
+          if (life <= 0) continue;
+          const w = 6 * life; const a = 0.6 * life;
+          const hx = Math.cos(samp.a) * range, hy = Math.sin(samp.a) * range;
+          gTrail.lineStyle(Math.max(1, w), color, Math.min(1, a));
+          gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.lineTo(hx, hy); gTrail.strokePath();
+        }
       } catch (_) {}
       try {
         const hx = Math.cos(angNow) * range, hy = Math.sin(angNow) * range;
-        g.lineStyle(3, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        g.lineStyle(1, color, 0.5); g.beginPath(); g.arc(0, 0, range, angNow - 0.04, angNow + 0.04); g.strokePath();
+        g.lineStyle(6, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        g.lineStyle(2, color, 0.85); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
         if (Math.random() < 0.25) { const back = angNow + Math.PI; const ex = caster.x + hx, ey = caster.y + hy; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); }
       } catch (_) {}
       if (t >= 1) {

@@ -94,7 +94,7 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
-  // Shared melee VFX (robust): per-frame via scene update listener
+  // Shared melee VFX (laser-like): thick beam with fading drag
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     const half = Phaser.Math.DegToRad(totalDeg / 2);
     const dir = altStart ? -1 : 1;
@@ -104,21 +104,35 @@ export default class CombatScene extends Phaser.Scene {
     try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); gTrail.setAlpha(1); } catch (_) {}
     try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); g.setAlpha(1); } catch (_) {}
     const startedAt = this.time.now;
+    const tail = [];
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
       try { g.setPosition(caster.x, caster.y); gTrail.setPosition(caster.x, caster.y); } catch (_) {}
-      try { g.clear(); } catch (_) {}
-      // Accumulating trail sector (draw new wedge each frame)
+      try { g.clear(); gTrail.clear(); } catch (_) {}
+
+      // Record tail and keep a short history for fading drag
+      tail.push({ a: angNow, t: now });
+      while (tail.length > 8) tail.shift();
+      // Draw fading drag behind beam
       try {
-        gTrail.fillStyle(color, 0.2);
-        gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.arc(0, 0, range, angNow - 0.05 * dir, angNow, dir < 0); gTrail.closePath(); gTrail.fillPath();
+        for (let i = 0; i < tail.length; i += 1) {
+          const samp = tail[i];
+          const life = Math.max(0, 1 - ((now - samp.t) / 160)); // ~160ms total tail life
+          if (life <= 0) continue;
+          const w = 6 * life; // width scales down
+          const a = 0.6 * life; // alpha scales down
+          const hx = Math.cos(samp.a) * range, hy = Math.sin(samp.a) * range;
+          gTrail.lineStyle(Math.max(1, w), color, Math.min(1, a));
+          gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.lineTo(hx, hy); gTrail.strokePath();
+        }
       } catch (_) {}
-      // Foreground beam + faint arc
+      // Foreground thick beam (laser)
       try {
         const hx = Math.cos(angNow) * range, hy = Math.sin(angNow) * range;
-        g.lineStyle(3, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        g.lineStyle(1, color, 0.5); g.beginPath(); g.arc(0, 0, range, angNow - 0.04, angNow + 0.04); g.strokePath();
+        g.lineStyle(6, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        // Slight glow with thinner overlay
+        g.lineStyle(2, color, 0.85); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
         if (Math.random() < 0.25) { const back = angNow + Math.PI; const ex = caster.x + hx, ey = caster.y + hy; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); }
       } catch (_) {}
       if (t >= 1) {
@@ -2766,8 +2780,8 @@ export default class CombatScene extends Phaser.Scene {
         if (e._svy === undefined) e._svy = 0;
         e._svx += (vx - e._svx) * smooth;
         e._svy += (vy - e._svy) * smooth;
-        // Post-sweep slow for melee enemies
-        if (e.isMelee && e._meleeSlowUntil && now < e._meleeSlowUntil) { e._svx *= 0.2; e._svy *= 0.2; }
+        // Post-sweep slow for melee enemies (reduced slowdown: 60% speed)
+        if (e.isMelee && e._meleeSlowUntil && now < e._meleeSlowUntil) { e._svx *= 0.6; e._svy *= 0.6; }
         e.body.setVelocity(e._svx, e._svy);
         // Stuck detection triggers repath (more aggressive during Grenadier charge)
         if (e._lastPosT === undefined) { e._lastPosT = now; e._lx = e.x; e._ly = e.y; }
