@@ -317,10 +317,16 @@ export default class BossScene extends Phaser.Scene {
         // Follow caster: draw at (0,0) and position graphics at caster
         try { gTrail.setPosition(caster.x, caster.y); g.setPosition(caster.x, caster.y); } catch (_) {}
         gTrail.fillStyle(color, 0.18);
-        gTrail.slice(0, 0, range, start, angNow, dir > 0).fillPath();
+        gTrail.beginPath();
+        gTrail.moveTo(0, 0);
+        gTrail.arc(0, 0, range, start, angNow, dir < 0);
+        gTrail.closePath();
+        gTrail.fillPath();
         const hx = Math.cos(angNow) * range; const hy = Math.sin(angNow) * range;
-        g.lineStyle(3, color, 0.95).beginPath().moveTo(0, 0).lineTo(hx, hy).strokePath();
-        g.lineStyle(1, color, 0.5).beginPath().arc(0, 0, range, angNow - 0.02, angNow + 0.02).strokePath();
+        g.lineStyle(3, color, 0.95);
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        g.lineStyle(1, color, 0.5);
+        g.beginPath(); g.arc(0, 0, range, angNow - 0.02, angNow + 0.02); g.strokePath();
         if (Math.random() < 0.25) {
           const back = angNow + Math.PI; const ex = caster.x + hx, ey = caster.y + hy;
           try { pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); } catch (_) {}
