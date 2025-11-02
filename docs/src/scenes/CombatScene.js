@@ -113,15 +113,16 @@ export default class CombatScene extends Phaser.Scene {
 
       // Record tail and keep a short history for fading drag
       tail.push({ a: angNow, t: now });
-      while (tail.length > 8) tail.shift();
+      // Keep a longer history for a farther tail
+      while (tail.length > 24) tail.shift();
       // Draw fading drag behind beam
       try {
         for (let i = 0; i < tail.length; i += 1) {
           const samp = tail[i];
-          const life = Math.max(0, 1 - ((now - samp.t) / 160)); // ~160ms total tail life
+          const life = Math.max(0, 1 - ((now - samp.t) / 420)); // extend tail life (~420ms)
           if (life <= 0) continue;
-          const w = 6 * life; // width scales down
-          const a = 0.6 * life; // alpha scales down
+          const w = 8 * life; // slightly thicker near head
+          const a = 0.55 * life; // fade over time
           const hx = Math.cos(samp.a) * range, hy = Math.sin(samp.a) * range;
           gTrail.lineStyle(Math.max(1, w), color, Math.min(1, a));
           gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.lineTo(hx, hy); gTrail.strokePath();

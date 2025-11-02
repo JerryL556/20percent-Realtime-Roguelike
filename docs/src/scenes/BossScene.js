@@ -320,13 +320,13 @@ export default class BossScene extends Phaser.Scene {
       try { g.clear(); gTrail.clear(); } catch (_) {}
       // Tail history for fading drag
       tail.push({ a: angNow, t: now });
-      while (tail.length > 8) tail.shift();
+      while (tail.length > 24) tail.shift();
       try {
         for (let i = 0; i < tail.length; i += 1) {
           const samp = tail[i];
-          const life = Math.max(0, 1 - ((now - samp.t) / 160));
+          const life = Math.max(0, 1 - ((now - samp.t) / 420));
           if (life <= 0) continue;
-          const w = 6 * life; const a = 0.6 * life;
+          const w = 8 * life; const a = 0.55 * life;
           const hx = Math.cos(samp.a) * range, hy = Math.sin(samp.a) * range;
           gTrail.lineStyle(Math.max(1, w), color, Math.min(1, a));
           gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.lineTo(hx, hy); gTrail.strokePath();
