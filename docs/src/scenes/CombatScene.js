@@ -94,55 +94,40 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
-  // Shared melee VFX
+  // Shared melee VFX (robust): per-frame via scene update listener
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     const half = Phaser.Math.DegToRad(totalDeg / 2);
     const dir = altStart ? -1 : 1;
     const start = baseAngle + (altStart ? half : -half);
-    const gTrail = this.add.graphics();
-    const g = this.add.graphics();
-    try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-    const started = this.time.now;
-    const drawAt = (angNow) => {
-      try {
-        // Follow caster: draw at (0,0) and position graphics at caster
-        try { gTrail.setPosition(caster.x, caster.y); g.setPosition(caster.x, caster.y); } catch (_) {}
-        // Trail sector (accumulates and follows caster)
-        gTrail.fillStyle(color, 0.18);
-        gTrail.beginPath();
-        gTrail.moveTo(0, 0);
-        gTrail.arc(0, 0, range, start, angNow, dir < 0);
-        gTrail.closePath();
-        gTrail.fillPath();
-        // Foreground beam and faint arc (relative to caster)
-        const hx = Math.cos(angNow) * range;
-        const hy = Math.sin(angNow) * range;
-        g.lineStyle(3, color, 0.95);
-        g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        g.lineStyle(1, color, 0.5);
-        g.beginPath(); g.arc(0, 0, range, angNow - 0.02, angNow + 0.02); g.strokePath();
-        // Edge sparks (~25%)
-        if (Math.random() < 0.25) {
-          const back = angNow + Math.PI;
-          const ex = caster.x + hx, ey = caster.y + hy; // world coords for particles
-          try { pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); } catch (_) {}
-        }
-      } catch (_) {}
-    };
-    const upd = () => {
-      const now = this.time.now; const t = Math.min(1, (now - started) / Math.max(1, durationMs));
-      const cur = start + dir * (t * (2 * half));
+    const gTrail = this.add.graphics({ x: caster.x, y: caster.y });
+    const g = this.add.graphics({ x: caster.x, y: caster.y });
+    try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); gTrail.setAlpha(1); } catch (_) {}
+    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); g.setAlpha(1); } catch (_) {}
+    const startedAt = this.time.now;
+    const onUpdate = () => {
+      const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
+      const angNow = start + dir * (t * (2 * half));
+      try { g.setPosition(caster.x, caster.y); gTrail.setPosition(caster.x, caster.y); } catch (_) {}
       try { g.clear(); } catch (_) {}
-      drawAt(cur);
-      // Follow caster by redrawing with current caster position; trail accumulates
+      // Accumulating trail sector (draw new wedge each frame)
+      try {
+        gTrail.fillStyle(color, 0.2);
+        gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.arc(0, 0, range, angNow - 0.05 * dir, angNow, dir < 0); gTrail.closePath(); gTrail.fillPath();
+      } catch (_) {}
+      // Foreground beam + faint arc
+      try {
+        const hx = Math.cos(angNow) * range, hy = Math.sin(angNow) * range;
+        g.lineStyle(3, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
+        g.lineStyle(1, color, 0.5); g.beginPath(); g.arc(0, 0, range, angNow - 0.04, angNow + 0.04); g.strokePath();
+        if (Math.random() < 0.25) { const back = angNow + Math.PI; const ex = caster.x + hx, ey = caster.y + hy; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); }
+      } catch (_) {}
       if (t >= 1) {
         try { this.tweens.add({ targets: gTrail, alpha: 0, duration: 140, ease: 'Cubic.easeOut', onComplete: () => { try { gTrail.destroy(); } catch (_) {} } }); } catch (_) { try { gTrail.destroy(); } catch (__ ) {} }
         try { g.destroy(); } catch (_) {}
-        this.time.removeEvent(evt);
+        this.events.off('update', onUpdate, this);
       }
     };
-    const evt = this.time.addEvent({ delay: 0, loop: true, callback: upd, callbackScope: this });
+    this.events.on('update', onUpdate, this);
   }
 
   create() {
