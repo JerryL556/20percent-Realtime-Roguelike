@@ -303,7 +303,7 @@ export default class BossScene extends Phaser.Scene {
   }
 
   // Shared melee VFX: single moving gun-flare beam only (no trail)
-  spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, _color, _range, altStart) {
+  spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     const half = Phaser.Math.DegToRad(totalDeg / 2);
     const dir = altStart ? -1 : 1;
     const start = baseAngle + (altStart ? half : -half);
@@ -311,7 +311,7 @@ export default class BossScene extends Phaser.Scene {
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
-      try { muzzleFlash(this, caster.x, caster.y, { angle: angNow, color: 0xffee66, length: 12, thickness: 3 }); } catch (_) {}
+      try { muzzleFlash(this, caster.x, caster.y, { angle: angNow, color: (color ?? 0xffffff), length: Math.max(1, range | 0), thickness: 4 }); } catch (_) {}
       if (t >= 1) {
         this.events.off('update', onUpdate, this);
       }

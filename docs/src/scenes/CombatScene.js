@@ -103,8 +103,8 @@ export default class CombatScene extends Phaser.Scene {
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
-      // Exactly like gun flare
-      try { muzzleFlash(this, caster.x, caster.y, { angle: angNow, color: 0xffee66, length: 12, thickness: 3 }); } catch (_) {}
+      // Exactly like gun flare; use provided color and match melee range as beam length
+      try { muzzleFlash(this, caster.x, caster.y, { angle: angNow, color: (color ?? 0xffffff), length: Math.max(1, range | 0), thickness: 4 }); } catch (_) {}
       if (t >= 1) {
         this.events.off('update', onUpdate, this);
       }
