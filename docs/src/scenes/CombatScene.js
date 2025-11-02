@@ -94,79 +94,18 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
-  // Shared melee VFX (laser-like): thick beam with fast, long fading drag + tip tail and start flare
+  // Shared melee VFX: single moving gun-flare beam only (no trail)
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     const half = Phaser.Math.DegToRad(totalDeg / 2);
     const dir = altStart ? -1 : 1;
     const start = baseAngle + (altStart ? half : -half);
-    const gTrail = this.add.graphics({ x: caster.x, y: caster.y });
-    const g = this.add.graphics({ x: caster.x, y: caster.y });
-    try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); gTrail.setAlpha(1); } catch (_) {}
-    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); g.setAlpha(1); } catch (_) {}
     const startedAt = this.time.now;
-    const tail = [];
-    let prevA = baseAngle + (altStart ? half : -half);
-    let flared = false;
     const onUpdate = () => {
       const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
       const angNow = start + dir * (t * (2 * half));
-      try { g.setPosition(caster.x, caster.y); gTrail.setPosition(caster.x, caster.y); } catch (_) {}
-      try { g.clear(); gTrail.clear(); } catch (_) {}
-
-      // One-time origin flare to mimic muzzle flash
-      if (!flared) {
-        try { muzzleFlashSplit(this, caster.x, caster.y, { angle: baseAngle, color: 0xffffff, count: 3, spreadDeg: 26, length: 16, thickness: 4 }); } catch (_) {}
-        flared = true;
-      }
-
-      // Record multiple subsamples per frame for a denser, faster-looking tail
-      try {
-        const dA = Phaser.Math.Angle.Wrap(angNow - prevA);
-        const steps = Math.max(3, Math.min(8, Math.ceil(Math.abs(dA) / Phaser.Math.DegToRad(4))));
-        for (let s = 1; s <= steps; s += 1) {
-          const a = prevA + (dA * (s / steps));
-          const ts = now - ((steps - s) * 6); // slight time offset to spread fade
-          tail.push({ a, t: ts });
-        }
-        prevA = angNow;
-      } catch (_) {
-        tail.push({ a: angNow, t: now }); prevA = angNow;
-      }
-      // Keep a longer history for a farther tail
-      while (tail.length > 36) tail.shift();
-      // Draw fading drag behind beam
-      try {
-        for (let i = 0; i < tail.length; i += 1) {
-          const samp = tail[i];
-          const life = Math.max(0, 1 - ((now - samp.t) / 480)); // longer tail life
-          if (life <= 0) continue;
-          const w = 8 * life; // slightly thicker near head
-          const a = 0.55 * life; // fade over time
-          const hx = Math.cos(samp.a) * range, hy = Math.sin(samp.a) * range;
-          // Main drag from origin
-          gTrail.lineStyle(Math.max(1, w), color, Math.min(1, a));
-          gTrail.beginPath(); gTrail.moveTo(0, 0); gTrail.lineTo(hx, hy); gTrail.strokePath();
-          // Tip tail: a short extension beyond the beam tip
-          const tipBack = 10 * life; const tipFwd = 18 * life;
-          const tx1 = Math.cos(samp.a) * Math.max(0, range - tipBack);
-          const ty1 = Math.sin(samp.a) * Math.max(0, range - tipBack);
-          const tx2 = Math.cos(samp.a) * (range + tipFwd);
-          const ty2 = Math.sin(samp.a) * (range + tipFwd);
-          gTrail.lineStyle(Math.max(1, w * 0.9), 0xffffff, Math.min(1, a * 0.85));
-          gTrail.beginPath(); gTrail.moveTo(tx1, ty1); gTrail.lineTo(tx2, ty2); gTrail.strokePath();
-        }
-      } catch (_) {}
-      // Foreground thick beam (laser)
-      try {
-        const hx = Math.cos(angNow) * range, hy = Math.sin(angNow) * range;
-        g.lineStyle(7, color, 0.95); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        // Slight glow with thinner overlay
-        g.lineStyle(3, 0xffffff, 0.9); g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        if (Math.random() < 0.25) { const back = angNow + Math.PI; const ex = caster.x + hx, ey = caster.y + hy; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); }
-      } catch (_) {}
+      // Exactly like gun flare
+      try { muzzleFlash(this, caster.x, caster.y, { angle: angNow, color: 0xffee66, length: 12, thickness: 3 }); } catch (_) {}
       if (t >= 1) {
-        try { this.tweens.add({ targets: gTrail, alpha: 0, duration: 140, ease: 'Cubic.easeOut', onComplete: () => { try { gTrail.destroy(); } catch (_) {} } }); } catch (_) { try { gTrail.destroy(); } catch (__ ) {} }
-        try { g.destroy(); } catch (_) {}
         this.events.off('update', onUpdate, this);
       }
     };
