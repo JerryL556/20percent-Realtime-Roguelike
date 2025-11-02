@@ -138,7 +138,7 @@ export const weaponDefs = [
   },
   {
     id: 'guided_missiles',
-    name: 'Guided Missiles',
+    name: 'L-G Missiles',
     // Micro homing rockets that follow the cursor with limited turn rate
     damage: 10,           // increased direct hit
     aoeDamage: 10,        // reduced splash

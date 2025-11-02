@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -814,7 +814,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2掳/frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2°/frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -878,8 +878,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1掳/frame
-          b._fov = Phaser.Math.DegToRad(90); // 90掳 cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1°/frame
+          b._fov = Phaser.Math.DegToRad(90); // 90° cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -904,7 +904,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45掳 half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45° half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2384,7 +2384,7 @@ export default class CombatScene extends Phaser.Scene {
         let usingPath = false;
         const losBlocked = this.isLineBlocked(e.x, e.y, this.player.x, this.player.y);
         if (losBlocked && this._nav?.grid) {
-          const needRepath = (!e._path || (e._pathIdx == null) || (e._pathIdx >= e._path.length) || (now - (e._lastPathAt || 0) > 800));
+          const needRepath = (!e._path || (e._pathIdx == null) || (e._pathIdx >= e._path.length) || (now - (e._lastPathAt || 0) > ((e.isGrenadier && e._charging) ? 300 : 800)));
           if (needRepath) {
             try {
               const [sgx, sgy] = worldToGrid(this._nav.grid, e.x, e.y);
@@ -2528,12 +2528,12 @@ export default class CombatScene extends Phaser.Scene {
         e._svx += (vx - e._svx) * smooth;
         e._svy += (vy - e._svy) * smooth;
         e.body.setVelocity(e._svx, e._svy);
-        // Stuck detection triggers repath
+        // Stuck detection triggers repath (more aggressive during Grenadier charge)
         if (e._lastPosT === undefined) { e._lastPosT = now; e._lx = e.x; e._ly = e.y; }
         if (now - e._lastPosT > 400) {
           const md = Math.hypot((e.x - (e._lx || e.x)), (e.y - (e._ly || e.y)));
           e._lx = e.x; e._ly = e.y; e._lastPosT = now;
-          if (md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
+          const stuckWhileCharging = (e.isGrenadier && e._charging && md < 3); if ((md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) || stuckWhileCharging) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
         }
       }
       // Grenadier: detonate if reached player while charging
@@ -2555,7 +2555,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors 鈥?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors �?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
