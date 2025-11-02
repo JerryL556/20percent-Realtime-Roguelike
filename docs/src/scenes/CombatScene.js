@@ -60,6 +60,87 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
+  // Player melee implementation: 150° cone, 48px range, 10 damage
+  performPlayerMelee() {
+    const caster = this.player;
+    if (!caster) return;
+    if (this._meleeBusy && this.time.now < this._meleeBusy) {
+      // No cooldown required, but prevent double-processing within same tick
+    }
+    const ptr = this.inputMgr.pointer;
+    const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
+    const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2);
+    const range = 48;
+    this._meleeAlt = !this._meleeAlt;
+    // VFX
+    try { this.spawnMeleeVfx(caster, ang, totalDeg, 100, 0xffffff, range, this._meleeAlt); } catch (_) {}
+    // Damage check against enemies
+    try {
+      const enemies = this.enemies?.getChildren?.() || [];
+      enemies.forEach((e) => {
+        if (!e?.active || !e.isEnemy) return;
+        const dx = e.x - caster.x; const dy = e.y - caster.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const pad = (e.body?.halfWidth || 6);
+        if (d > (range + pad)) return;
+        const dir = Math.atan2(dy, dx);
+        const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
+        if (diff <= half) {
+          if (e.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + 10; }
+          else {
+            if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
+            e.hp -= 10;
+            if (e.hp <= 0) { try { this.killEnemy(e); } catch (_) {} }
+          }
+        }
+      });
+    } catch (_) {}
+    this._meleeBusy = this.time.now + 50;
+  }
+
+  // Shared melee VFX
+  spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
+    const half = Phaser.Math.DegToRad(totalDeg / 2);
+    const dir = altStart ? -1 : 1;
+    const start = baseAngle + (altStart ? half : -half);
+    const gTrail = this.add.graphics();
+    const g = this.add.graphics();
+    try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    const started = this.time.now;
+    const drawAt = (angNow) => {
+      try {
+        // Trail sector
+        gTrail.fillStyle(color, 0.18);
+        gTrail.slice(caster.x, caster.y, range, start, angNow, dir > 0).fillPath();
+        // Foreground beam and faint arc
+        const hx = caster.x + Math.cos(angNow) * range;
+        const hy = caster.y + Math.sin(angNow) * range;
+        g.lineStyle(3, color, 0.95).beginPath().moveTo(caster.x, caster.y).lineTo(hx, hy).strokePath();
+        g.lineStyle(1, color, 0.5).beginPath().arc(caster.x, caster.y, range, angNow - 0.02, angNow + 0.02).strokePath();
+        // Edge sparks (~25%)
+        if (Math.random() < 0.25) {
+          const back = angNow + Math.PI;
+          const ex = hx, ey = hy;
+          try { pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); } catch (_) {}
+        }
+      } catch (_) {}
+    };
+    const upd = () => {
+      const now = this.time.now; const t = Math.min(1, (now - started) / Math.max(1, durationMs));
+      const cur = start + dir * (t * (2 * half));
+      try { g.clear(); } catch (_) {}
+      drawAt(cur);
+      // Follow caster by redrawing with current caster position; trail accumulates
+      if (t >= 1) {
+        try { this.tweens.add({ targets: gTrail, alpha: 0, duration: 140, ease: 'Cubic.easeOut', onComplete: () => { try { gTrail.destroy(); } catch (_) {} } }); } catch (_) { try { gTrail.destroy(); } catch (__ ) {} }
+        try { g.destroy(); } catch (_) {}
+        this.time.removeEvent(evt);
+      }
+    };
+    const evt = this.time.addEvent({ delay: 0, loop: true, callback: upd, callbackScope: this });
+  }
+
   create() {
     const { width, height } = this.scale;
     // Ensure physics world bounds match the visible area so enemies can't leave the screen
@@ -440,6 +521,8 @@ export default class CombatScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemies, (p, e) => {
       // Ignore dummy collisions for player damage
       if (e?.isDummy) return;
+      // Melee enemies do not apply touch damage; only their cone hit can damage
+      if (e?.isMelee) return;
       if (this.time.now < this.player.iframesUntil) return;
       this.gs.hp -= e.damage;
       this.player.iframesUntil = this.time.now + 600;
@@ -2445,6 +2528,11 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // Player melee: C key, 150°, 48px, 10 dmg
+    try {
+      if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
+    } catch (_) {}
+
     // Rebuild nav grid periodically so enemies can re-route around obstacles
     if (!this._nav) this._nav = { grid: null, builtAt: 0 };
     if (!this._nav.grid || (this.time.now - this._nav.builtAt > 1200)) {
@@ -2497,6 +2585,51 @@ export default class CombatScene extends Phaser.Scene {
         let speed = e.speed || 60;
         // Global speed boost for all enemies
         speed *= 1.5;
+        // Melee attack state machine (for base + runner)
+        if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
+          const cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(45), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(45), wind: 350, sweep: 120, recover: 500 };
+          if (!e._mState) e._mState = 'idle';
+          // Enter windup if player close
+          if (e._mState === 'idle') {
+            if (dist <= (cfg.range + 8)) {
+              e._mState = 'windup'; e._meleeUntil = now + cfg.wind; e._meleeFacing = Math.atan2(dy, dx); e._meleeAlt = !e._meleeAlt;
+            }
+          }
+          // Freeze during windup
+          if (e._mState === 'windup') {
+            vx = 0; vy = 0;
+            if (now >= (e._meleeUntil || 0)) {
+              // Start sweep
+              e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
+              try { this.spawnMeleeVfx(e, e._meleeFacing, 90, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
+              // Schedule mid-sweep damage check at ~60ms
+              this.time.delayedCall(60, () => {
+                if (!e.active || e._mState !== 'sweep') return;
+                const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
+                const dd = Math.hypot(pdx, pdy) || 1;
+                const angP = Math.atan2(pdy, pdx);
+                const diff = Math.abs(Phaser.Math.Angle.Wrap(angP - (e._meleeFacing || 0)));
+                if (dd <= cfg.range && diff <= cfg.half && !e._meleeDidHit) {
+                  this.gs.hp -= (e.damage || 10);
+                  this.player.iframesUntil = this.time.now + 600;
+                  e._meleeDidHit = true;
+                }
+              });
+            }
+          }
+          // During sweep, stand still
+          if (e._mState === 'sweep') {
+            vx = 0; vy = 0;
+            if (now >= (e._meleeUntil || 0)) {
+              e._mState = 'recover'; e._meleeUntil = now + cfg.recover; e._meleeSlowUntil = now + 280;
+            }
+          }
+          // Recovery: reduced movement speed, then back to idle
+          if (e._mState === 'recover') {
+            // Slowdown applied later to smoothed velocity
+            if (now >= (e._meleeUntil || 0)) { e._mState = 'idle'; }
+          }
+        }
         // Pathfinding when LOS to player is blocked
         let usingPath = false;
         const losBlocked = this.isLineBlocked(e.x, e.y, this.player.x, this.player.y);
@@ -2644,6 +2777,8 @@ export default class CombatScene extends Phaser.Scene {
         if (e._svy === undefined) e._svy = 0;
         e._svx += (vx - e._svx) * smooth;
         e._svy += (vy - e._svy) * smooth;
+        // Post-sweep slow for melee enemies
+        if (e.isMelee && e._meleeSlowUntil && now < e._meleeSlowUntil) { e._svx *= 0.2; e._svy *= 0.2; }
         e.body.setVelocity(e._svx, e._svy);
         // Stuck detection triggers repath (more aggressive during Grenadier charge)
         if (e._lastPosT === undefined) { e._lastPosT = now; e._lx = e.x; e._ly = e.y; }

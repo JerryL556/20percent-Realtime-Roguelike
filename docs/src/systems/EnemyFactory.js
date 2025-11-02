@@ -6,6 +6,7 @@ export function createEnemy(scene, x, y, hp = 100, damage = 10, speed = 60) {
   e.damage = damage;
   e.speed = speed;
   e.isEnemy = true;
+  e.isMelee = true;
   e.on('destroy', () => { try { e._g?.destroy(); } catch (_) {} try { e._igniteIndicator?.destroy(); e._igniteIndicator = null; } catch (_) {} try { e._toxinIndicator?.destroy(); e._toxinIndicator = null; } catch (_) {} });
   return e;
 }
@@ -19,6 +20,7 @@ export function createRunnerEnemy(scene, x, y, hp = 60, damage = 10, speed = 120
   r.damage = damage;
   r.speed = speed;
   r.isEnemy = true;
+  r.isMelee = true;
   r.isRunner = true;
   r.setTint(0xff6666);
   r.on('destroy', () => { try { r._g?.destroy(); } catch (_) {} try { r._igniteIndicator?.destroy(); r._igniteIndicator = null; } catch (_) {} try { r._toxinIndicator?.destroy(); r._toxinIndicator = null; } catch (_) {} });

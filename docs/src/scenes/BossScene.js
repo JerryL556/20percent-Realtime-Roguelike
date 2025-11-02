@@ -261,8 +261,8 @@ export default class BossScene extends Phaser.Scene {
       // Always destroy boss bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
-    // Boss bullets also collide with destructible barricades
-    this.physics.add.collider(this.bossBullets, this.barricadesSoft, (b, s) => this.onBossBulletHitBarricade(b, s));
+  // Boss bullets also collide with destructible barricades
+  this.physics.add.collider(this.bossBullets, this.barricadesSoft, (b, s) => this.onBossBulletHitBarricade(b, s));
 
     // Boss HP bar at top (shorter to avoid UI overlap)
     const barW = Math.min(420, Math.max(200, width - 220));
@@ -279,6 +279,63 @@ export default class BossScene extends Phaser.Scene {
     this.grenades = this.physics.add.group({ classType: Phaser.Physics.Arcade.Image, maxSize: 20, runChildUpdate: true });
     this._grenadeNextAvailableAt = this.time.now + 2000; // small initial delay
     this._lastAbilityRollAt = 0;
+  }
+
+  // Player melee (same as Combat): 150°, 48px, 10 dmg
+  performPlayerMelee() {
+    const caster = this.player; if (!caster) return;
+    const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
+    const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
+    try { this.spawnMeleeVfx(caster, ang, totalDeg, 100, 0xffffff, range, this._meleeAlt); } catch (_) {}
+    // Damage boss if within cone
+    const e = this.boss;
+    if (e && e.active) {
+      const dx = e.x - caster.x; const dy = e.y - caster.y; const d = Math.hypot(dx, dy) || 1;
+      const pad = (e.body?.halfWidth || 12);
+      if (d <= (range + pad)) {
+        const dir = Math.atan2(dy, dx); const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
+        if (diff <= half) {
+          if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
+          e.hp -= 10; if (e.hp <= 0) this.killBoss(e);
+        }
+      }
+    }
+  }
+
+  // Shared melee VFX (copied from CombatScene)
+  spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
+    const half = Phaser.Math.DegToRad(totalDeg / 2);
+    const dir = altStart ? -1 : 1;
+    const start = baseAngle + (altStart ? half : -half);
+    const gTrail = this.add.graphics();
+    const g = this.add.graphics();
+    try { gTrail.setDepth(8500); gTrail.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    const started = this.time.now;
+    const drawAt = (angNow) => {
+      try {
+        gTrail.fillStyle(color, 0.18);
+        gTrail.slice(caster.x, caster.y, range, start, angNow, dir > 0).fillPath();
+        const hx = caster.x + Math.cos(angNow) * range; const hy = caster.y + Math.sin(angNow) * range;
+        g.lineStyle(3, color, 0.95).beginPath().moveTo(caster.x, caster.y).lineTo(hx, hy).strokePath();
+        g.lineStyle(1, color, 0.5).beginPath().arc(caster.x, caster.y, range, angNow - 0.02, angNow + 0.02).strokePath();
+        if (Math.random() < 0.25) {
+          const back = angNow + Math.PI; const ex = hx, ey = hy;
+          try { pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); } catch (_) {}
+        }
+      } catch (_) {}
+    };
+    const evt = this.time.addEvent({ delay: 0, loop: true, callback: () => {
+      const now = this.time.now; const t = Math.min(1, (now - started) / Math.max(1, durationMs));
+      const cur = start + dir * (t * (2 * half));
+      try { g.clear(); } catch (_) {}
+      drawAt(cur);
+      if (t >= 1) {
+        try { this.tweens.add({ targets: gTrail, alpha: 0, duration: 140, ease: 'Cubic.easeOut', onComplete: () => { try { gTrail.destroy(); } catch (_) {} } }); } catch (_) { try { gTrail.destroy(); } catch (__ ) {} }
+        try { g.destroy(); } catch (_) {}
+        this.time.removeEvent(evt);
+      }
+    }, callbackScope: this });
   }
 
   win() {
@@ -2183,3 +2240,5 @@ export default class BossScene extends Phaser.Scene {
 
 
 
+    // Player melee parity with Combat: C key, 150°, 48px, 10 dmg
+    try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}

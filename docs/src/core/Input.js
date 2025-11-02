@@ -3,7 +3,7 @@ export class InputManager {
     this.scene = scene;
     this.keys = scene.input.keyboard.addKeys({
       up: 'W', left: 'A', down: 'S', right: 'D',
-      interact: 'E', dash: 'SPACE', q: 'Q', r: 'R', tab: 'TAB', ability: 'F'
+      interact: 'E', dash: 'SPACE', q: 'Q', r: 'R', tab: 'TAB', ability: 'F', melee: 'C'
     });
     this.pointer = scene.input.activePointer;
   }
@@ -21,6 +21,7 @@ export class InputManager {
   get pressedDash() { return Phaser.Input.Keyboard.JustDown(this.keys.dash); }
   get pressedTab() { return Phaser.Input.Keyboard.JustDown(this.keys.tab); }
   get pressedAbility() { return Phaser.Input.Keyboard.JustDown(this.keys.ability); }
+  get pressedMelee() { return Phaser.Input.Keyboard.JustDown(this.keys.melee); }
   get isLMBDown() { return this.pointer.isDown && this.pointer.buttons === 1; }
   get pressedLMB() { return !!this.pointer.justDown && this.pointer.buttons === 1; }
 }
