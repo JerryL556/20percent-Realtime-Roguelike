@@ -434,10 +434,12 @@ export default class BossScene extends Phaser.Scene {
         b.damage = weapon.damage;
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
-        b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0); b._maxTurn = Phaser.Math.DegToRad(2);
+        b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
+        // Turn rate (time-based): ~120°/s equals 2°/frame at 60 FPS
+        b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
-        if (b._smart) { const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5; b._maxTurn *= mult; b._fov = Phaser.Math.DegToRad(90); }
+        if (b._smart) { const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5; b._turnRate *= mult; b._fov = Phaser.Math.DegToRad(90); }
         b._noTurnUntil = this.time.now + 200;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
         const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
@@ -457,7 +459,8 @@ export default class BossScene extends Phaser.Scene {
                 desired = Phaser.Math.Angle.Between(b.x, b.y, tx, ty);
               }
             }
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, b._maxTurn);
+            const dt = (this.game?.loop?.delta || 16.7) / 1000;
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._turnRate || 0) * dt);
             const vx = Math.cos(b._angle) * b._speed; const vy = Math.sin(b._angle) * b._speed; b.setVelocity(vx, vy);
           } catch (_) {}
           try {
@@ -509,6 +512,18 @@ export default class BossScene extends Phaser.Scene {
           if (view && !view.contains(b.x, b.y)) {
             if (!b._mine) { try { b.destroy(); } catch (_) {} return; }
           }
+          // Napalm (MGL incendiary): add orange tracer particles behind rocket
+          try {
+            if (b._firefield) {
+              const vx0 = b.body?.velocity?.x || 0; const vy0 = b.body?.velocity?.y || 0;
+              const spd2 = (vx0*vx0 + vy0*vy0) || 0;
+              if (spd2 > 1) {
+                const back = Math.atan2(vy0, vx0) + Math.PI;
+                const ex = b.x + Math.cos(back) * 6; const ey = b.y + Math.sin(back) * 6;
+                pixelSparks(this, ex, ey, { angleRad: back, count: 2, spreadDeg: 8, speedMin: 90, speedMax: 180, lifeMs: 110, color: 0xffaa33, size: 2, alpha: 0.95 });
+              }
+            }
+          } catch (_) {}
           // Smart Explosives: proximity detection and mine behavior (boss as sole target)
           if (b._smartExplosives) {
             const detR = b._detectR || Math.max(8, Math.floor((b._blastRadius || 70) * 0.65));
@@ -613,16 +628,61 @@ export default class BossScene extends Phaser.Scene {
       b.setCircle(2).setOffset(-2, -2);
       b.setVelocity(vx, vy);
       b.damage = weapon.damage;
-      b.setTint(0xffffff);
+      // Tint: default white; Explosive Core uses orange bullets
+      if (weapon._core === 'blast') b.setTint(0xff8800); else b.setTint(0xffffff);
       b._core = weapon._core || null;
       b._igniteOnHit = weapon._igniteOnHit || 0;
       b._toxinOnHit = weapon._toxinOnHit || 0;
       b._stunOnHit = weapon._stunOnHit || 0;
       if (b._core === 'pierce') { b._pierceLeft = 1; }
-      b.setTint(0xffffff); // player bullets are white
-      b.update = () => {
-        if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy();
-      };
+      // Tracers: particles for ignite/toxin/stun; blue line for pierce; none for explosive-core bullets
+      try {
+        const tracerColor = (() => {
+          if (b._toxinOnHit > 0) return 0x33ff66; // green
+          if (b._igniteOnHit > 0) return 0xffaa33; // orange
+          if (b._stunOnHit > 0) return 0xffee66; // yellow
+          return null;
+        })();
+        if (b._core === 'pierce') {
+          const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+          b.update = () => {
+            const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+            try {
+              g.clear();
+              const vx0 = b.body?.velocity?.x || vx; const vy0 = b.body?.velocity?.y || vy;
+              const ang = Math.atan2(vy0, vx0);
+              const tail = 10;
+              const tx = b.x - Math.cos(ang) * tail; const ty = b.y - Math.sin(ang) * tail;
+              g.lineStyle(3, 0x2266ff, 0.5).beginPath().moveTo(tx, ty).lineTo(b.x, b.y).strokePath();
+              g.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx + Math.cos(ang) * 2, ty + Math.sin(ang) * 2).lineTo(b.x, b.y).strokePath();
+            } catch (_) {}
+          };
+          b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
+        } else if (tracerColor && weapon._core !== 'blast') {
+          b.update = () => {
+            const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} return; }
+            try {
+              const vx0 = b.body?.velocity?.x || vx; const vy0 = b.body?.velocity?.y || vy;
+              const back = Math.atan2(vy0, vx0) + Math.PI;
+              const ex = b.x + Math.cos(back) * 5; const ey = b.y + Math.sin(back) * 5;
+              const isIgnite = (b._igniteOnHit || 0) > 0;
+              const isToxin  = (b._toxinOnHit  || 0) > 0;
+              const isStun   = (b._stunOnHit   || 0) > 0;
+              let count = 2, size = 2, lifeMs = 100, speedMin = 90, speedMax = 180, alpha = 0.9;
+              if (isIgnite) { count = 3; size = 2; lifeMs = 120; speedMin = 100; speedMax = 200; alpha = 0.95; }
+              else if (isToxin) { count = 2; size = 2; lifeMs = 110; speedMin = 90; speedMax = 190; alpha = 0.92; }
+              else if (isStun) { count = 2; size = 2; lifeMs = 100; speedMin = 90; speedMax = 180; alpha = 0.9; }
+              pixelSparks(this, ex, ey, { angleRad: back, count, spreadDeg: 8, speedMin, speedMax, lifeMs, color: tracerColor, size, alpha });
+            } catch (_) {}
+          };
+          b.on('destroy', () => b._g?.destroy());
+        } else {
+          b.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } };
+          b.on('destroy', () => b._g?.destroy());
+        }
+      } catch (_) {
+        b.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } };
+      }
       b.on('destroy', () => b._g?.destroy());
     }
     // 2Tap Trigger: auto second shot for pistol core
@@ -664,14 +724,58 @@ export default class BossScene extends Phaser.Scene {
         b2.setActive(true).setVisible(true);
         b2.setCircle(2).setOffset(-2, -2);
         b2.setVelocity(vx, vy);
-         b2.setTint(0xffffff);
+         // Tint rules match primary
+         if (weapon._core === 'blast') b2.setTint(0xff8800); else b2.setTint(0xffffff);
          b2.damage = weapon.damage;
          b2._core = weapon._core || null;
          b2._igniteOnHit = weapon._igniteOnHit || 0;
          b2._toxinOnHit = weapon._toxinOnHit || 0;
          b2._stunOnHit = weapon._stunOnHit || 0;
          if (b2._core === 'pierce') { b2._pierceLeft = 1; }
-        b2.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} } };
+        try {
+          const tracerColor2 = (() => {
+            if (b2._toxinOnHit > 0) return 0x33ff66; // green
+            if (b2._igniteOnHit > 0) return 0xffaa33; // orange
+            if (b2._stunOnHit > 0) return 0xffee66; // yellow
+            return null;
+          })();
+          if (b2._core === 'pierce') {
+            const g2 = this.add.graphics(); b2._g = g2; try { g2.setDepth(8000); g2.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+            b2.update = () => {
+              const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} return; }
+              try {
+                g2.clear();
+                const vx0 = b2.body?.velocity?.x || vx; const vy0 = b2.body?.velocity?.y || vy;
+                const ang = Math.atan2(vy0, vx0);
+                const tail = 10; const tx = b2.x - Math.cos(ang) * tail; const ty = b2.y - Math.sin(ang) * tail;
+                g2.lineStyle(3, 0x2266ff, 0.5).beginPath().moveTo(tx, ty).lineTo(b2.x, b2.y).strokePath();
+                g2.lineStyle(1, 0xaaddff, 0.9).beginPath().moveTo(tx + Math.cos(ang) * 2, ty + Math.sin(ang) * 2).lineTo(b2.x, b2.y).strokePath();
+              } catch (_) {}
+            };
+            b2.on('destroy', () => { try { b2._g?.destroy(); } catch (_) {} });
+          } else if (tracerColor2 && weapon._core !== 'blast') {
+            b2.update = () => {
+              const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} return; }
+              try {
+                const vx0 = b2.body?.velocity?.x || vx; const vy0 = b2.body?.velocity?.y || vy;
+                const back = Math.atan2(vy0, vx0) + Math.PI;
+                const ex = b2.x + Math.cos(back) * 5; const ey = b2.y + Math.sin(back) * 5;
+                const isIgnite = (b2._igniteOnHit || 0) > 0; const isToxin = (b2._toxinOnHit || 0) > 0; const isStun = (b2._stunOnHit || 0) > 0;
+                let count = 2, size = 2, lifeMs = 100, speedMin = 90, speedMax = 180, alpha = 0.9;
+                if (isIgnite) { count = 3; size = 2; lifeMs = 120; speedMin = 100; speedMax = 200; alpha = 0.95; }
+                else if (isToxin) { count = 2; size = 2; lifeMs = 110; speedMin = 90; speedMax = 190; alpha = 0.92; }
+                else if (isStun) { count = 2; size = 2; lifeMs = 100; speedMin = 90; speedMax = 180; alpha = 0.9; }
+                pixelSparks(this, ex, ey, { angleRad: back, count, spreadDeg: 8, speedMin, speedMax, lifeMs, color: tracerColor2, size, alpha });
+              } catch (_) {}
+            };
+            b2.on('destroy', () => b2._g?.destroy());
+          } else {
+            b2.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} } };
+            b2.on('destroy', () => b2._g?.destroy());
+          }
+        } catch (_) {
+          b2.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b2.x, b2.y)) { try { b2.destroy(); } catch (_) {} } };
+        }
         b2.on('destroy', () => b2._g?.destroy());
         this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
         this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
