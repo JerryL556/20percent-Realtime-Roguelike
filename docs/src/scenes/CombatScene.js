@@ -64,9 +64,6 @@ export default class CombatScene extends Phaser.Scene {
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
-    if (this._meleeBusy && this.time.now < this._meleeBusy) {
-      // No cooldown required, but prevent double-processing within same tick
-    }
     const ptr = this.inputMgr.pointer;
     const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2);
@@ -95,7 +92,6 @@ export default class CombatScene extends Phaser.Scene {
         }
       });
     } catch (_) {}
-    this._meleeBusy = this.time.now + 50;
   }
 
   // Shared melee VFX
@@ -110,18 +106,20 @@ export default class CombatScene extends Phaser.Scene {
     const started = this.time.now;
     const drawAt = (angNow) => {
       try {
-        // Trail sector
+        // Follow caster: draw at (0,0) and position graphics at caster
+        try { gTrail.setPosition(caster.x, caster.y); g.setPosition(caster.x, caster.y); } catch (_) {}
+        // Trail sector (accumulates and follows caster)
         gTrail.fillStyle(color, 0.18);
-        gTrail.slice(caster.x, caster.y, range, start, angNow, dir > 0).fillPath();
-        // Foreground beam and faint arc
-        const hx = caster.x + Math.cos(angNow) * range;
-        const hy = caster.y + Math.sin(angNow) * range;
-        g.lineStyle(3, color, 0.95).beginPath().moveTo(caster.x, caster.y).lineTo(hx, hy).strokePath();
-        g.lineStyle(1, color, 0.5).beginPath().arc(caster.x, caster.y, range, angNow - 0.02, angNow + 0.02).strokePath();
+        gTrail.slice(0, 0, range, start, angNow, dir > 0).fillPath();
+        // Foreground beam and faint arc (relative to caster)
+        const hx = Math.cos(angNow) * range;
+        const hy = Math.sin(angNow) * range;
+        g.lineStyle(3, color, 0.95).beginPath().moveTo(0, 0).lineTo(hx, hy).strokePath();
+        g.lineStyle(1, color, 0.5).beginPath().arc(0, 0, range, angNow - 0.02, angNow + 0.02).strokePath();
         // Edge sparks (~25%)
         if (Math.random() < 0.25) {
           const back = angNow + Math.PI;
-          const ex = hx, ey = hy;
+          const ex = caster.x + hx, ey = caster.y + hy; // world coords for particles
           try { pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 10, speedMin: 120, speedMax: 220, lifeMs: 180, color, size: 2, alpha: 0.9 }); } catch (_) {}
         }
       } catch (_) {}
