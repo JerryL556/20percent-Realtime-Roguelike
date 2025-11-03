@@ -344,8 +344,12 @@ export default class BossScene extends Phaser.Scene {
     const dur = Math.max(1, (durationMs | 0) || 100);
     const guardFan = this.time.delayedCall(dur, cleanupFan);
     caster._meleeFan = { g, guard: guardFan, cleanup: cleanupFan };
-    // Remove any prior swinging line overlay if present
-    try { if (caster._meleeLine?.g) { caster._meleeLine.g.destroy(); } caster._meleeLine = null; } catch (_) {}
+    // Remove any prior swinging line overlay if present (ensure listener removal)
+    try {
+      if (caster._meleeLine?.cleanup) { caster._meleeLine.cleanup(); }
+      else if (caster._meleeLine?.g) { caster._meleeLine.g.destroy(); }
+      caster._meleeLine = null;
+    } catch (_) {}
 
     // Add a bright additive "beam" line that sweeps across the melee fan during the swing (parity with CombatScene)
     try {
@@ -360,6 +364,8 @@ export default class BossScene extends Phaser.Scene {
       let lastSparkAt = 0;
       const updateBeam = () => {
         try {
+          if (!caster?.active) { cleanupBeam(); return; }
+          // Follow caster
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);

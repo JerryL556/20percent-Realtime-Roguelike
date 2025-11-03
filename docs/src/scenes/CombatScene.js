@@ -103,7 +103,10 @@ export default class CombatScene extends Phaser.Scene {
 
   // Shared melee VFX: simple transparent fan (sector) showing affected area; follows caster position
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
-    try { if (caster._meleeFan?.g) { caster._meleeFan.g.destroy(); } } catch (_) {}
+    try {
+      if (caster._meleeFan?.cleanup) { caster._meleeFan.cleanup(); }
+      else if (caster._meleeFan?.g) { caster._meleeFan.g.destroy(); }
+    } catch (_) {}
     const g = this.add.graphics({ x: caster.x, y: caster.y });
     try { g.setDepth(9000); } catch (_) {}
     const half = Phaser.Math.DegToRad(totalDeg / 2);
@@ -126,8 +129,12 @@ export default class CombatScene extends Phaser.Scene {
     const dur = Math.max(1, (durationMs | 0) || 100);
     const guardFan = this.time.delayedCall(dur, cleanupFan);
     caster._meleeFan = { g, guard: guardFan, cleanup: cleanupFan };
-    // Remove any prior swinging line overlay if present
-    try { if (caster._meleeLine?.g) { caster._meleeLine.g.destroy(); } caster._meleeLine = null; } catch (_) {}
+    // Remove any prior swinging line overlay if present (ensure listener removal)
+    try {
+      if (caster._meleeLine?.cleanup) { caster._meleeLine.cleanup(); }
+      else if (caster._meleeLine?.g) { caster._meleeLine.g.destroy(); }
+      caster._meleeLine = null;
+    } catch (_) {}
 
     // Add a bright additive "beam" line that sweeps across the melee fan during the swing
     try {
@@ -143,6 +150,7 @@ export default class CombatScene extends Phaser.Scene {
       let lastSparkAt = 0;
       const updateBeam = () => {
         try {
+          if (!caster?.active) { cleanupBeam(); return; }
           // Follow caster
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
