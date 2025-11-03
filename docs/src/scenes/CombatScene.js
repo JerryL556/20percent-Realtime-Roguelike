@@ -101,6 +101,28 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
+
+  // Centralized damage application that respects Energy Shield and overrun
+  applyPlayerDamage(amount) {
+    try {
+      const gs = this.gs; if (!gs) return;
+      const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
+      let remaining = dmg;
+      const s = Math.max(0, Math.floor(gs.shield || 0));
+      if (s > 0) {
+        const absorbed = Math.min(s, remaining);
+        gs.shield = s - absorbed;
+        remaining -= absorbed;
+      }
+      if (remaining > 0) {
+        if (gs.allowOverrun !== false) {
+          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
+        }
+      }
+      gs.lastDamagedAt = this.time.now;
+    } catch (_) {}
+  }
+
   // Shared melee VFX: simple transparent fan (sector) showing affected area; follows caster position
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     try {
