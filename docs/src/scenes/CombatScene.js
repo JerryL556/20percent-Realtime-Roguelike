@@ -1,4 +1,4 @@
-ï»¿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -60,7 +60,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150Â° cone, 48px range, 10 damage
+  // Player melee implementation: 150¡ã cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -98,6 +98,28 @@ export default class CombatScene extends Phaser.Scene {
           }
         });
       });
+    } catch (_) {}
+  }
+
+
+  // Centralized damage application that respects Energy Shield and overrun
+  applyPlayerDamage(amount) {
+    try {
+      const gs = this.gs; if (!gs) return;
+      const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
+      let remaining = dmg;
+      const s = Math.max(0, Math.floor(gs.shield || 0));
+      if (s > 0) {
+        const absorbed = Math.min(s, remaining);
+        gs.shield = s - absorbed;
+        remaining -= absorbed;
+      }
+      if (remaining > 0) {
+        if (gs.allowOverrun !== false) {
+          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
+        }
+      }
+      gs.lastDamagedAt = this.time.now;
     } catch (_) {}
   }
 
@@ -157,7 +179,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180Â°, safe for lerp)
+          // Linear interpolate angles (range is <= 180¡ã, safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -241,6 +263,12 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
+    this.gs = this.registry.get('gameState');
+    // Ensure shield is full on scene start
+    try {
+      if (typeof this.gs.shieldMax !== "number") this.gs.shieldMax = 20;
+      this.gs.shield = this.gs.shieldMax;
+    } catch (_) {}
     this.inputMgr = new InputManager(this);
 
     // Player
@@ -283,6 +311,17 @@ export default class CombatScene extends Phaser.Scene {
         // Always try to sync texture in case it finished loading after create
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
+        // Shield regeneration (regens even from 0 after a delay)
+        try {
+          const gs = this.gs; if (!gs) return;
+          const now = this.time.now;
+          const since = now - (gs.lastDamagedAt || 0);
+          if (since >= (gs.shieldRegenDelayMs || 3000) && (gs.shield || 0) < (gs.shieldMax || 0)) {
+            const dt = ((this.game?.loop?.delta) || 16) / 1000;
+            const inc = (gs.shieldRegenPerSec || 0) * dt;
+            gs.shield = Math.min((gs.shield || 0) + inc, (gs.shieldMax || 0));
+          }
+        } catch (_) {}
       });
     } catch (_) {}
 
@@ -627,7 +666,7 @@ export default class CombatScene extends Phaser.Scene {
       // Melee enemies do not apply touch damage; only their cone hit can damage
       if (e?.isMelee) return;
       if (this.time.now < this.player.iframesUntil) return;
-      this.gs.hp -= e.damage;
+      this.applyPlayerDamage(e.damage);
       this.player.iframesUntil = this.time.now + 600;
       if (this.gs.hp <= 0) {
         // For framework: respawn at hub
@@ -662,7 +701,7 @@ export default class CombatScene extends Phaser.Scene {
         const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2 && !inIframes) {
           const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12;
-          this.gs.hp -= dmg;
+          this.applyPlayerDamage(dmg);
           this.player.iframesUntil = this.time.now + 600;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
@@ -680,7 +719,7 @@ export default class CombatScene extends Phaser.Scene {
       }
       if (!inIframes) {
         const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; // default shooter damage
-        this.gs.hp -= dmg;
+        this.applyPlayerDamage(dmg);
         this.player.iframesUntil = this.time.now + 600;
         if (this.gs.hp <= 0) {
           const eff = getPlayerEffects(this.gs);
@@ -743,7 +782,7 @@ export default class CombatScene extends Phaser.Scene {
         if ((pdx * pdx + pdy * pdy) <= r2) {
           const now = this.time.now;
           if (now >= (this.player.iframesUntil || 0)) {
-            this.gs.hp -= (e.damage || 14);
+            this.applyPlayerDamage((e.damage || 14));
             this.player.iframesUntil = now + 600;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
@@ -898,7 +937,7 @@ export default class CombatScene extends Phaser.Scene {
         const now = this.time.now;
         if (now >= (this.player.iframesUntil || 0)) {
           const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 14;
-          this.gs.hp -= dmg;
+          this.applyPlayerDamage(dmg);
           this.player.iframesUntil = now + 600;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
@@ -1000,7 +1039,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2æŽ³/frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Â°/frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1064,8 +1103,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1æŽ³/frame
-          b._fov = Phaser.Math.DegToRad(90); // 90æŽ³ cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1Â°/frame
+          b._fov = Phaser.Math.DegToRad(90); // 90Â° cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1090,7 +1129,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45æŽ³ half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45Â° half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2631,7 +2670,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150Â°, 48px, 10 dmg
+    // Player melee: C key, 150¡ã, 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -2713,7 +2752,7 @@ export default class CombatScene extends Phaser.Scene {
                 const angP = Math.atan2(pdy, pdx);
                 const diff = Math.abs(Phaser.Math.Angle.Wrap(angP - (e._meleeFacing || 0)));
                 if (dd <= cfg.range && diff <= cfg.half && !e._meleeDidHit) {
-                  this.gs.hp -= (e.damage || 10);
+                  this.applyPlayerDamage((e.damage || 10));
                   this.player.iframesUntil = this.time.now + 600;
                   try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
                   e._meleeDidHit = true;
@@ -2911,7 +2950,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors éˆ¥?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors â€?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -3218,7 +3257,7 @@ export default class CombatScene extends Phaser.Scene {
                     const inIframes = this.time.now < this.player.iframesUntil;
                     if (!inIframes) {
                       const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
-                      this.gs.hp -= dmg;
+                      this.applyPlayerDamage(dmg);
                       this.player.iframesUntil = this.time.now + 600;
                       if (this.gs.hp <= 0) {
                         const eff = getPlayerEffects(this.gs);
@@ -3351,7 +3390,7 @@ export default class CombatScene extends Phaser.Scene {
         const r2 = radius * radius; const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2) {
           if (now >= (this.player.iframesUntil || 0)) {
-            this.gs.hp -= (e.damage || 14);
+            this.applyPlayerDamage((e.damage || 14));
             this.player.iframesUntil = now + 600;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
@@ -3398,7 +3437,7 @@ export default class CombatScene extends Phaser.Scene {
         if (damagePlayer && Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
           if (this.time.now >= (this.player.iframesUntil || 0)) {
             const dmg = Math.max(1, Math.round(dps * tick));
-            this.gs.hp -= dmg;
+            this.applyPlayerDamage(dmg);
             this.player.iframesUntil = this.time.now + 250; // brief i-frames vs continuous laser
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
@@ -4015,6 +4054,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 
