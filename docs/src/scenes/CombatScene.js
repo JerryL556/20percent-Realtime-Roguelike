@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+ï»¿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -60,7 +60,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150¡ã cone, 48px range, 10 damage
+  // Player melee implementation: 150Â° cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -179,7 +179,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180¡ã, safe for lerp)
+          // Linear interpolate angles (range is <= 180Â°, safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -312,6 +312,44 @@ export default class CombatScene extends Phaser.Scene {
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
         // Shield regeneration (regens even from 0 after a delay)
+        // Shield VFX: subtle blue ring when shield > 0; break animation on 0
+        try {
+          const gs = this.gs; if (!gs || !this.player) return;
+          const hasShield = (gs.shield || 0) > 0.0001;
+          if (hasShield) {
+            if (!this._shieldRingG || !this._shieldRingG.active) {
+              this._shieldRingG = this.add.graphics({ x: this.player.x, y: this.player.y });
+              try { this._shieldRingG.setDepth(8800); } catch (_) {}
+              try { this._shieldRingG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+            }
+            const g = this._shieldRingG; g.clear();
+            const t = (this.time.now % 1000) / 1000;
+            const radius = 9 + Math.sin(t * Math.PI * 2) * 0.6;
+            const alpha = 0.25 + Math.sin(t * Math.PI * 2) * 0.05;
+            g.lineStyle(2, 0x66ccff, 0.9).strokeCircle(0, 0, radius);
+            g.lineStyle(1, 0x99ddff, 0.6).strokeCircle(0, 0, Math.max(7.5, radius - 1.5));
+            try { g.setAlpha(alpha); } catch (_) {}
+            g.x = this.player.x; g.y = this.player.y;
+          } else {
+            if (this._shieldRingG) {
+              const old = this._shieldRingG; this._shieldRingG = null;
+              try {
+                this.tweens.add({ targets: old, alpha: 0, scale: 1.4, duration: 160, ease: 'Cubic.Out', onComplete: () => { try { old.destroy(); } catch (_) {} } });
+              } catch (_) { try { old.destroy(); } catch (_) {} }
+              try {
+                const cx = this.player.x, cy = this.player.y;
+                for (let i = 0; i < 12; i += 1) {
+                  const a = (i / 12) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
+                  pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 10, speedMin: 140, speedMax: 240, lifeMs: 220, color: 0x66ccff, size: 2, alpha: 0.95 });
+                }
+                const br = this.add.graphics({ x: cx, y: cy });
+                try { br.setDepth(8800); br.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+                br.lineStyle(2, 0x66ccff, 0.8).strokeCircle(0, 0, 8);
+                this.tweens.add({ targets: br, alpha: 0, scale: 1.8, duration: 220, ease: 'Cubic.Out', onComplete: () => { try { br.destroy(); } catch (_) {} } });
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
         try {
           const gs = this.gs; if (!gs) return;
           const now = this.time.now;
@@ -1039,7 +1077,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Â°/frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2æŽ³/frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1103,8 +1141,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1Â°/frame
-          b._fov = Phaser.Math.DegToRad(90); // 90Â° cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1æŽ³/frame
+          b._fov = Phaser.Math.DegToRad(90); // 90æŽ³ cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1129,7 +1167,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45Â° half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45æŽ³ half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2670,7 +2708,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150¡ã, 48px, 10 dmg
+    // Player melee: C key, 150Â°, 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -2950,7 +2988,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors â€?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors éˆ¥?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}

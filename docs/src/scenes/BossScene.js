@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+ï»¿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -44,6 +44,44 @@ export default class BossScene extends Phaser.Scene {
         updateWeaponSprite(this);
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
+        // Shield VFX: subtle blue ring when shield > 0; break animation on 0
+        try {
+          const gs = this.gs; if (!gs || !this.player) return;
+          const hasShield = (gs.shield || 0) > 0.0001;
+          if (hasShield) {
+            if (!this._shieldRingG || !this._shieldRingG.active) {
+              this._shieldRingG = this.add.graphics({ x: this.player.x, y: this.player.y });
+              try { this._shieldRingG.setDepth(8800); } catch (_) {}
+              try { this._shieldRingG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+            }
+            const g = this._shieldRingG; g.clear();
+            const t = (this.time.now % 1000) / 1000;
+            const radius = 9 + Math.sin(t * Math.PI * 2) * 0.6;
+            const alpha = 0.25 + Math.sin(t * Math.PI * 2) * 0.05;
+            g.lineStyle(2, 0x66ccff, 0.9).strokeCircle(0, 0, radius);
+            g.lineStyle(1, 0x99ddff, 0.6).strokeCircle(0, 0, Math.max(7.5, radius - 1.5));
+            try { g.setAlpha(alpha); } catch (_) {}
+            g.x = this.player.x; g.y = this.player.y;
+          } else {
+            if (this._shieldRingG) {
+              const old = this._shieldRingG; this._shieldRingG = null;
+              try {
+                this.tweens.add({ targets: old, alpha: 0, scale: 1.4, duration: 160, ease: 'Cubic.Out', onComplete: () => { try { old.destroy(); } catch (_) {} } });
+              } catch (_) { try { old.destroy(); } catch (_) {} }
+              try {
+                const cx = this.player.x, cy = this.player.y;
+                for (let i = 0; i < 12; i += 1) {
+                  const a = (i / 12) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
+                  pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 10, speedMin: 140, speedMax: 240, lifeMs: 220, color: 0x66ccff, size: 2, alpha: 0.95 });
+                }
+                const br = this.add.graphics({ x: cx, y: cy });
+                try { br.setDepth(8800); br.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+                br.lineStyle(2, 0x66ccff, 0.8).strokeCircle(0, 0, 8);
+                this.tweens.add({ targets: br, alpha: 0, scale: 1.8, duration: 220, ease: 'Cubic.Out', onComplete: () => { try { br.destroy(); } catch (_) {} } });
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
         // Player melee parity with Combat: check input each frame
         try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
         // Shield regeneration (regens even from 0 after a delay)
@@ -310,7 +348,7 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150é—? 48px, 10 dmg
+  // Player melee (same as Combat): 150é—‚? 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
@@ -583,7 +621,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—‚?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -629,7 +667,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120é—?s equals 2é—?frame at 60 FPS
+        // Turn rate (time-based): ~120é—‚?s equals 2é—‚?frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
