@@ -362,6 +362,7 @@ export default class BossScene extends Phaser.Scene {
       const endAt = startAt + dur;
       const thick = Math.max(2, Math.floor(r * 0.08));
       let lastSparkAt = 0;
+      let lastBurstAt = 0;
       let lastAng = start;
       const updateBeam = () => {
         try {
@@ -384,7 +385,7 @@ export default class BossScene extends Phaser.Scene {
           beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX * 0.85, tipY * 0.85); beam.strokePath();
           beam.fillStyle(col, 0.85).fillCircle(tipX, tipY, Math.max(2, Math.floor(thick * 0.6)));
           // Particle trail: follow beam tip and spray opposite to sweep movement direction
-          if (!lastSparkAt || (now - lastSparkAt > 20)) {
+          if (!lastSparkAt || (now - lastSparkAt > 14)) {
             lastSparkAt = now;
             const dAng = Phaser.Math.Angle.Wrap(cur - lastAng);
             const sprayDir = cur + (dAng >= 0 ? -Math.PI / 2 : Math.PI / 2);
@@ -392,11 +393,30 @@ export default class BossScene extends Phaser.Scene {
             try {
               pixelSparks(this, caster.x + tipX, caster.y + tipY, {
                 angleRad: sprayDir,
-                count: 2,
-                spreadDeg: 26,
+                count: 4,
+                spreadDeg: 28,
                 speedMin: 200,
-                speedMax: 340,
-                lifeMs: 220,
+                speedMax: 360,
+                lifeMs: 230,
+                color: col,
+                size: 2,
+                alpha: 0.95,
+              });
+            } catch (_) {}
+          }
+          // Periodic mini-burst for extra intensity
+          if (!lastBurstAt || (now - lastBurstAt > 60)) {
+            lastBurstAt = now;
+            const dAng = Phaser.Math.Angle.Wrap(cur - lastAng);
+            const sprayDir = cur + (dAng >= 0 ? -Math.PI / 2 : Math.PI / 2);
+            try {
+              pixelSparks(this, caster.x + tipX, caster.y + tipY, {
+                angleRad: sprayDir,
+                count: 6,
+                spreadDeg: 36,
+                speedMin: 220,
+                speedMax: 380,
+                lifeMs: 260,
                 color: col,
                 size: 2,
                 alpha: 0.95,
