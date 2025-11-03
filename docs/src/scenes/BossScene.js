@@ -19,6 +19,9 @@ export default class BossScene extends Phaser.Scene {
     // Ensure UI overlay is active during boss fight
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
+    this.gs = this.registry.get('gameState');
+    // Initialize shield defaults if missing
+    try { if (typeof this.gs.shieldMax !== 'number') this.gs.shieldMax = 20; if (typeof this.gs.shield !== 'number') this.gs.shield = this.gs.shieldMax; if (typeof this.gs.shieldRegenPerSec !== 'number') this.gs.shieldRegenPerSec = 6; if (typeof this.gs.shieldRegenDelayMs !== 'number') this.gs.shieldRegenDelayMs = 1500; if (typeof this.gs.lastDamagedAt !== 'number') this.gs.lastDamagedAt = 0; if (typeof this.gs.allowOverrun !== 'boolean') this.gs.allowOverrun = true; } catch (_) {}
     this.inputMgr = new InputManager(this);
 
     // Player
@@ -37,8 +40,7 @@ export default class BossScene extends Phaser.Scene {
       this.events.on('update', () => {
         updateWeaponSprite(this);
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
-        this._lastActiveWeapon = this.gs?.activeWeapon;
-        // Player melee parity with Combat: check input each frame
+                try { const gs = this.gs; if (gs) { const now = this.time.now; const since = now - (gs.lastDamagedAt || 0); if (since >= (gs.shieldRegenDelayMs || 1500) && (gs.shield || 0) < (gs.shieldMax || 0)) { const inc = (gs.shieldRegenPerSec || 0) / 60; gs.shield = Math.min(gs.shield + inc, gs.shieldMax || gs.shield); } } } catch (_) {}\r\n        // Player melee parity with Combat: check input each frame
         try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
       });
     } catch (_) {}
@@ -146,7 +148,7 @@ export default class BossScene extends Phaser.Scene {
     // Basic overlap damage
     this.physics.add.overlap(this.player, this.boss, () => {
       if (this.time.now < this.player.iframesUntil) return;
-      this.gs.hp -= this.boss.damage;
+      this.applyPlayerDamage(this.boss.damage);
       this.player.iframesUntil = this.time.now + 700;
       // Universal hit VFX when boss overlaps (melee) player
       try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
@@ -260,7 +262,7 @@ export default class BossScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.bossBullets, (p, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
       if (!inIframes) {
-        this.gs.hp -= 10; // boss bullet damage
+        this.applyPlayerDamage(10); // boss bullet damage
         this.player.iframesUntil = this.time.now + 600;
         if (this.gs.hp <= 0) {
           const eff = getPlayerEffects(this.gs);
@@ -293,13 +295,33 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150é—? 48px, 10 dmg
+  // Player melee (same as Combat): 150é—? 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
-    try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
+    try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); }
+  // Centralized damage application that respects Energy Shield and overrun
+  applyPlayerDamage(amount) {
+    try {
+      const gs = this.gs; if (!gs) return;
+      const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
+      let remaining = dmg;
+      const s = Math.max(0, Math.floor(gs.shield || 0));
+      if (s > 0) {
+        const absorbed = Math.min(s, remaining);
+        gs.shield = s - absorbed;
+        remaining -= absorbed;
+      }
+      if (remaining > 0) {
+        if (gs.allowOverrun !== false) {
+          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
+        }
+      }
+      gs.lastDamagedAt = this.time.now;
+    } catch (_) {}
+  } catch (_) {}
     // Damage boss mid-swing (~60ms), mirroring enemy timing
     this.time.delayedCall(60, () => {
       const e = this.boss;
@@ -544,7 +566,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—‚?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -590,7 +612,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120é—?s equals 2é—?frame at 60 FPS
+        // Turn rate (time-based): ~120é—?s equals 2é—?frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
@@ -1668,7 +1690,7 @@ export default class BossScene extends Phaser.Scene {
                 const line = new Phaser.Geom.Line(ds.lastX ?? this.boss.x, ds.lastY ?? this.boss.y, this.boss.x, this.boss.y);
                 const rect = this.player.getBounds();
                 if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
-                  if (time >= (this.player.iframesUntil || 0)) { this.gs.hp -= (this.boss.dashDamage || 20); this.player.iframesUntil = time + 600; }
+                  if (time >= (this.player.iframesUntil || 0)) { this.applyPlayerDamage((this.boss.dashDamage || 20)); this.player.iframesUntil = time + 600; }
                 }
                 const arr = this.barricadesSoft?.getChildren?.() || [];
                 for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const r = s.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, r)) { try { s.destroy(); } catch (_) {} } }
@@ -2007,7 +2029,7 @@ export default class BossScene extends Phaser.Scene {
         const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2) {
           if (now >= this.player.iframesUntil) {
-            this.gs.hp -= (this.boss.damage || 20);
+            this.applyPlayerDamage((this.boss.damage || 20));
             this.player.iframesUntil = now + 500;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
@@ -2332,6 +2354,9 @@ export default class BossScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
+
 
 
 

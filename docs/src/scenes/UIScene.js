@@ -1,5 +1,6 @@
 import { SceneKeys } from '../core/SceneKeys.js';
 import { HpBar } from '../ui/HpBar.js';
+import { ShieldBar } from '../ui/ShieldBar.js';
 import { DashBar } from '../ui/DashBar.js';
 import { HeatBar } from '../ui/HeatBar.js';
 import { makeTextButton } from '../ui/Buttons.js';
@@ -18,6 +19,8 @@ export default class UIScene extends Phaser.Scene {
     const uiHpY = Math.max(12, height - 28);
     const uiDashY = Math.max(8, height - 22);
     const dashXStart = 16 + 180 + 20;
+    // Shield bar sits above HP bar (same width, thinner)
+    this.shieldBar = new ShieldBar(this, 16, uiHpY - 6, 180, 6);
     this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     this.dashBar = new DashBar(this, dashXStart, uiDashY, 14, 4);
@@ -66,6 +69,7 @@ export default class UIScene extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys({ tab: 'TAB' });
 
     this.events.on('shutdown', () => {
+      this.shieldBar.destroy();
       this.hpBar.destroy();
       this.dashBar.destroy();
       this.closeLoadout();
@@ -79,6 +83,10 @@ export default class UIScene extends Phaser.Scene {
       const eff = getPlayerEffects(gs);
       const effectiveMax = (gs.maxHp || 0) + (eff.bonusHp || 0);
       this.hpBar.draw(gs.hp, effectiveMax);
+      // Draw shield above HP (use gs.shield/shieldMax)
+      const sCur = Math.max(0, Math.floor(gs.shield || 0));
+      const sMax = Math.max(0, Math.floor(gs.shieldMax || 0));
+      this.shieldBar.draw(sCur, sMax);
       this.goldText.setText(`Gold: ${gs.gold}`);
       const wName = (getWeaponById(gs.activeWeapon)?.name || gs.activeWeapon);
       this.weaponText.setText(`Weapon: ${wName}`);

@@ -24,6 +24,13 @@ export class GameState {
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
+    // Energy Shield
+    this.shieldMax = 20;
+    this.shield = 20;
+    this.shieldRegenPerSec = 6; // points per second
+    this.shieldRegenDelayMs = 1500; // delay before regen starts
+    this.lastDamagedAt = 0; // timestamp when last damaged (ms)
+    this.allowOverrun = true; // leftover damage spills to HP
     // Equipment & loadout
     // Two weapon slots; active is the one currently used for shooting
     this.ownedWeapons = ['pistol'];
@@ -58,6 +65,12 @@ export class GameState {
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
+    this.shieldMax = 20;
+    this.shield = 20;
+    this.shieldRegenPerSec = 6;
+    this.shieldRegenDelayMs = 1500;
+    this.lastDamagedAt = 0;
+    this.allowOverrun = true;
     this.ownedWeapons = ['pistol'];
     this.equippedWeapons = ['pistol', null];
     this.activeWeapon = 'pistol';
@@ -153,6 +166,12 @@ export class GameState {
       xp: this.xp,
       maxHp: this.maxHp,
       hp: this.hp,
+      shieldMax: this.shieldMax,
+      shield: this.shield,
+      shieldRegenPerSec: this.shieldRegenPerSec,
+      shieldRegenDelayMs: this.shieldRegenDelayMs,
+      lastDamagedAt: this.lastDamagedAt,
+      allowOverrun: this.allowOverrun,
       ownedWeapons: this.ownedWeapons,
       equippedWeapons: this.equippedWeapons,
       activeWeapon: this.activeWeapon,
@@ -190,6 +209,13 @@ export class GameState {
     if (!Array.isArray(gs.bossRushQueue)) gs.bossRushQueue = [];
     if (!('lastBossType' in gs)) gs.lastBossType = null;
     if (!gs.abilityId) gs.abilityId = 'ads';
+    // Ensure shield defaults
+    if (typeof gs.shieldMax !== 'number') gs.shieldMax = 20;
+    if (typeof gs.shield !== 'number') gs.shield = Math.min(gs.shieldMax, 20);
+    if (typeof gs.shieldRegenPerSec !== 'number') gs.shieldRegenPerSec = 6;
+    if (typeof gs.shieldRegenDelayMs !== 'number') gs.shieldRegenDelayMs = 1500;
+    if (typeof gs.lastDamagedAt !== 'number') gs.lastDamagedAt = 0;
+    if (typeof gs.allowOverrun !== 'boolean') gs.allowOverrun = true;
     return gs;
   }
 }
