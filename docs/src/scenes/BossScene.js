@@ -293,7 +293,7 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150¡ã, 48px, 10 dmg
+  // Player melee (same as Combat): 150æŽ³, 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
@@ -368,8 +368,12 @@ export default class BossScene extends Phaser.Scene {
           const tipY = Math.sin(cur) * r;
           beam.clear();
           beam.lineStyle(thick, col, 0.95);
-          beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX, tipY); beam.strokePath();
-          beam.lineStyle(Math.max(1, thick - 1), 0xffffdd, 0.95);
+          
+          // White base segment for clarity near origin (about one-third of length)
+          const baseFrac = 0.35;
+          beam.lineStyle(Math.max(1, thick - 1), 0xffffee, 0.98);
+          beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX * baseFrac, tipY * baseFrac); beam.strokePath();
+          beam.lineStyle(Math.max(1, thick - 1), col, 0.95);
           beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX * 0.85, tipY * 0.85); beam.strokePath();
           beam.fillStyle(col, 0.85).fillCircle(tipX, tipY, Math.max(2, Math.floor(thick * 0.6)));
           if (!lastSparkAt || (now - lastSparkAt > 30)) {
@@ -497,7 +501,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Â°/frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2éŽº?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -543,7 +547,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120¡ã/s equals 2¡ã/frame at 60 FPS
+        // Turn rate (time-based): ~120æŽ³/s equals 2æŽ³/frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
