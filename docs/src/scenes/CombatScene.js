@@ -70,7 +70,7 @@ export default class CombatScene extends Phaser.Scene {
     const range = 48;
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
-    try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); }
+    try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
     // Damage check against enemies (mid-swing ~60ms to match enemy timing)
     try {
       this.time.delayedCall(60, () => {
@@ -4033,6 +4033,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
