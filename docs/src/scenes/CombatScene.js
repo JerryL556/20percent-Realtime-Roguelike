@@ -70,7 +70,6 @@ export default class CombatScene extends Phaser.Scene {
     const range = 48;
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
-     param($m) "$($m.Value) catch (_) {}" 
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); }
     // Damage check against enemies (mid-swing ~60ms to match enemy timing)
     try {
@@ -2724,7 +2723,6 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) {
               // Start sweep
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
-               param($m) "$($m.Value) catch (_) {}"  catch (_) {}
               // Schedule mid-sweep damage check at ~60ms
               this.time.delayedCall(60, () => {
                 if (!e.active || e._mState !== 'sweep') return;
