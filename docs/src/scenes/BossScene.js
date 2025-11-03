@@ -296,31 +296,12 @@ export default class BossScene extends Phaser.Scene {
   }
 
   // Player melee (same as Combat): 150闂? 48px, 10 dmg
-  performPlayerMelee() {
+    performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
-  // Centralized damage application that respects Energy Shield and overrun
-  applyPlayerDamage(amount) {
-    try {
-      const gs = this.gs; if (!gs) return;
-      const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
-      let remaining = dmg;
-      const s = Math.max(0, Math.floor(gs.shield || 0));
-      if (s > 0) {
-        const absorbed = Math.min(s, remaining);
-        gs.shield = s - absorbed;
-        remaining -= absorbed;
-      }
-      if (remaining > 0) {
-        if (gs.allowOverrun !== false) {
-          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
-        }
-      }
-      gs.lastDamagedAt = this.time.now;
-    } catch (_) {}
     // Damage boss mid-swing (~60ms), mirroring enemy timing
     this.time.delayedCall(60, () => {
       const e = this.boss;
@@ -332,15 +313,12 @@ export default class BossScene extends Phaser.Scene {
           if (diff <= half) {
             if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
             e.hp -= 10; if (e.hp <= 0) this.killBoss(e);
-            // Universal melee hit VFX on boss
             try { impactBurst(this, e.x, e.y, { color: 0xffffff, size: 'small' }); } catch (_) {}
           }
         }
       }
     });
   }
-
-  // Shared melee VFX: simple transparent fan (sector) showing affected area; follows caster position
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     try { if (caster._meleeFan?.g) { caster._meleeFan.g.destroy(); } } catch (_) {}
     const g = this.add.graphics({ x: caster.x, y: caster.y });
