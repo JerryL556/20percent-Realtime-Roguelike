@@ -1,4 +1,4 @@
-ï»¿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -32,6 +32,16 @@ export default class BossScene extends Phaser.Scene {
     this.registry.set('dashRegenProgress', 1);
     // Weapon visuals (match CombatScene)
     try { createPlayerWeaponSprite(this); } catch (_) {}
+    // Keep weapon sprite updated every frame (follows player even if boss is stunned)
+    try {
+      this.events.on('update', () => {
+        updateWeaponSprite(this);
+        if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
+        this._lastActiveWeapon = this.gs?.activeWeapon;
+        // Player melee parity with Combat: check input each frame
+        try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
+      });
+    } catch (_) {}
 
     // Ammo tracking per-weapon for this scene
     this._lastActiveWeapon = this.gs.activeWeapon;
@@ -138,6 +148,8 @@ export default class BossScene extends Phaser.Scene {
       if (this.time.now < this.player.iframesUntil) return;
       this.gs.hp -= this.boss.damage;
       this.player.iframesUntil = this.time.now + 700;
+      // Universal hit VFX when boss overlaps (melee) player
+      try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
       if (this.gs.hp <= 0) {
         const eff = getPlayerEffects(this.gs);
         this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -281,56 +293,100 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150Â°, 48px, 10 dmg
+  // Player melee (same as Combat): 150¡ã, 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
-    try { this.spawnMeleeVfx(caster, ang, totalDeg, 100, 0xffffff, range, this._meleeAlt); } catch (_) {}
-    // Damage boss if within cone
-    const e = this.boss;
-    if (e && e.active) {
-      const dx = e.x - caster.x; const dy = e.y - caster.y; const d = Math.hypot(dx, dy) || 1;
-      const pad = (e.body?.halfWidth || 12);
-      if (d <= (range + pad)) {
-        const dir = Math.atan2(dy, dx); const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
-        if (diff <= half) {
-          if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
-          e.hp -= 10; if (e.hp <= 0) this.killBoss(e);
+    // Simple transparent fan to indicate affected area (white)
+    try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
+    // Damage boss mid-swing (~60ms), mirroring enemy timing
+    this.time.delayedCall(60, () => {
+      const e = this.boss;
+      if (e && e.active && caster?.active) {
+        const dx = e.x - caster.x; const dy = e.y - caster.y; const d = Math.hypot(dx, dy) || 1;
+        const pad = (e.body?.halfWidth || 12);
+        if (d <= (range + pad)) {
+          const dir = Math.atan2(dy, dx); const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
+          if (diff <= half) {
+            if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
+            e.hp -= 10; if (e.hp <= 0) this.killBoss(e);
+            // Universal melee hit VFX on boss
+            try { impactBurst(this, e.x, e.y, { color: 0xffffff, size: 'small' }); } catch (_) {}
+          }
         }
       }
-    }
+    });
   }
 
-  // Shared melee VFX: single moving beam that follows caster (no trail)
+  // Shared melee VFX: simple transparent fan (sector) showing affected area; follows caster position
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
-    const half = Phaser.Math.DegToRad(totalDeg / 2);
-    const dir = altStart ? -1 : 1;
-    const start = baseAngle + (altStart ? half : -half);
-    const startedAt = this.time.now;
+    try { if (caster._meleeFan?.g) { caster._meleeFan.g.destroy(); } } catch (_) {}
     const g = this.add.graphics({ x: caster.x, y: caster.y });
-    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-    const onUpdate = () => {
-      const now = this.time.now; const t = Math.min(1, (now - startedAt) / Math.max(1, durationMs));
-      const angNow = start + dir * (t * (2 * half));
-      try {
-        g.setPosition(caster.x, caster.y);
-        g.clear();
-        const len = Math.max(1, range | 0);
-        const hx = Math.cos(angNow) * len;
-        const hy = Math.sin(angNow) * len;
-        g.lineStyle(4, (color ?? 0xffffff), 0.98);
-        g.beginPath(); g.moveTo(0, 0); g.lineTo(hx, hy); g.strokePath();
-        g.lineStyle(2, 0xffffff, 0.95);
-        g.beginPath(); g.moveTo(0, 0); g.lineTo(hx * 0.85, hy * 0.85); g.strokePath();
-        g.fillStyle((color ?? 0xffffff), 0.85).fillCircle(0, 0, 2);
-      } catch (_) {}
-      if (t >= 1) {
-        this.events.off('update', onUpdate, this);
-        try { g.destroy(); } catch (_) {}
-      }
-    };
+    try { g.setDepth(9000); } catch (_) {}
+    const half = Phaser.Math.DegToRad(totalDeg / 2);
+    const a1 = baseAngle - half;
+    const a2 = baseAngle + half;
+    const r = Math.max(1, Math.floor(range));
+    const col = (typeof color === 'number') ? color : 0xffffff;
+    const alpha = 0.22;
+    try {
+      g.fillStyle(col, alpha);
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.arc(0, 0, r, a1, a2, false);
+      g.closePath();
+      g.fillPath();
+    } catch (_) {}
+    const onUpdate = () => { try { g.x = caster.x; g.y = caster.y; } catch (_) {} };
     this.events.on('update', onUpdate, this);
+    const cleanupFan = () => { try { this.events.off('update', onUpdate, this); } catch (_) {} try { g.destroy(); } catch (_) {} caster._meleeFan = null; };
+    const dur = Math.max(1, (durationMs | 0) || 100);
+    const guardFan = this.time.delayedCall(dur, cleanupFan);
+    caster._meleeFan = { g, guard: guardFan, cleanup: cleanupFan };
+    // Remove any prior swinging line overlay if present
+    try { if (caster._meleeLine?.g) { caster._meleeLine.g.destroy(); } caster._meleeLine = null; } catch (_) {}
+
+    // Add a bright additive "beam" line that sweeps across the melee fan during the swing (parity with CombatScene)
+    try {
+      const beam = this.add.graphics({ x: caster.x, y: caster.y });
+      try { beam.setDepth?.(9500); } catch (_) {}
+      try { beam.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+      const start = altStart ? (baseAngle + half) : (baseAngle - half);
+      const end = altStart ? (baseAngle - half) : (baseAngle + half);
+      const startAt = this.time.now;
+      const endAt = startAt + dur;
+      const thick = Math.max(2, Math.floor(r * 0.08));
+      let lastSparkAt = 0;
+      const updateBeam = () => {
+        try {
+          beam.x = caster.x; beam.y = caster.y;
+          const now = this.time.now;
+          const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
+          const cur = start + (end - start) * t;
+          const tipX = Math.cos(cur) * r;
+          const tipY = Math.sin(cur) * r;
+          beam.clear();
+          beam.lineStyle(thick, col, 0.95);
+          beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX, tipY); beam.strokePath();
+          beam.lineStyle(Math.max(1, thick - 1), 0xffffdd, 0.95);
+          beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX * 0.85, tipY * 0.85); beam.strokePath();
+          beam.fillStyle(col, 0.85).fillCircle(tipX, tipY, Math.max(2, Math.floor(thick * 0.6)));
+          if (!lastSparkAt || (now - lastSparkAt > 30)) {
+            lastSparkAt = now;
+            try { pixelSparks(this, caster.x + tipX, caster.y + tipY, { angleRad: cur, count: 1, spreadDeg: 16, speedMin: 120, speedMax: 220, lifeMs: 160, color: col, size: 2, alpha: 0.9 }); } catch (_) {}
+          }
+          if (now >= endAt) {
+            this.events.off('update', updateBeam, this);
+            this.tweens.add({ targets: beam, alpha: 0, duration: 80, onComplete: () => { try { beam.destroy(); } catch (_) {} } });
+          }
+        } catch (_) {}
+      };
+      this.events.on('update', updateBeam, this);
+      const cleanupBeam = () => { try { this.events.off('update', updateBeam, this); } catch (_) {} try { beam.destroy(); } catch (_) {} };
+      caster._meleeLine = { g: beam, cleanup: cleanupBeam };
+      this.time.delayedCall(dur + 120, cleanupBeam);
+    } catch (_) {}
   }
 
   win() {
@@ -441,7 +497,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2æŽ³/frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Â°/frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -487,7 +543,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120Â°/s equals 2Â°/frame at 60 FPS
+        // Turn rate (time-based): ~120¡ã/s equals 2¡ã/frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
@@ -2235,5 +2291,3 @@ export default class BossScene extends Phaser.Scene {
 
 
 
-    // Player melee parity with Combat: C key, 150Â°, 48px, 10 dmg
-    try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
