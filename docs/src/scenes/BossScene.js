@@ -19,7 +19,6 @@ export default class BossScene extends Phaser.Scene {
     // Ensure UI overlay is active during boss fight
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
-    this.gs = this.registry.get('gameState');
     // Initialize shield defaults if missing
     try { if (typeof this.gs.shieldMax !== 'number') this.gs.shieldMax = 20; if (typeof this.gs.shield !== 'number') this.gs.shield = this.gs.shieldMax; if (typeof this.gs.shieldRegenPerSec !== 'number') this.gs.shieldRegenPerSec = 6; if (typeof this.gs.shieldRegenDelayMs !== 'number') this.gs.shieldRegenDelayMs = 1500; if (typeof this.gs.lastDamagedAt !== 'number') this.gs.lastDamagedAt = 0; if (typeof this.gs.allowOverrun !== 'boolean') this.gs.allowOverrun = true; } catch (_) {}
     this.inputMgr = new InputManager(this);
@@ -40,7 +39,8 @@ export default class BossScene extends Phaser.Scene {
       this.events.on('update', () => {
         updateWeaponSprite(this);
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
-                try { const gs = this.gs; if (gs) { const now = this.time.now; const since = now - (gs.lastDamagedAt || 0); if (since >= (gs.shieldRegenDelayMs || 1500) && (gs.shield || 0) < (gs.shieldMax || 0)) { const inc = (gs.shieldRegenPerSec || 0) / 60; gs.shield = Math.min(gs.shield + inc, gs.shieldMax || gs.shield); } } } catch (_) {}\r\n        // Player melee parity with Combat: check input each frame
+                try { const gs = this.gs; if (gs) { const now = this.time.now; const since = now - (gs.lastDamagedAt || 0); if (since >= (gs.shieldRegenDelayMs || 1500) && (gs.shield || 0) < (gs.shieldMax || 0)) { const inc = (gs.shieldRegenPerSec || 0) / 60; gs.shield = Math.min(gs.shield + inc, gs.shieldMax || gs.shield); } } } catch (_) {}
+        // Player melee parity with Combat: check input each frame
         try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
       });
     } catch (_) {}
