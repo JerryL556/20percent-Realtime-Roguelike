@@ -293,7 +293,7 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150掳, 48px, 10 dmg
+  // Player melee (same as Combat): 150閹? 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
@@ -387,13 +387,12 @@ export default class BossScene extends Phaser.Scene {
             try { pixelSparks(this, caster.x + tipX, caster.y + tipY, { angleRad: cur, count: 1, spreadDeg: 16, speedMin: 120, speedMax: 220, lifeMs: 160, color: col, size: 2, alpha: 0.9 }); } catch (_) {}
           }
           if (now >= endAt) {
-            this.events.off('update', updateBeam, this);
-            this.tweens.add({ targets: beam, alpha: 0, duration: 80, onComplete: () => { try { beam.destroy(); } catch (_) {} } });
+            cleanupBeam(); } catch (_) {} } });
           }
         } catch (_) {}
       };
       this.events.on('update', updateBeam, this);
-      const cleanupBeam = () => { try { this.events.off('update', updateBeam, this); } catch (_) {} try { beam.destroy(); } catch (_) {} };
+      const cleanupBeam = () => { try { this.events.off('update', updateBeam, this); } catch (_) {} try { this.tweens.killTweensOf(beam); } catch (_) {} try { beam.clear(); beam.visible = false; } catch (_) {} try { beam.destroy(); } catch (_) {} try { if (caster && caster._meleeLine && caster._meleeLine.g === beam) caster._meleeLine = null; } catch (_) {} };
       caster._meleeLine = { g: beam, cleanup: cleanupBeam };
       this.time.delayedCall(dur + 120, cleanupBeam);
     } catch (_) {}
@@ -507,7 +506,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2鎺?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2闁?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -553,7 +552,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120掳/s equals 2掳/frame at 60 FPS
+        // Turn rate (time-based): ~120閹?s equals 2閹?frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;

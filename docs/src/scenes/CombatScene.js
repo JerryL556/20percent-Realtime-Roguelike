@@ -179,19 +179,21 @@ export default class CombatScene extends Phaser.Scene {
             try { pixelSparks(this, caster.x + tipX, caster.y + tipY, { angleRad: cur, count: 1, spreadDeg: 16, speedMin: 120, speedMax: 220, lifeMs: 160, color: col, size: 2, alpha: 0.9 }); } catch (_) {}
           }
 
-          if (now >= endAt) {
-            // Fade out quickly at end to avoid harsh pop
-            this.events.off('update', updateBeam, this);
-            this.tweens.add({ targets: beam, alpha: 0, duration: 80, onComplete: () => { try { beam.destroy(); } catch (_) {} } });
-          }
+          if (now >= endAt) { cleanupBeam(); return; }
         } catch (_) {}
       };
       this.events.on('update', updateBeam, this);
-      const cleanupBeam = () => { try { this.events.off('update', updateBeam, this); } catch (_) {} try { beam.destroy(); } catch (_) {} };
+      const cleanupBeam = () => {
+        try { this.events.off('update', updateBeam, this); } catch (_) {}
+        try { this.tweens.killTweensOf(beam); } catch (_) {}
+        try { beam.clear(); beam.visible = false; } catch (_) {}
+        try { beam.destroy(); } catch (_) {}
+        try { if (caster && caster._meleeLine && caster._meleeLine.g === beam) caster._meleeLine = null; } catch (_) {}
+      };
       // Store handle for potential early cleanup next swing
       caster._meleeLine = { g: beam, cleanup: cleanupBeam };
       // Safety guard in case scene stops updating
-      this.time.delayedCall(dur + 120, cleanupBeam);
+      this.time.delayedCall(dur, cleanupBeam);
     } catch (_) {}
   }
 
