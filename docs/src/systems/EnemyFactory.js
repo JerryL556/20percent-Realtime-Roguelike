@@ -176,6 +176,10 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed =
   g.isShooter = true;
   g.burstCooldownMs = burstCooldownMs;
   g.lastShotAt = 0;
+  // Proximity detonation trigger radius (must be < explosion radius)
+  g.detonateTriggerRadius = 55;
+  // Explosion radius used for damage and VFX (keep in sync)
+  g.explosionRadius = 70;
   // Distinct tint (red-orange) and slight scale to stand out as elite
   try { g.setScale(1.2); } catch (_) {}
   g.setTint(0xdd5533);

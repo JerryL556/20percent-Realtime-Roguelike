@@ -812,7 +812,7 @@ export default class CombatScene extends Phaser.Scene {
     // Grenadier: explode on death
     try {
       if (e.isGrenadier && !e._exploded) {
-        const ex = e.x; const ey = e.y; const radius = 60; // slightly smaller than boss
+        const ex = e.x; const ey = e.y; const radius = (e.explosionRadius || 60); // visual matches damage AoE
         try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
         // Damage player if within radius
         const r2 = radius * radius; const pdx = this.player.x - ex; const pdy = this.player.y - ey;
@@ -2968,10 +2968,11 @@ export default class CombatScene extends Phaser.Scene {
           const stuckWhileCharging = (e.isGrenadier && e._charging && md < 3); if ((md < 2 && this.isLineBlocked(e.x, e.y, this.player.x, this.player.y)) || stuckWhileCharging) { e._path = null; e._pathIdx = 0; e._lastPathAt = 0; }
         }
       }
-      // Grenadier: detonate if reached player while charging
+      // Grenadier: detonate if player within trigger radius while charging
       if (e.isGrenadier && e._charging) {
         const dxp = this.player.x - e.x; const dyp = this.player.y - e.y;
-        if ((dxp * dxp + dyp * dyp) <= (16 * 16)) {
+        const trig = (e.detonateTriggerRadius || 40);
+        if ((dxp * dxp + dyp * dyp) <= (trig * trig)) {
           try { this.killEnemy(e); } catch (_) {}
         }
       }

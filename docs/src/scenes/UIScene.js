@@ -19,8 +19,8 @@ export default class UIScene extends Phaser.Scene {
     const uiHpY = Math.max(12, height - 28);
     const uiDashY = Math.max(8, height - 22);
     const dashXStart = 16 + 180 + 20;
-    // Shield bar sits above HP bar (same width, thinner)
-    this.shieldBar = new ShieldBar(this, 16, uiHpY - 6, 180, 6);
+    // Shield bar sits above HP bar (same width, slightly thicker)
+    this.shieldBar = new ShieldBar(this, 16, uiHpY - 8, 180, 8);
     this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     this.dashBar = new DashBar(this, dashXStart, uiDashY, 14, 4);
