@@ -27,7 +27,7 @@ export class GameState {
     // Energy Shield
     this.shieldMax = 20;
     this.shield = 20;
-    this.shieldRegenPerSec = 6; // points per second
+    this.shieldRegenPerSec = 4; // points per second
     this.shieldRegenDelayMs = 3000; // delay before regen starts
     this.lastDamagedAt = 0; // timestamp when last damaged (ms)
     this.allowOverrun = true; // leftover damage spills to HP
@@ -67,7 +67,7 @@ export class GameState {
     this.hp = 100;
     this.shieldMax = 20;
     this.shield = 20;
-    this.shieldRegenPerSec = 6;
+    this.shieldRegenPerSec = 4;
     this.shieldRegenDelayMs = 3000;
     this.lastDamagedAt = 0;
     this.allowOverrun = true;
@@ -212,7 +212,7 @@ export class GameState {
     // Ensure shield defaults
     if (typeof gs.shieldMax !== 'number') gs.shieldMax = 20;
     if (typeof gs.shield !== 'number') gs.shield = Math.min(gs.shieldMax, 20);
-    if (typeof gs.shieldRegenPerSec !== 'number') gs.shieldRegenPerSec = 6;
+    if (typeof gs.shieldRegenPerSec !== 'number') gs.shieldRegenPerSec = 4;
     if (typeof gs.shieldRegenDelayMs !== 'number') gs.shieldRegenDelayMs = 3000;
     if (typeof gs.lastDamagedAt !== 'number') gs.lastDamagedAt = 0;
     if (typeof gs.allowOverrun !== 'boolean') gs.allowOverrun = true;
