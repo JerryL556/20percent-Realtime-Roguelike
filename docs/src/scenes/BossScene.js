@@ -19,8 +19,6 @@ export default class BossScene extends Phaser.Scene {
     // Ensure UI overlay is active during boss fight
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
-    // Initialize shield defaults if missing
-    try { if (typeof this.gs.shieldMax !== 'number') this.gs.shieldMax = 20; if (typeof this.gs.shield !== 'number') this.gs.shield = this.gs.shieldMax; if (typeof this.gs.shieldRegenPerSec !== 'number') this.gs.shieldRegenPerSec = 6; if (typeof this.gs.shieldRegenDelayMs !== 'number') this.gs.shieldRegenDelayMs = 1500; if (typeof this.gs.lastDamagedAt !== 'number') this.gs.lastDamagedAt = 0; if (typeof this.gs.allowOverrun !== 'boolean') this.gs.allowOverrun = true; } catch (_) {}
     this.inputMgr = new InputManager(this);
 
     // Player
@@ -39,7 +37,7 @@ export default class BossScene extends Phaser.Scene {
       this.events.on('update', () => {
         updateWeaponSprite(this);
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
-                try { const gs = this.gs; if (gs) { const now = this.time.now; const since = now - (gs.lastDamagedAt || 0); if (since >= (gs.shieldRegenDelayMs || 1500) && (gs.shield || 0) < (gs.shieldMax || 0)) { const inc = (gs.shieldRegenPerSec || 0) / 60; gs.shield = Math.min(gs.shield + inc, gs.shieldMax || gs.shield); } } } catch (_) {}
+        this._lastActiveWeapon = this.gs?.activeWeapon;
         // Player melee parity with Combat: check input each frame
         try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
       });
@@ -295,8 +293,8 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150é—‚? 48px, 10 dmg
-    performPlayerMelee() {
+  // Player melee (same as Combat): 150é—? 48px, 10 dmg
+  performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
@@ -313,12 +311,37 @@ export default class BossScene extends Phaser.Scene {
           if (diff <= half) {
             if (typeof e.hp !== 'number') e.hp = e.maxHp || 300;
             e.hp -= 10; if (e.hp <= 0) this.killBoss(e);
+            // Universal melee hit VFX on boss
             try { impactBurst(this, e.x, e.y, { color: 0xffffff, size: 'small' }); } catch (_) {}
           }
         }
       }
     });
   }
+
+
+  // Centralized damage application that respects Energy Shield and overrun
+  applyPlayerDamage(amount) {
+    try {
+      const gs = this.gs; if (!gs) return;
+      const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
+      let remaining = dmg;
+      const s = Math.max(0, Math.floor(gs.shield || 0));
+      if (s > 0) {
+        const absorbed = Math.min(s, remaining);
+        gs.shield = s - absorbed;
+        remaining -= absorbed;
+      }
+      if (remaining > 0) {
+        if (gs.allowOverrun !== false) {
+          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
+        }
+      }
+      gs.lastDamagedAt = this.time.now;
+    } catch (_) {}
+  }
+
+  // Shared melee VFX: simple transparent fan (sector) showing affected area; follows caster position
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     try { if (caster._meleeFan?.g) { caster._meleeFan.g.destroy(); } } catch (_) {}
     const g = this.add.graphics({ x: caster.x, y: caster.y });
@@ -543,7 +566,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—‚?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -589,7 +612,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120é—‚?s equals 2é—‚?frame at 60 FPS
+        // Turn rate (time-based): ~120é—?s equals 2é—?frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
@@ -2331,8 +2354,6 @@ export default class BossScene extends Phaser.Scene {
     return obj;
   }
 }
-
-
 
 
 

@@ -60,7 +60,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150Â° cone, 48px range, 10 damage
+  // Player melee implementation: 150¡ã cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -179,7 +179,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180Â°, safe for lerp)
+          // Linear interpolate angles (range is <= 180¡ã, safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -263,15 +263,6 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
-    // Initialize shield values
-    try {
-      if (typeof this.gs.shieldMax !== 'number') this.gs.shieldMax = 20;
-      if (typeof this.gs.shield !== 'number') this.gs.shield = this.gs.shieldMax;
-      if (typeof this.gs.shieldRegenPerSec !== 'number') this.gs.shieldRegenPerSec = 6;
-      if (typeof this.gs.shieldRegenDelayMs !== 'number') this.gs.shieldRegenDelayMs = 1500;
-      if (typeof this.gs.lastDamagedAt !== 'number') this.gs.lastDamagedAt = 0;
-      if (typeof this.gs.allowOverrun !== 'boolean') this.gs.allowOverrun = true;
-    } catch (_) {}
     this.inputMgr = new InputManager(this);
 
     // Player
@@ -314,16 +305,6 @@ export default class CombatScene extends Phaser.Scene {
         // Always try to sync texture in case it finished loading after create
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
-        // Shield regeneration tick (approx 60fps)
-        try {
-          const gs = this.gs; if (!gs) return;
-          const now = this.time.now;
-          const since = now - (gs.lastDamagedAt || 0);
-          if (since >= (gs.shieldRegenDelayMs || 1500) && (gs.shield || 0) < (gs.shieldMax || 0)) {
-            const inc = (gs.shieldRegenPerSec || 0) / 60;
-            gs.shield = Math.min(gs.shield + inc, gs.shieldMax || gs.shield);
-          }
-        } catch (_) {}
       });
     } catch (_) {}
 
@@ -1041,7 +1022,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2æŽ?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Â°/frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1105,8 +1086,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1æŽ?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90æŽ?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1Â°/frame
+          b._fov = Phaser.Math.DegToRad(90); // 90Â° cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1131,7 +1112,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45æŽ?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45Â° half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2672,7 +2653,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150Â°, 48px, 10 dmg
+    // Player melee: C key, 150¡ã, 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -2745,6 +2726,7 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) {
               // Start sweep
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
+              try { this.spawnMeleeVfx(e, e._meleeFacing, 90, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
               // Schedule mid-sweep damage check at ~60ms
               this.time.delayedCall(60, () => {
                 if (!e.active || e._mState !== 'sweep') return;
@@ -2951,7 +2933,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors éˆ?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors â€?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -4055,8 +4037,6 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
-
-
 
 
 
