@@ -139,6 +139,16 @@ export default class CombatScene extends Phaser.Scene {
       const startAt = this.time.now;
       const endAt = startAt + dur;
       const thick = Math.max(2, Math.floor(r * 0.08));
+      // Blend helper to derive a hot core tint from the base color
+      const blend = (c1, c2, t) => {
+        const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
+        const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
+        const rr = Math.round(r1 * (1 - t) + r2 * t) & 0xff;
+        const gg = Math.round(g1 * (1 - t) + g2 * t) & 0xff;
+        const bb = Math.round(b1 * (1 - t) + b2 * t) & 0xff;
+        return (rr << 16) | (gg << 8) | bb;
+      };
+      const innerCol = blend(col, 0xffffff, 0.25); // lighter version of beam color (not pure white)
       let lastSparkAt = 0;
       const updateBeam = () => {
         try {
@@ -154,8 +164,8 @@ export default class CombatScene extends Phaser.Scene {
           // Outer colored stroke
           beam.lineStyle(thick, col, 0.95);
           beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX, tipY); beam.strokePath();
-          // Hot inner core
-          beam.lineStyle(Math.max(1, thick - 1), 0xffffdd, 0.95);
+          // Hot inner core tinted toward base color
+          beam.lineStyle(Math.max(1, thick - 1), innerCol, 0.95);
           beam.beginPath(); beam.moveTo(0, 0); beam.lineTo(tipX * 0.85, tipY * 0.85); beam.strokePath();
           // Tip bloom
           beam.fillStyle(col, 0.85).fillCircle(tipX, tipY, Math.max(2, Math.floor(thick * 0.6)));
