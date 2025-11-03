@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -324,17 +324,17 @@ export default class CombatScene extends Phaser.Scene {
             }
             const g = this._shieldRingG; g.clear();
             const t = (this.time.now % 1000) / 1000;
-            const radius = 9 + Math.sin(t * Math.PI * 2) * 0.6;
+            const radius = 13 + Math.sin(t * Math.PI * 2) * 1.0;
             const alpha = 0.25 + Math.sin(t * Math.PI * 2) * 0.05;
-            g.lineStyle(2, 0x66ccff, 0.9).strokeCircle(0, 0, radius);
-            g.lineStyle(1, 0x99ddff, 0.6).strokeCircle(0, 0, Math.max(7.5, radius - 1.5));
+            g.lineStyle(3, 0x66ccff, 0.95).strokeCircle(0, 0, radius);
+            g.lineStyle(2, 0x99ddff, 0.7).strokeCircle(0, 0, Math.max(11, radius - 2.5));
             try { g.setAlpha(alpha); } catch (_) {}
             g.x = this.player.x; g.y = this.player.y;
           } else {
             if (this._shieldRingG) {
               const old = this._shieldRingG; this._shieldRingG = null;
               try {
-                this.tweens.add({ targets: old, alpha: 0, scale: 1.4, duration: 160, ease: 'Cubic.Out', onComplete: () => { try { old.destroy(); } catch (_) {} } });
+                this.tweens.add({ targets: old, alpha: 0, scale: 1.6, duration: 160, ease: 'Cubic.Out', onComplete: () => { try { old.destroy(); } catch (_) {} } });
               } catch (_) { try { old.destroy(); } catch (_) {} }
               try {
                 const cx = this.player.x, cy = this.player.y;
@@ -344,8 +344,8 @@ export default class CombatScene extends Phaser.Scene {
                 }
                 const br = this.add.graphics({ x: cx, y: cy });
                 try { br.setDepth(8800); br.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-                br.lineStyle(2, 0x66ccff, 0.8).strokeCircle(0, 0, 8);
-                this.tweens.add({ targets: br, alpha: 0, scale: 1.8, duration: 220, ease: 'Cubic.Out', onComplete: () => { try { br.destroy(); } catch (_) {} } });
+                br.lineStyle(2, 0x66ccff, 0.8).strokeCircle(0, 0, 12);
+                this.tweens.add({ targets: br, alpha: 0, scale: 2.0, duration: 220, ease: 'Cubic.Out', onComplete: () => { try { br.destroy(); } catch (_) {} } });
               } catch (_) {}
             }
           }
