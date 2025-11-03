@@ -148,6 +148,7 @@ export default class CombatScene extends Phaser.Scene {
       const thick = Math.max(2, Math.floor(r * 0.08));
       // Base-white accent near origin for readability on enemies (short segment)
       let lastSparkAt = 0;
+      let lastAng = start;
       const updateBeam = () => {
         try {
           if (!caster?.active) { cleanupBeam(); return; }
@@ -173,10 +174,25 @@ export default class CombatScene extends Phaser.Scene {
           // Tip bloom
           beam.fillStyle(col, 0.85).fillCircle(tipX, tipY, Math.max(2, Math.floor(thick * 0.6)));
 
-          // Occasional sparks from the tip traveling outward for extra flair
-          if (!lastSparkAt || (now - lastSparkAt > 30)) {
+          // Particle trail: follow beam tip and spray opposite to sweep movement direction
+          if (!lastSparkAt || (now - lastSparkAt > 20)) {
             lastSparkAt = now;
-            try { pixelSparks(this, caster.x + tipX, caster.y + tipY, { angleRad: cur, count: 1, spreadDeg: 16, speedMin: 120, speedMax: 220, lifeMs: 160, color: col, size: 2, alpha: 0.9 }); } catch (_) {}
+            const dAng = Phaser.Math.Angle.Wrap(cur - lastAng);
+            const sprayDir = cur + (dAng >= 0 ? -Math.PI / 2 : Math.PI / 2);
+            lastAng = cur;
+            try {
+              pixelSparks(this, caster.x + tipX, caster.y + tipY, {
+                angleRad: sprayDir,
+                count: 2,
+                spreadDeg: 26,
+                speedMin: 200,
+                speedMax: 340,
+                lifeMs: 220,
+                color: col,
+                size: 2,
+                alpha: 0.95,
+              });
+            } catch (_) {}
           }
 
           if (now >= endAt) { cleanupBeam(); return; }
