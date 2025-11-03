@@ -19,6 +19,12 @@ export default class BossScene extends Phaser.Scene {
     // Ensure UI overlay is active during boss fight
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
+    this.gs = this.registry.get('gameState');
+    // Ensure shield is full on scene start
+    try {
+      if (typeof this.gs.shieldMax !== "number") this.gs.shieldMax = 20;
+      this.gs.shield = this.gs.shieldMax;
+    } catch (_) {}
     this.inputMgr = new InputManager(this);
 
     // Player
@@ -40,6 +46,17 @@ export default class BossScene extends Phaser.Scene {
         this._lastActiveWeapon = this.gs?.activeWeapon;
         // Player melee parity with Combat: check input each frame
         try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
+        // Shield regeneration (regens even from 0 after a delay)
+        try {
+          const gs = this.gs; if (!gs) return;
+          const now = this.time.now;
+          const since = now - (gs.lastDamagedAt || 0);
+          if (since >= (gs.shieldRegenDelayMs || 3000) && (gs.shield || 0) < (gs.shieldMax || 0)) {
+            const dt = ((this.game?.loop?.delta) || 16) / 1000;
+            const inc = (gs.shieldRegenPerSec || 0) * dt;
+            gs.shield = Math.min((gs.shield || 0) + inc, (gs.shieldMax || 0));
+          }
+        } catch (_) {}
       });
     } catch (_) {}
 

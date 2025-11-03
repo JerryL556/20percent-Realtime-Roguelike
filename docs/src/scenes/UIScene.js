@@ -84,7 +84,8 @@ export default class UIScene extends Phaser.Scene {
       const effectiveMax = (gs.maxHp || 0) + (eff.bonusHp || 0);
       this.hpBar.draw(gs.hp, effectiveMax);
       // Draw shield above HP (use gs.shield/shieldMax)
-      const sCur = Math.max(0, Math.floor(gs.shield || 0));
+      // Use precise shield value so small regen shows immediately
+      const sCur = Math.max(0, gs.shield || 0);
       const sMax = Math.max(0, Math.floor(gs.shieldMax || 0));
       this.shieldBar.draw(sCur, sMax);
       this.goldText.setText(`Gold: ${gs.gold}`);
