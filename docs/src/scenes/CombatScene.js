@@ -60,7 +60,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150¡ã cone, 48px range, 10 damage
+  // Player melee implementation: 150Â° cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -70,30 +70,8 @@ export default class CombatScene extends Phaser.Scene {
     const range = 48;
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
+     param($m) "$($m.Value) catch (_) {}" 
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); }
-  // Centralized damage application that respects Energy Shield and overrun
-  applyPlayerDamage(amount) {
-    try {
-      const gs = this.gs; if (!gs) return;
-      const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
-      let remaining = dmg;
-      // Absorb with shield first
-      const s = Math.max(0, Math.floor(gs.shield || 0));
-      if (s > 0) {
-        const absorbed = Math.min(s, remaining);
-        gs.shield = s - absorbed;
-        remaining -= absorbed;
-      }
-      // Overrun to HP if any remainder
-      if (remaining > 0) {
-        if (gs.allowOverrun !== false) {
-          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
-        }
-      }
-      // Mark last damaged time to pause regen
-      gs.lastDamagedAt = this.time.now;
-    } catch (_) {}
-  } catch (_) {}
     // Damage check against enemies (mid-swing ~60ms to match enemy timing)
     try {
       this.time.delayedCall(60, () => {
@@ -180,7 +158,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180¡ã, safe for lerp)
+          // Linear interpolate angles (range is <= 180Â°, safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -1042,7 +1020,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Â°/frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2æŽ?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1106,8 +1084,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1Â°/frame
-          b._fov = Phaser.Math.DegToRad(90); // 90Â° cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1æŽ?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90æŽ?cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1132,7 +1110,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45Â° half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45æŽ?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2673,7 +2651,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150¡ã, 48px, 10 dmg
+    // Player melee: C key, 150Â°, 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -2746,7 +2724,7 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) {
               // Start sweep
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
-              try { this.spawnMeleeVfx(e, e._meleeFacing, 90, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
+               param($m) "$($m.Value) catch (_) {}"  catch (_) {}
               // Schedule mid-sweep damage check at ~60ms
               this.time.delayedCall(60, () => {
                 if (!e.active || e._mState !== 'sweep') return;
@@ -2953,7 +2931,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors â€?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors éˆ?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
