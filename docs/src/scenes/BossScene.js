@@ -56,10 +56,9 @@ export default class BossScene extends Phaser.Scene {
             }
             const g = this._shieldRingG; g.clear();
             const t = (this.time.now % 1000) / 1000;
-            const radius = 13 + Math.sin(t * Math.PI * 2) * 1.0;
-            const alpha = 0.25 + Math.sin(t * Math.PI * 2) * 0.05;
-            g.lineStyle(3, 0x66ccff, 0.95).strokeCircle(0, 0, radius);
-            g.lineStyle(2, 0x99ddff, 0.7).strokeCircle(0, 0, Math.max(11, radius - 2.5));
+            const radius = 13 + Math.sin(t * Math.PI * 2) * 1.0; const s = Math.max(0, gs.shield || 0); const smax = Math.max(1e-6, gs.shieldMax || 0); const p = Math.max(0, Math.min(1, s / smax)); const alpha = (0.12 + 0.28 * p) + Math.sin(t * Math.PI * 2) * 0.04 * p;
+            g.lineStyle(3, 0x66ccff, 0.55 + 0.4 * p).strokeCircle(0, 0, radius);
+            g.lineStyle(2, 0x99ddff, 0.3 + 0.4 * p).strokeCircle(0, 0, Math.max(11, radius - 2.5));
             try { g.setAlpha(alpha); } catch (_) {}
             g.x = this.player.x; g.y = this.player.y;
           } else {
@@ -70,13 +69,13 @@ export default class BossScene extends Phaser.Scene {
               } catch (_) { try { old.destroy(); } catch (_) {} }
               try {
                 const cx = this.player.x, cy = this.player.y;
-                for (let i = 0; i < 12; i += 1) {
+                for (let i = 0; i < 18; i += 1) {
                   const a = (i / 12) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
-                  pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 10, speedMin: 140, speedMax: 240, lifeMs: 220, color: 0x66ccff, size: 2, alpha: 0.95 });
+                  pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 10, speedMin: 160, speedMax: 280, lifeMs: 220, color: 0x66ccff, size: 2, alpha: 0.95 });
                 }
                 const br = this.add.graphics({ x: cx, y: cy });
                 try { br.setDepth(8800); br.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-                br.lineStyle(2, 0x66ccff, 0.8).strokeCircle(0, 0, 12);
+                br.lineStyle(3, 0x66ccff, 1.0).strokeCircle(0, 0, 12);
                 this.tweens.add({ targets: br, alpha: 0, scale: 2.0, duration: 220, ease: 'Cubic.Out', onComplete: () => { try { br.destroy(); } catch (_) {} } });
               } catch (_) {}
             }
@@ -2020,7 +2019,7 @@ export default class BossScene extends Phaser.Scene {
     const dmg = Math.floor(weapon.damage * (1 + 2 * t)); const speed = Math.floor(weapon.bulletSpeed * (1 + 2 * t)); const spreadRad = Phaser.Math.DegToRad(Math.max(0, (weapon.spreadDeg || 0))) * (1 - t); const off = (spreadRad > 0) ? Phaser.Math.FloatBetween(-spreadRad / 2, spreadRad / 2) : 0; const angle = baseAngle + off; const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
     const b = this.bullets.get(this.player.x, this.player.y, 'bullet'); if (!b) return; b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.damage = dmg; b.setTint(0x66aaff); b._core = 'pierce'; b._pierceLeft = 999; b._rail = true; b._stunOnHit = weapon._stunOnHit || 0; const trail = this.add.graphics(); b._g = trail; trail.setDepth(8000); b._px = b.x; b._py = b.y; b.update = () => { try { trail.clear(); trail.lineStyle(2, 0xaaddff, 0.9); const tx = b.x - (vx * 0.02); const ty = b.y - (vy * 0.02); trail.beginPath(); trail.moveTo(b.x, b.y); trail.lineTo(tx, ty); trail.strokePath(); } catch (_) {} try { const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y); const boss = this.boss; if (boss && boss.active) { if (!b._hitSet) b._hitSet = new Set(); if (!b._hitSet.has(boss)) { const rect = boss.getBounds(); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b.damage || 12); if (b._stunOnHit && b._stunOnHit > 0) { const nowS = this.time.now; boss._stunValue = Math.min(10, (boss._stunValue || 0) + b._stunOnHit); if ((boss._stunValue || 0) >= 10) { boss._stunnedUntil = nowS + 200; boss._stunValue = 0; if (!boss._stunIndicator) { boss._stunIndicator = this.add.graphics(); try { boss._stunIndicator.setDepth(9000); } catch (_) {} boss._stunIndicator.fillStyle(0xffff33, 1).fillCircle(0, 0, 2); } try { boss._stunIndicator.setPosition(boss.x, boss.y - 24); } catch (_) {} } } try { impactBurst(this, b.x, b.y, { color: 0xaaddff, size: 'small' }); } catch (_) {} b._hitSet.add(boss); if (boss.hp <= 0) this.killBoss(boss); } } } } catch (_) {} const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } b._px = b.x; b._py = b.y; }; b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
     // Rail muzzle VFX: big blue split flash + particle burst
-    try { const m = getWeaponMuzzleWorld(this, 3); muzzleFlashSplit(this, m.x, m.y, { angle, color: 0xaaddff, count: 4, spreadDeg: 30, length: 24, thickness: 5 }); const burst = { spreadDeg: 14, speedMin: 140, speedMax: 240, lifeMs: 280, color: 0x66aaff, size: 2, alpha: 0.9 }; pixelSparks(this, m.x, m.y, { angleRad: angle - Math.PI / 2, count: 10, ...burst }); pixelSparks(this, m.x, m.y, { angleRad: angle + Math.PI / 2, count: 10, ...burst }); if (this.rail?._em) { try { this.rail._em.explode?.(60, m.x, m.y); } catch (_) {} } try { this.rail?._mgr?.destroy(); } catch (_) {} if (this.rail) { this.rail._mgr = null; this.rail._em = null; } } catch (_) {}
+    try { const m = getWeaponMuzzleWorld(this, 3); muzzleFlashSplit(this, m.x, m.y, { angle, color: 0xaaddff, count: 4, spreadDeg: 30, length: 24, thickness: 5 }); const burst = { spreadDeg: 14, speedMin: 160, speedMax: 280, lifeMs: 280, color: 0x66aaff, size: 2, alpha: 0.9 }; pixelSparks(this, m.x, m.y, { angleRad: angle - Math.PI / 2, count: 10, ...burst }); pixelSparks(this, m.x, m.y, { angleRad: angle + Math.PI / 2, count: 10, ...burst }); if (this.rail?._em) { try { this.rail._em.explode?.(60, m.x, m.y); } catch (_) {} } try { this.rail?._mgr?.destroy(); } catch (_) {} if (this.rail) { this.rail._mgr = null; this.rail._em = null; } } catch (_) {}
     // High recoil kick for railgun
     try { this._weaponRecoil = Math.max(this._weaponRecoil || 0, 5.5); } catch (_) {}
     this.ammoByWeapon[wid] = Math.max(0, (this.ammoByWeapon[wid] ?? cap) - 1);

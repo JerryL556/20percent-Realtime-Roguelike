@@ -60,7 +60,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150° cone, 48px range, 10 damage
+  // Player melee implementation: 150掳 cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -179,7 +179,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180°, safe for lerp)
+          // Linear interpolate angles (range is <= 180掳, safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -324,10 +324,9 @@ export default class CombatScene extends Phaser.Scene {
             }
             const g = this._shieldRingG; g.clear();
             const t = (this.time.now % 1000) / 1000;
-            const radius = 13 + Math.sin(t * Math.PI * 2) * 1.0;
-            const alpha = 0.25 + Math.sin(t * Math.PI * 2) * 0.05;
-            g.lineStyle(3, 0x66ccff, 0.95).strokeCircle(0, 0, radius);
-            g.lineStyle(2, 0x99ddff, 0.7).strokeCircle(0, 0, Math.max(11, radius - 2.5));
+            const radius = 13 + Math.sin(t * Math.PI * 2) * 1.0; const s = Math.max(0, gs.shield || 0); const smax = Math.max(1e-6, gs.shieldMax || 0); const p = Math.max(0, Math.min(1, s / smax)); const alpha = (0.12 + 0.28 * p) + Math.sin(t * Math.PI * 2) * 0.04 * p;
+            g.lineStyle(3, 0x66ccff, 0.55 + 0.4 * p).strokeCircle(0, 0, radius);
+            g.lineStyle(2, 0x99ddff, 0.3 + 0.4 * p).strokeCircle(0, 0, Math.max(11, radius - 2.5));
             try { g.setAlpha(alpha); } catch (_) {}
             g.x = this.player.x; g.y = this.player.y;
           } else {
@@ -338,13 +337,13 @@ export default class CombatScene extends Phaser.Scene {
               } catch (_) { try { old.destroy(); } catch (_) {} }
               try {
                 const cx = this.player.x, cy = this.player.y;
-                for (let i = 0; i < 12; i += 1) {
+                for (let i = 0; i < 18; i += 1) {
                   const a = (i / 12) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.05, 0.05);
-                  pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 10, speedMin: 140, speedMax: 240, lifeMs: 220, color: 0x66ccff, size: 2, alpha: 0.95 });
+                  pixelSparks(this, cx, cy, { angleRad: a, count: 1, spreadDeg: 10, speedMin: 160, speedMax: 280, lifeMs: 220, color: 0x66ccff, size: 2, alpha: 0.95 });
                 }
                 const br = this.add.graphics({ x: cx, y: cy });
                 try { br.setDepth(8800); br.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-                br.lineStyle(2, 0x66ccff, 0.8).strokeCircle(0, 0, 12);
+                br.lineStyle(3, 0x66ccff, 1.0).strokeCircle(0, 0, 12);
                 this.tweens.add({ targets: br, alpha: 0, scale: 2.0, duration: 220, ease: 'Cubic.Out', onComplete: () => { try { br.destroy(); } catch (_) {} } });
               } catch (_) {}
             }
@@ -1077,7 +1076,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2掳/frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2鎺?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1141,8 +1140,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1掳/frame
-          b._fov = Phaser.Math.DegToRad(90); // 90掳 cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1鎺?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90鎺?cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1167,7 +1166,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45掳 half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45鎺?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2708,7 +2707,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150°, 48px, 10 dmg
+    // Player melee: C key, 150掳, 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -2988,7 +2987,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors 鈥?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors 閳?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -3832,7 +3831,7 @@ export default class CombatScene extends Phaser.Scene {
       const m = getWeaponMuzzleWorld(this, 3);
       muzzleFlashSplit(this, m.x, m.y, { angle, color: 0xaaddff, count: 4, spreadDeg: 30, length: 24, thickness: 5 });
       // Stronger pixel spark burst on fire
-      const burst = { spreadDeg: 14, speedMin: 140, speedMax: 240, lifeMs: 280, color: 0x66aaff, size: 2, alpha: 0.9 };
+      const burst = { spreadDeg: 14, speedMin: 160, speedMax: 280, lifeMs: 280, color: 0x66aaff, size: 2, alpha: 0.9 };
       pixelSparks(this, m.x, m.y, { angleRad: angle - Math.PI / 2, count: 10, ...burst });
       pixelSparks(this, m.x, m.y, { angleRad: angle + Math.PI / 2, count: 10, ...burst });
       if (this.rail?._em) { try { this.rail._em.explode?.(60, m.x, m.y); } catch (_) {} }
