@@ -902,7 +902,9 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
     // Reward gold per standard enemy kill
     try { this.gs.gold += 5; } catch (_) {}
-    // Death VFX (purely visual)\n    try { spawnDeathVfxForEnemy(this, e); } catch (_) {}\n    // Destroy the enemy sprite
+    // Death VFX (purely visual)
+    try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
+    // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
   }
 
@@ -4275,6 +4277,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
