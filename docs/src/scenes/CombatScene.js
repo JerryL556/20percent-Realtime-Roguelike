@@ -810,8 +810,7 @@ export default class CombatScene extends Phaser.Scene {
       const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius;
         const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2 && !inIframes) {
-          const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12;
-          this.applyPlayerDamage(dmg);
+          let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
           this.player.iframesUntil = this.time.now + 600;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
@@ -885,7 +884,7 @@ export default class CombatScene extends Phaser.Scene {
         if ((pdx * pdx + pdy * pdy) <= r2) {
           const now = this.time.now;
           if (now >= (this.player.iframesUntil || 0)) {
-            this.applyPlayerDamage((e.damage || 14));
+            (function(){ let dmg=(e?.damage||14); try{ const eff=getPlayerEffects(this.gs)||{}; const mul=eff.enemyExplosionDmgMul||1; dmg=Math.ceil(dmg*mul);}catch(_){} this.applyPlayerDamage(dmg);}()).
             this.player.iframesUntil = now + 600;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
@@ -1039,8 +1038,7 @@ export default class CombatScene extends Phaser.Scene {
       if ((pdx * pdx + pdy * pdy) <= r2) {
         const now = this.time.now;
         if (now >= (this.player.iframesUntil || 0)) {
-          const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 14;
-          this.applyPlayerDamage(dmg);
+          let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 14; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
           this.player.iframesUntil = now + 600;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
@@ -3566,7 +3564,7 @@ export default class CombatScene extends Phaser.Scene {
         const r2 = radius * radius; const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2) {
           if (now >= (this.player.iframesUntil || 0)) {
-            this.applyPlayerDamage((e.damage || 14));
+            (function(){ let dmg=(e?.damage||14); try{ const eff=getPlayerEffects(this.gs)||{}; const mul=eff.enemyExplosionDmgMul||1; dmg=Math.ceil(dmg*mul);}catch(_){} this.applyPlayerDamage(dmg);}()).
             this.player.iframesUntil = now + 600;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
@@ -4277,6 +4275,9 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
+
 
 
 

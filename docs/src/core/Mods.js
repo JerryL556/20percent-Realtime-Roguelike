@@ -335,6 +335,13 @@ export const armourMods = [
     applyEffect: (e) => ({ ...e, dashRegenMs: Math.min(4000, e.dashRegenMs || 999999) }),
   },
   {
+    id: 'a_explosion_resist',
+    name: 'FLAK Paddings',
+    desc: '-60% Explosion damage reduced',
+    apply: (a) => a,
+    applyEffect: (e) => ({ ...e, enemyExplosionDmgMul: Math.min((e.enemyExplosionDmgMul || 1), 0.4) }),
+  },
+  {
     id: 'a_no_overflow',
     name: 'Emergency Power Supply',
     desc: '+Prevents damage overflow when Energy Shield breaks',
