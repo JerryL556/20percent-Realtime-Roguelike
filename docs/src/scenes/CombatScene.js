@@ -529,7 +529,21 @@ export default class CombatScene extends Phaser.Scene {
       this.bullets,
       this.barricadesSoft,
       (b, s) => this.onBulletHitBarricade(b, s),
-      (b, s) => !(b && b._rail),
+      (b, s) => {
+        if (!b || !s) return false;
+        if (b._rail) return false; // rail pierces
+        if (b._core === 'pierce') {
+          try {
+            const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+            const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+            const hp1 = hp0 - dmg;
+            try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+            if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+          } catch (_) {}
+          return false;
+        }
+        return true;
+      },
       this,
     );
 
