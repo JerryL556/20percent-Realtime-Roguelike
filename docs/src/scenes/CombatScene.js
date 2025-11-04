@@ -546,10 +546,14 @@ export default class CombatScene extends Phaser.Scene {
           const diff = Math.abs(Phaser.Math.Angle.Wrap(angToBullet - shieldAng));
           const half = Phaser.Math.DegToRad(45);
           const r = e._shieldRadius || (24 + off);
-          const dxr = b.x - cx, dyr = b.y - cy;
-          if (diff <= half && (dxr * dxr + dyr * dyr) <= (r * r)) {
-            // Small red spark at block point
-            try { impactBurst(this, b.x, b.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
+          // Compute hit on outside arc boundary along direction from shield center to bullet
+          const hitX = cx + Math.cos(angToBullet) * r;
+          const hitY = cy + Math.sin(angToBullet) * r;
+          // Only block if bullet is within arc sector and outside/at radius (ensures boundary hit)
+          const dxr = b.x - cx, dyr = b.y - cy; const d2 = dxr * dxr + dyr * dyr;
+          if (diff <= half && d2 >= (r * r * 0.9)) {
+            // Spark exactly on the arc boundary
+            try { impactBurst(this, hitX, hitY, { color: 0xff3333, size: 'small' }); } catch (_) {}
             // Destroy projectile without applying damage or AoE
             try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
             try { b.setActive(false).setVisible(false); } catch (_) {}
@@ -2803,26 +2807,27 @@ export default class CombatScene extends Phaser.Scene {
             if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
             const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
             const off = e._shieldOffset || 12;
-            // Radius correlates with distance (offset): base 24 + offset
-            const r = (e._shieldRadius || (24 + off));
+            const baseR = (e._shieldRadius || (24 + off));
             const cx = e.x + Math.cos(e._shieldAngle) * off;
             const cy = e.y + Math.sin(e._shieldAngle) * off;
-            const tNow = (this.time?.now || 0) * 0.001;
-            const pulseA = 0.14 + 0.06 * (0.5 + 0.5 * Math.sin(tNow * Math.PI * 2 * 1.2));
+            // Match player shield VFX style: pulsing radius and alpha, two stroke layers
+            const t = ((this.time?.now || 0) % 1000) / 1000;
+            const radius = baseR + Math.sin(t * Math.PI * 2) * 1.0;
+            const p = 1; // no shield HP for enemies; use full visual strength
+            const alpha = (0.12 + 0.28 * p) + Math.sin(t * Math.PI * 2) * 0.04 * p;
             try {
               g.clear(); g.setPosition(cx, cy);
-              // Filled arc with subtle red pulse, plus bright red outline (player-style additive look)
-              g.fillStyle(0xff3333, Math.min(0.35, pulseA));
-              g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, r, e._shieldAngle - half, e._shieldAngle + half, false); g.closePath(); g.fillPath();
-              g.lineStyle(2, 0xff3333, 0.95);
-              g.beginPath(); g.arc(0, 0, r, e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
+              // Exact player shield style but as an arc and red palette
+              g.lineStyle(3, 0xff6666, 0.55 + 0.4 * p).beginPath(); g.arc(0, 0, radius, e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
+              g.lineStyle(2, 0xff9999, 0.3 + 0.4 * p).beginPath(); g.arc(0, 0, Math.max(11, radius - 2.5), e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
+              try { g.setAlpha(alpha); } catch (_) {}
             } catch (_) {}
           } catch (_) {}
         }
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
           let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(45), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(45), wind: 350, sweep: 120, recover: 500 };
-          if (e.isRook) { cfg = { range: 70, half: Phaser.Math.DegToRad(45), wind: 420, sweep: 130, recover: 700 }; }
+          if (e.isRook) { cfg = { range: 70, half: Phaser.Math.DegToRad(45), wind: 380, sweep: 120, recover: 640 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
