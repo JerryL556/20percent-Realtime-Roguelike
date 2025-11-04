@@ -2846,19 +2846,29 @@ export default class CombatScene extends Phaser.Scene {
               try { g.setAlpha(alpha); } catch (_) {}
             } catch (_) {}
 
+            // Transparent red sector from Rook to arc (visual coverage area)
+            try {
+              if (!e._shieldFillG) { e._shieldFillG = this.add.graphics(); try { e._shieldFillG.setDepth(8400); e._shieldFillG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
+              const fg = e._shieldFillG; fg.clear(); fg.setPosition(e.x, e.y);
+              const rFill = Math.max(6, off + radius);
+              fg.fillStyle(0xff3333, 0.12);
+              fg.beginPath(); fg.moveTo(0, 0); fg.arc(0, 0, rFill, e._shieldAngle - half, e._shieldAngle + half, false); fg.closePath(); fg.fillPath();
+            } catch (_) {}
+
             // Maintain/update physics shield zone used for bullet/rocket blocking
             try {
               const needCreate = (!e._shieldZone || !e._shieldZone.body);
+              const zoneR = Math.max(8, Math.floor(baseR)); // keep physics size constant since visual size is constant
               if (needCreate) {
-                const z = this.add.zone(cx, cy, Math.ceil(radius * 2), Math.ceil(radius * 2));
+                const z = this.add.zone(cx, cy, Math.ceil(zoneR * 2), Math.ceil(zoneR * 2));
                 this.physics.world.enable(z);
                 z.body.setAllowGravity(false);
                 z.body.setImmovable(true);
-                try { z.body.setCircle(Math.max(8, Math.floor(radius))); } catch (_) { try { z.body.setSize(Math.ceil(radius * 2), Math.ceil(radius * 2)); } catch (_) {} }
+                try { z.body.setCircle(zoneR); } catch (_) { try { z.body.setSize(Math.ceil(zoneR * 2), Math.ceil(zoneR * 2)); } catch (_) {} }
                 z._owner = e; e._shieldZone = z; this.rookShieldGroup.add(z);
               } else {
                 const z = e._shieldZone; z.setPosition(cx, cy);
-                try { z.body.setCircle(Math.max(8, Math.floor(radius))); } catch (_) { try { z.body.setSize(Math.ceil(radius * 2), Math.ceil(radius * 2)); } catch (_) {} }
+                try { z.body.setCircle(zoneR); } catch (_) { try { z.body.setSize(Math.ceil(zoneR * 2), Math.ceil(zoneR * 2)); } catch (_) {} }
               }
             } catch (_) {}
           } catch (_) {}
