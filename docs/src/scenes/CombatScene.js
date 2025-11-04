@@ -455,19 +455,22 @@ export default class CombatScene extends Phaser.Scene {
       }
       this.enemies.add(e);
     });
-    // Elite: exactly 1 per room; split between Grenadier, Prism, Snitch
+    // Elite: exactly 1 per room; split between Grenadier, Prism, Snitch, Rook
     if (!this.gs?.shootingRange) {
       const spE = pickEdgeSpawn();
       const pick = Math.random(); // unseeded to avoid same choice every room
-      if (pick < (1/3)) {
+      if (pick < (1/4)) {
         const eG = createGrenadierEnemy(this, spE.x, spE.y, Math.floor(260 * mods.enemyHp), Math.floor(14 * mods.enemyDamage), 48, 2000);
         this.enemies.add(eG);
-      } else if (pick < (2/3)) {
+      } else if (pick < (2/4)) {
         const eP = createPrismEnemy(this, spE.x, spE.y, Math.floor(180 * mods.enemyHp), Math.floor(16 * mods.enemyDamage), 46);
         this.enemies.add(eP);
-      } else {
+      } else if (pick < (3/4)) {
         const eS = createSnitchEnemy(this, spE.x, spE.y, Math.floor(100 * mods.enemyHp), Math.floor(6 * mods.enemyDamage), 60);
         this.enemies.add(eS);
+      } else {
+        const eR = createRookEnemy(this, spE.x, spE.y, Math.floor(300 * mods.enemyHp), Math.floor(25 * mods.enemyDamage), 35);
+        this.enemies.add(eR);
       }
     }
 
@@ -535,11 +538,16 @@ export default class CombatScene extends Phaser.Scene {
       // Rook shield: block non-rail bullets (including rockets) within 90° front arc
       if (e.isRook && !b._rail) {
         try {
-          const angToBullet = Math.atan2(b.y - e.y, b.x - e.x);
+          const off = e._shieldOffset || 12;
+          const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
+          const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
+          const angToBullet = Math.atan2(b.y - cy, b.x - cx);
           const shieldAng = e._shieldAngle || 0;
           const diff = Math.abs(Phaser.Math.Angle.Wrap(angToBullet - shieldAng));
           const half = Phaser.Math.DegToRad(45);
-          if (diff <= half) {
+          const r = e._shieldRadius || (24 + off);
+          const dxr = b.x - cx, dyr = b.y - cy;
+          if (diff <= half && (dxr * dxr + dyr * dyr) <= (r * r)) {
             // Small red spark at block point
             try { impactBurst(this, b.x, b.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
             // Destroy projectile without applying damage or AoE
@@ -2814,7 +2822,7 @@ export default class CombatScene extends Phaser.Scene {
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
           let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(45), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(45), wind: 350, sweep: 120, recover: 500 };
-          if (e.isRook) { cfg = { range: 70, half: Phaser.Math.DegToRad(45), wind: 520, sweep: 130, recover: 760 }; }
+          if (e.isRook) { cfg = { range: 70, half: Phaser.Math.DegToRad(45), wind: 420, sweep: 130, recover: 700 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
