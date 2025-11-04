@@ -337,9 +337,9 @@ export const armourMods = [
   {
     id: 'a_explosion_resist',
     name: 'FLAK Paddings',
-    desc: '-60% Explosion damage reduced',
+    desc: '-40% Explosion damage reduced',
     apply: (a) => a,
-    applyEffect: (e) => ({ ...e, enemyExplosionDmgMul: Math.min((e.enemyExplosionDmgMul || 1), 0.4) }),
+    applyEffect: (e) => ({ ...e, enemyExplosionDmgMul: Math.min((e.enemyExplosionDmgMul || 1), 0.6) }),
   },
   {
     id: 'a_no_overflow',
