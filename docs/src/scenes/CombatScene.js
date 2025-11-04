@@ -561,14 +561,15 @@ export default class CombatScene extends Phaser.Scene {
       // Rook shield: block non-rail bullets (including rockets) within 90° front arc
       if (e.isRook && !b._rail) {
         try {
-          const off = 1;
+          const r = (e._shieldRadius || 60);
+          const off = Math.max(0, Math.min(r - 10, (e._shieldOffset ?? (r - 12))));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const angToBullet = Math.atan2(b.y - cy, b.x - cx);
           const shieldAng = e._shieldAngle || 0;
           const diff = Math.abs(Phaser.Math.Angle.Wrap(angToBullet - shieldAng));
           const half = Phaser.Math.DegToRad(45);
-          const r = e._shieldRadius || (24 + off);
+          // r: using fixed shield radius above
           // Compute hit on outside arc boundary along direction from shield center to bullet
           const hitX = cx + Math.cos(angToBullet) * r;
           const hitY = cy + Math.sin(angToBullet) * r;
@@ -2829,8 +2830,9 @@ export default class CombatScene extends Phaser.Scene {
             e._shieldAngle = cur + step;
             if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
             const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
-            const off = 1;
-            const baseR = (e._shieldRadius || (24 + off));
+            const r = (e._shieldRadius || 60);
+          const off = Math.max(0, Math.min(r - 10, (e._shieldOffset ?? (r - 12))));
+            const baseR = r;
             const cx = e.x + Math.cos(e._shieldAngle) * off;
             const cy = e.y + Math.sin(e._shieldAngle) * off;
             // Match player shield VFX style: pulsing radius and alpha, two stroke layers
@@ -2853,8 +2855,8 @@ export default class CombatScene extends Phaser.Scene {
               const a1 = e._shieldAngle - half; const a2 = e._shieldAngle + half;
               const ex1 = Math.cos(a1) * radius, ey1 = Math.sin(a1) * radius;
               const ex2 = Math.cos(a2) * radius, ey2 = Math.sin(a2) * radius;
-              g.lineStyle(2, 0xff3333, 0.25).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
-              g.lineStyle(2, 0xff3333, 0.25).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
+              g.lineStyle(6, 0xff3333, 0.4).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
+              g.lineStyle(6, 0xff3333, 0.4).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
             // Maintain/update physics shield zone used for bullet/rocket blocking
@@ -4149,7 +4151,8 @@ export default class CombatScene extends Phaser.Scene {
       // Rook shield: treat 90° arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
-          const off = 1;
+          const r = (e._shieldRadius || 60);
+          const off = Math.max(0, Math.min(r - 10, (e._shieldOffset ?? (r - 12))));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const dirToSource = Math.atan2(sy - cy, sx - cx);
@@ -4158,7 +4161,7 @@ export default class CombatScene extends Phaser.Scene {
           const half = Phaser.Math.DegToRad(45);
           if (diff <= half) {
             // Intersect ray with shield radius circle around Rook
-            const r = e._shieldRadius || 18;
+            // r from above
             const dxr = Math.cos(angle), dyr = Math.sin(angle);
             const fx = sx - cx, fy = sy - cy; // ray origin relative to shield center
             const a = dxr * dxr + dyr * dyr;
@@ -4250,6 +4253,14 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
+
+
+
+
+
+
 
 
 
