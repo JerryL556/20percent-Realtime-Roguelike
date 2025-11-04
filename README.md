@@ -2,52 +2,67 @@
 
 Play in browser: https://jerryl556.github.io/20percent-Realtime-Roguelike/
 
-## GitHub Pages
-- Source: `main` branch, folder `docs` (GitHub Pages settings → Build and deployment → Source: Deploy from a branch → Branch: `main` / `/docs`).
-- Deployed files live under `docs/` and include `index.html`, `assets/`, and a copy of `src/` for ES module loading.
-- Local dev: open `index.html` at repo root when serving the repo root (e.g., `npx http-server .`) or open `docs/index.html` to mirror the Pages layout.
+## Overview
+Fast, top‑down, realtime roguelike built with Phaser. Explore combat rooms, fight a boss, return to hub, upgrade, and loop deeper. The game runs entirely in the browser and uses simple ES modules with no build step.
 
-## Current Status
-Early prototype. Core scenes and systems are scaffolded (Boot, Start, Menu, Hub, Combat, Boss, UI) and placeholder graphics are generated at runtime. Expect incomplete features and occasional bugs while gameplay, art, and balance are still in progress.
+## Project Layout
+- `docs/` hosts the playable site (GitHub Pages): `index.html`, `assets/`, and `src/`.
+- Scenes: Boot, Start, Menu, Hub, Combat, Boss; `UIScene` overlays HUD.
 
-## Systems Overview
-- Game State & Saving
-  - `src/core/GameState.js`: Tracks gold, HP, difficulty, dash charges, owned/equipped weapons, armour, and run seed. Handles scene progression (3 rooms → Boss → Hub) and provides difficulty modifiers.
-  - `src/core/SaveManager.js`: Saves/loads to `localStorage`, plus export/import via JSON download/upload.
+## Gameplay & Core Systems
+- Game state & saving
+  - `src/core/GameState.js`: run seed, difficulty, gold/HP, dash charges, weapon/armour builds, and scene routing (3 rooms → Boss → Hub). BossRush alternates boss types.
+  - `src/core/SaveManager.js`: localStorage save/load and JSON import/export.
 - Input
-  - `src/core/Input.js`: WASD move, Space dash, E interact, LMB shoot, Q swap weapon, Tab open/close Loadout overlay.
-- Weapons, Mods, and Loadout
-  - `src/core/Weapons.js`: Defines base weapons (pistol, rifle, shotgun) with damage, fire rate, spread, etc.
-  - `src/core/Mods.js`: Three weapon mod slots and one core slot (e.g., +damage, +fire rate, pierce/explosive core). Armour has 2 mod slots (e.g., bonus HP, faster dash regen).
-  - `src/core/Loadout.js`: Computes effective weapon stats by applying selected mods/cores; aggregates player effects from armour.
-- Procedural Generation
-  - `src/systems/ProceduralGen.js`: Seeded room generator using `RNG` and depth to pick arena size, enemy spawn points, and barricade layouts. Normal rooms build small "apartment" perimeters, corridors, and soft clutter. About 50% of wall segments are destructible for flexible routing.
-- Enemies
-  - `src/systems/EnemyFactory.js`: Spawns melee, shooter, and boss variants with basic stats. Shooters fire at intervals; boss has more HP and patterns. Enemies (and the boss) can break destructible barricades by pushing into them.
-- Combat Flow
-  - `src/scenes/CombatScene.js`: Room combat, shooting, dash with charges and regen, exit portal after clear; death returns to Hub with restored HP.
-  - `src/scenes/BossScene.js`: Single boss fight with burst patterns; portal to Hub on victory.
-  - `src/scenes/HubScene.js`: Vendor/shop, basic upgrades (potions, max HP, dash slot), and portal to Combat.
-- UI Overlay
-  - `src/scenes/UIScene.js`: Draws HP bar, dash charges/regeneration, gold and weapon; includes Save/Download/Load buttons and Loadout editor (Tab) for weapons/mods/armour.
-- Randomness
-  - `src/core/RNG.js`: Mulberry32 seeded RNG for reproducible runs; used by generation and spawn selection.
+  - `src/core/Input.js`: WASD move, Space dash, E interact, LMB shoot, Q swap, Tab loadout editor.
+- Weapons, Mods, Loadout
+  - `src/core/Weapons.js`: base stats; `src/core/Mods.js`: three mod slots + one core; `src/core/Loadout.js`: applies modifiers and aggregates armour effects.
+- Procedural generation
+  - `src/systems/ProceduralGen.js`: seeded arenas with destructible/indestructible barricades and spawn points; path grid built per room.
+- Pathfinding
+  - `src/systems/Pathfinding.js`: lightweight A* on a tile grid. Enemies repath when LOS is blocked or on a timer.
 
-### Barricades & Cover
-- Types: Destructible (light brown) and Indestructible (light grey).
-- Both types block movement and bullets.
-- Destructible tiles have HP, take damage from bullets and explosions, and disappear when destroyed.
-- Enemies and the boss can also destroy destructible tiles by pushing into them.
-- Normal rooms: mix of hard/soft walls with roughly 50% soft segments on perimeters and corridors; extra soft clutter creates cover.
-- Boss room: simpler layout but denser and fully destructible.
+## Rendering, Assets, and Hitboxes
+- Weapon art
+  - `src/systems/WeaponVisuals.js` preloads weapon PNGs, sizes them by desired on‑screen height, and tracks muzzle positions for effects.
+- Enemy art overlays
+  - Enemies render with PNG overlays that flip left/right toward the player. Base physics sprites are hidden.
+  - Movement body: unified 12×12 for consistent navigation & barricade collision.
+  - Bullet hitboxes: separate invisible Arcade bodies follow each overlay and match its display size so bullets collide on visual width/height.
+  - Assets are preloaded in `BootScene`; missing textures are lazy‑loaded as a fallback.
+- VFX lifecycle
+  - Sniper aim lines, prism beams, melee lines, indicators, and boss dash hints are purged on death.
 
-### Pathfinding & Rerouting
-- `src/systems/Pathfinding.js`: Lightweight 4-neighbor A* on a grid built from the current arena and barricade blockers.
-- Enemies re-route along waypoints when line of sight to the player is blocked, and periodically rebuild their nav grid to reflect destroyed tiles.
+## Combat Model
+- Bullets
+  - Player bullets: pierce and explosive cores, particle tracers, barricade damage on splash.
+  - Sniper enemy bullets: red tracer tail, +15% velocity, manual line‑to‑rect collision to avoid tunneling.
+- Lasers
+  - Player laser heat/overheat; prism aim‑then‑beam and sweeping beam use beam‑to‑rect intersection.
+- Melee
+  - Player melee: windup → sweep → recover with bright sweep line; melee enemies use similar cone checks.
+- Rook shield
+  - 90° frontal arc blocks non‑rail bullets via angular sector + outer arc radius test.
 
-### Explosions
-- Explosive projectiles (e.g., rockets, grenades) damage enemies and also damage nearby destructible barricades within the blast radius.
-- Rocket reload is 1.0s by default (unless overridden by weapon definition).
+## Enemies (selection)
+- Shredder (melee), Charger (runner), Shooter, MachineGunner, Rocketeer, Sniper.
+- Elites: Prism (laser), Snitch (kite/call), Rook (shield), Bombardier (grenades + charge).
+- Visual scaling (overlay only)
+  - Charger slightly smaller; Shooter +15%; Snitch +30%; Prism +30%; Rook +15%; Bombardier +20%.
+- Bombardier charge
+  - Auto‑swaps art to BombardierSpecial while charging (preloaded swap; no blanking).
 
-## Scenes
-- Boot → Start → Menu/Hub → Combat → Boss → Hub (loops). UI scene overlays gameplay scenes.
+## Bosses
+- Dasher and Shotgunner variants. Dash hint and other VFX are purged on death.
+
+## Barricades & Cover
+- Destructible (soft) and indestructible (hard) walls block movement and bullets. Explosions and some enemies/boss can break soft walls.
+
+## GitHub Pages
+- Source: `main` branch, folder `docs` (Settings → Pages → Deploy from a branch → `main` / `/docs`).
+- Local dev: serve repo root (e.g., `npx http-server .`) and open `index.html`, or open `docs/index.html` to mirror Pages.
+
+## Contributing
+- Issues and PRs welcome. Please keep PRs focused; open an issue first for larger changes.
+
+
