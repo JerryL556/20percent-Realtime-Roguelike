@@ -342,6 +342,13 @@ export const armourMods = [
     applyEffect: (e) => ({ ...e, enemyExplosionDmgMul: Math.min((e.enemyExplosionDmgMul || 1), 0.6) }),
   },
   {
+    id: 'a_shield_regen_plus',
+    name: 'Large Capacitors',
+    desc: '++2 Energy Shield regen per second',
+    apply: (a) => a,
+    applyEffect: (e) => ({ ...e, shieldRegenBonus: (e.shieldRegenBonus || 0) + 2 }),
+  },
+  {
     id: 'a_no_overflow',
     name: 'Emergency Power Supply',
     desc: '+Prevents damage overflow when Energy Shield breaks',

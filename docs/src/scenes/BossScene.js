@@ -90,7 +90,7 @@ export default class BossScene extends Phaser.Scene {
           const since = now - (gs.lastDamagedAt || 0);
           if (since >= (gs.shieldRegenDelayMs || 3000) && (gs.shield || 0) < (gs.shieldMax || 0)) {
             const dt = ((this.game?.loop?.delta) || 16) / 1000;
-            const inc = (gs.shieldRegenPerSec || 0) * dt;
+            const inc = ((gs.shieldRegenPerSec || 0) + ((getPlayerEffects(this.gs)||{}).shieldRegenBonus || 0)) * dt;
             gs.shield = Math.min((gs.shield || 0) + inc, (gs.shieldMax || 0));
           }
         } catch (_) {}
@@ -2424,6 +2424,7 @@ export default class BossScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
