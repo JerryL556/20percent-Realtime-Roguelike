@@ -2841,7 +2841,7 @@ export default class CombatScene extends Phaser.Scene {
             const p = 1; // no shield HP for enemies; use full visual strength
             const alpha = (0.12 + 0.28 * p) + Math.sin(t * Math.PI * 2) * 0.04 * p;
             try {
-              g.clear(); g.setPosition(e.x, e.y);
+              g.clear(); g.setPosition(cx, cy);
               // Exact player shield style but as an arc and red palette
               g.lineStyle(3, 0xff6666, 0.55 + 0.4 * p).beginPath(); g.arc(0, 0, radius, e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
               g.lineStyle(2, 0xff9999, 0.3 + 0.4 * p).beginPath(); g.arc(0, 0, Math.max(11, radius - 2.5), e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
@@ -2855,8 +2855,8 @@ export default class CombatScene extends Phaser.Scene {
               const a1 = e._shieldAngle - half; const a2 = e._shieldAngle + half;
               const ex1 = Math.cos(a1) * radius, ey1 = Math.sin(a1) * radius;
               const ex2 = Math.cos(a2) * radius, ey2 = Math.sin(a2) * radius;
-              g.lineStyle(4, 0xff3333, 0.35).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
-              g.lineStyle(4, 0xff3333, 0.35).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
+              g.lineStyle(1, 0xff3333, 0.22).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
+              g.lineStyle(1, 0xff3333, 0.22).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
             // Maintain/update physics shield zone used for bullet/rocket blocking
@@ -4253,6 +4253,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
