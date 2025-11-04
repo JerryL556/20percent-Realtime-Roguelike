@@ -370,14 +370,15 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       try { img.setTint(tint); } catch (_) {}
       // Horizontal drift (slow) — parabola controlled by vertical z only
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      // Slow horizontal drift only; keep the arc from vertical height component
-      const sp = Phaser.Math.FloatBetween(20, 60) * power;
+      // Emphasize horizontal motion; keep vertical (height) subtle
+      const sp = Phaser.Math.FloatBetween(60, 120) * power; // horizontal speed
       const vx = Math.cos(a) * sp;
-      const vy = Phaser.Math.FloatBetween(-8, 8) * power; // tiny baseline vertical drift
-      // Vertical arc (height): slower, gentler
-      let z = Phaser.Math.FloatBetween(6, 12) * power;   // initial height
-      let vz = Phaser.Math.FloatBetween(70, 110) * power; // initial upward velocity
-      const g = 180; // gravity
+      const vy = Phaser.Math.FloatBetween(-6, 6) * power; // minimal screen-space vertical drift
+      // Vertical arc (height) with gentle launch and gravity
+      let z = Phaser.Math.FloatBetween(4, 8) * power;    // initial height
+      let vz = Phaser.Math.FloatBetween(35, 60) * power; // initial upward velocity
+      const g = 90; // gravity
+      const zScale = 0.35; // projection of height into screen-space
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
       const onUpdate = () => {
@@ -389,7 +390,7 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
           // vertical motion
           z += vz * dt; vz -= g * dt;
           // display: raise by z
-          img.x = nx; img.y = ny - z;
+          img.x = nx; img.y = ny - z * zScale;
           img.rotation += rotSpd * dt;
           // landed
           if (z <= 0) {
