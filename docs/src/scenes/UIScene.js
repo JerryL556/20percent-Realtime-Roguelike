@@ -441,11 +441,11 @@ export default class UIScene extends Phaser.Scene {
           if (chosenId === 'exp_shield') {
             gs.maxHp = 50; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
             gs.shieldMax = 40; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
-            gs.shieldRegenDelayMs = 1500;
+            gs.shieldRegenDelayMs = 4000;
           } else {
             gs.maxHp = 100; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
             gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
-            gs.shieldRegenDelayMs = 3000;
+            gs.shieldRegenDelayMs = 4000;
           }
         } catch (_) {}
       armourLabel.setText('Equipped: ' + armourName());
@@ -587,6 +587,7 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
+
 
 
 
