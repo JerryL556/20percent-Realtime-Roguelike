@@ -534,14 +534,7 @@ export default class CombatScene extends Phaser.Scene {
     );
 
     // Shield hitboxes for Rook (separate from body)
-    this.rookShieldGroup = this.physics.add.group();
-    // rook shield zone overlap disabled } catch (_) {}
-          try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
-          try { b.setActive(false).setVisible(false); } catch (_) {}
-          this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
-        }
-      } catch (_) {}
-    }, null, this);
+    // Rook shield zone overlap disabled; blocking handled in bullets vs enemies outer-arc check
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
@@ -2846,20 +2839,7 @@ export default class CombatScene extends Phaser.Scene {
               g.lineStyle(1, 0xff3333, 0.22).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
-            // Maintain/update physics shield zone used for bullet/rocket blocking
-            try {
-              const needCreate = false && (!e._shieldZone || !e._shieldZone.body);
-              const zoneR = Math.max(8, Math.floor(baseR)); // keep physics size constant since visual size is constant
-              if (needCreate) {
-                const z = this.add.zone(cx, cy, Math.ceil(zoneR * 2), Math.ceil(zoneR * 2));
-                this.physics.world.enable(z);
-                z.body.setAllowGravity(false);
-                z.body.setImmovable(true);
-                try { z.body.setCircle(zoneR); } catch (_) { try { z.body.setSize(Math.ceil(zoneR * 2), Math.ceil(zoneR * 2)); } catch (_) {} }
-                z._owner = e; e._shieldZone = z; this.rookShieldGroup.add(z);
-              } else { /* shield zone disabled */ } catch (_) { try { z.body.setSize(Math.ceil(zoneR * 2), Math.ceil(zoneR * 2)); } catch (_) {} }
-              }
-            } catch (_) {}
+            // Shield zone disabled (outer-arc handles blocking)
           } catch (_) {}
         }
         // Melee attack state machine (for base + runner + rook)
@@ -4238,6 +4218,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 
