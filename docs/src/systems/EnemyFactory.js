@@ -162,6 +162,24 @@ export function createSnitchEnemy(scene, x, y, hp = 100, damage = 6, speed = 60)
   return s;
 }
 
+// Rook (elite melee): slow, tanky melee with frontal shield that blocks bullets
+export function createRookEnemy(scene, x, y, hp = 300, damage = 25, speed = 35) {
+  const r = scene.physics.add.sprite(x, y, 'enemy_square');
+  r.setSize(14, 14).setOffset(0, 0).setCollideWorldBounds(true);
+  r.hp = hp; r.maxHp = hp; r.damage = damage; r.speed = speed;
+  r.isEnemy = true; r.isMelee = true; r.isRook = true;
+  // Visual distinction
+  try { r.setTint(0x99aabb); } catch (_) {}
+  // Shield state: front arc (90 deg), slow turning
+  r._shieldAngle = 0; // radians, facing right initially
+  r._shieldG = null;
+  r._shieldOffset = 12; // draw shield arc offset forward from Rook
+  r._shieldRadius = 24 + r._shieldOffset; // larger visual radius correlates with distance
+  r._shieldHalf = Phaser.Math.DegToRad ? Phaser.Math.DegToRad(45) : (Math.PI/4);
+  r.on('destroy', () => { try { r._g?.destroy(); } catch (_) {} try { r._shieldG?.destroy(); r._shieldG = null; } catch (_) {} try { r._igniteIndicator?.destroy(); r._igniteIndicator = null; } catch (_) {} try { r._toxinIndicator?.destroy(); r._toxinIndicator = null; } catch (_) {} });
+  return r;
+}
+
 // Grenadier (elite): lobs grenades in 3-round volleys, slightly larger body
 export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed = 48, burstCooldownMs = 2000) {
   const g = scene.physics.add.sprite(x, y, 'enemy_square');

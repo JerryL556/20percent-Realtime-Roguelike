@@ -2,7 +2,7 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
-import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy } from '../systems/EnemyFactory.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
@@ -43,12 +43,13 @@ export default class CombatScene extends Phaser.Scene {
     const b7 = addBtn(6, 'Spawn Grenadier', () => { this.enemies.add(sp(createGrenadierEnemy)); });
     const b8 = addBtn(7, 'Spawn Prism', () => { this.enemies.add(sp(createPrismEnemy)); });
     const b9 = addBtn(8, 'Spawn Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); });
-    const b10 = addBtn(9, 'Spawn Boss', () => { this.enemies.add(sp((sc, x, y) => { const e = createBoss(sc, x, y, 600, 20, 50); e.isEnemy = true; return e; })); });
-    const b11 = addBtn(11, 'Clear Enemies', () => {
+    const b10 = addBtn(9, 'Spawn Rook', () => { this.enemies.add(sp(createRookEnemy)); });
+    const b11 = addBtn(11, 'Spawn Boss', () => { this.enemies.add(sp((sc, x, y) => { const e = createBoss(sc, x, y, 600, 20, 50); e.isEnemy = true; return e; })); });
+    const b12 = addBtn(13, 'Clear Enemies', () => {
       try { this.enemies.getChildren().forEach((e) => { if (e && e.active && !e.isDummy) e.destroy(); }); } catch (_) {}
     });
-    const close = makeTextButton(this, cx, y0 + 13 * line, 'Close', () => this.closePanel([title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, close]));
-    this.panel._extra = [title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, close];
+    const close = makeTextButton(this, cx, y0 + 15 * line, 'Close', () => this.closePanel([title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, close]));
+    this.panel._extra = [title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, close];
   }
 
   closePanel(extra = []) {
@@ -531,6 +532,24 @@ export default class CombatScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
+      // Rook shield: block non-rail bullets (including rockets) within 90° front arc
+      if (e.isRook && !b._rail) {
+        try {
+          const angToBullet = Math.atan2(b.y - e.y, b.x - e.x);
+          const shieldAng = e._shieldAngle || 0;
+          const diff = Math.abs(Phaser.Math.Angle.Wrap(angToBullet - shieldAng));
+          const half = Phaser.Math.DegToRad(45);
+          if (diff <= half) {
+            // Small red spark at block point
+            try { impactBurst(this, b.x, b.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
+            // Destroy projectile without applying damage or AoE
+            try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+            try { b.setActive(false).setVisible(false); } catch (_) {}
+            this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+            return;
+          }
+        } catch (_) {}
+      }
       // Only track per-target hits for piercing bullets to allow shotgun pellets to stack normally
       if (b._core === 'pierce') {
         if (!b._hitSet) b._hitSet = new Set();
@@ -2764,9 +2783,38 @@ export default class CombatScene extends Phaser.Scene {
         let speed = e.speed || 60;
         // Global speed boost for all enemies
         speed *= 1.5;
-        // Melee attack state machine (for base + runner)
+        // Rook: update and draw shield; turn slowly toward player (30°/s)
+        if (e.isRook) {
+          try {
+            const targetAng = Math.atan2(dy, dx);
+            const maxTurn = Phaser.Math.DegToRad(30) * dt; // rad/s * dt
+            const cur = e._shieldAngle || 0;
+            const delta = Phaser.Math.Angle.Wrap(targetAng - cur);
+            const step = Phaser.Math.Clamp(delta, -maxTurn, maxTurn);
+            e._shieldAngle = cur + step;
+            if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
+            const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
+            const off = e._shieldOffset || 12;
+            // Radius correlates with distance (offset): base 24 + offset
+            const r = (e._shieldRadius || (24 + off));
+            const cx = e.x + Math.cos(e._shieldAngle) * off;
+            const cy = e.y + Math.sin(e._shieldAngle) * off;
+            const tNow = (this.time?.now || 0) * 0.001;
+            const pulseA = 0.14 + 0.06 * (0.5 + 0.5 * Math.sin(tNow * Math.PI * 2 * 1.2));
+            try {
+              g.clear(); g.setPosition(cx, cy);
+              // Filled arc with subtle red pulse, plus bright red outline (player-style additive look)
+              g.fillStyle(0xff3333, Math.min(0.35, pulseA));
+              g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, r, e._shieldAngle - half, e._shieldAngle + half, false); g.closePath(); g.fillPath();
+              g.lineStyle(2, 0xff3333, 0.95);
+              g.beginPath(); g.arc(0, 0, r, e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
+            } catch (_) {}
+          } catch (_) {}
+        }
+        // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
-          const cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(45), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(45), wind: 350, sweep: 120, recover: 500 };
+          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(45), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(45), wind: 350, sweep: 120, recover: 500 };
+          if (e.isRook) { cfg = { range: 70, half: Phaser.Math.DegToRad(45), wind: 520, sweep: 130, recover: 760 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
@@ -3957,6 +4005,15 @@ export default class CombatScene extends Phaser.Scene {
         lz.mg.fillStyle(0xffffff, 0.5).fillCircle(sx, sy, 1.5);
       } catch (_) {}
 
+      // Shield block spark for laser (if recently blocked by a Rook)
+      try {
+        const lb = this._lastLaserBlockedAt;
+        if (lb && (now - lb.t) <= 50) {
+          impactBurst(this, lb.x, lb.y, { color: 0xff3333, size: 'small' });
+          this._lastLaserBlockedAt = null;
+        }
+      } catch (_) {}
+
       // Damage ticking
       lz.lastTickAt = (lz.lastTickAt || 0);
       lz.lastTickAt += dt;
@@ -4021,10 +4078,47 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     }
-    // Also stop at first enemy before barricade
+    // Also stop at first enemy before barricade; handle Rook shield as a blocker
     const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
       const e = enemies[i]; if (!e?.active) continue;
+      // Rook shield: treat 90° arc as obstacle if facing the beam source
+      if (e.isRook) {
+        try {
+          const off = e._shieldOffset || 12;
+          const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
+          const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
+          const dirToSource = Math.atan2(sy - cy, sx - cx);
+          const shieldAng = e._shieldAngle || 0;
+          const diff = Math.abs(Phaser.Math.Angle.Wrap(dirToSource - shieldAng));
+          const half = Phaser.Math.DegToRad(45);
+          if (diff <= half) {
+            // Intersect ray with shield radius circle around Rook
+            const r = e._shieldRadius || 18;
+            const dxr = Math.cos(angle), dyr = Math.sin(angle);
+            const fx = sx - cx, fy = sy - cy; // ray origin relative to shield center
+            const a = dxr * dxr + dyr * dyr;
+            const bq = 2 * (fx * dxr + fy * dyr);
+            const c = fx * fx + fy * fy - r * r;
+            const disc = bq * bq - 4 * a * c;
+            if (disc >= 0) {
+              const sqrtD = Math.sqrt(disc);
+              const t1 = (-bq - sqrtD) / (2 * a);
+              const t2 = (-bq + sqrtD) / (2 * a);
+              const t = (t1 > 0) ? t1 : ((t2 > 0) ? t2 : null);
+              if (t != null) {
+                const bx = sx + dxr * t; const by = sy + dyr * t;
+                const ddx = bx - sx; const ddy = by - sy; const d2 = ddx * ddx + ddy * ddy;
+                if (d2 < bestD2) {
+                  bestD2 = d2; ex = bx; ey = by; hitEnemy = null;
+                  this._lastLaserBlockedAt = { x: ex, y: ey, t: this.time.now };
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      // Standard enemy rect hit if not blocked closer
       const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 6, e.y - 6, 12, 12);
       const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
       if (pts && pts.length) {
