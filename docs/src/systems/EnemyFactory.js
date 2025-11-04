@@ -203,9 +203,16 @@ function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH
       try { e.scene?.events?.off?.('update', onUpdate); } catch (_) {}
       try { e._vis?.destroy?.(); e._vis = null; } catch (_) {}
       try { e._hitbox?.destroy?.(); e._hitbox = null; } catch (_) {}
+      // Common VFX cleanups used by snipers/prisms/melee
+      try { e._aimG?.clear?.(); e._aimG?.destroy?.(); e._aimG = null; } catch (_) {}
+      try { e._laserG?.clear?.(); e._laserG?.destroy?.(); e._laserG = null; } catch (_) {}
+      try { if (e._meleeLine?.cleanup) e._meleeLine.cleanup(); else e._meleeLine?.g?.destroy?.(); e._meleeLine = null; } catch (_) {}
+      // Indicators
       try { e._g?.destroy(); } catch (_) {}
       try { e._igniteIndicator?.destroy(); e._igniteIndicator = null; } catch (_) {}
       try { e._toxinIndicator?.destroy(); e._toxinIndicator = null; } catch (_) {}
+      // If running in BossScene, also clear any dash hint graphics stored on the scene
+      try { const sc = e.scene; if (sc && sc._dashSeq) { sc._dashSeq._hintG?.destroy?.(); sc._dashSeq = null; } } catch (_) {}
     });
   } catch (_) {}
 }
