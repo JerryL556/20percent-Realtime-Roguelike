@@ -845,7 +845,8 @@ export default class CombatScene extends Phaser.Scene {
       'F: Ability',
       'Q: Swap Weapon',
       'Tab: Loadout',
-    ].join('\n');
+    ].join('
+');
     this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
       .setOrigin(1, 1)
       .setAlpha(0.9);
@@ -2517,7 +2518,8 @@ export default class CombatScene extends Phaser.Scene {
                 const ux = Math.cos(bit._thrAng), uy = Math.sin(bit._thrAng);
                 const tail = 8, stub = 4; const tx = bit.x - ux * tail, ty = bit.y - uy * tail; const sx2 = bit.x - ux * stub, sy2 = bit.y - uy * stub;
                 try { const back = tAng + Math.PI; const ex = bit.x + Math.cos(back) * 6; const ey = bit.y + Math.sin(back) * 6; pixelSparks(this, ex, ey, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
-                // particles-only thruster (remove static blue lines)\r\n                try { const back = tAng + Math.PI; pixelSparks(this, bit.x, bit.y, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
+                // particles-only thruster (remove static blue lines)\r
+                try { const back = tAng + Math.PI; pixelSparks(this, bit.x, bit.y, { angleRad: back, count: 1, spreadDeg: 4, speedMin: 60, speedMax: 110, lifeMs: 50, color: 0xffee66, size: 1, alpha: 0.8 }); } catch (_) {}
               }
             }
           } catch (_) {}
@@ -2912,6 +2914,16 @@ export default class CombatScene extends Phaser.Scene {
                   this.player.iframesUntil = this.time.now + 600;
                   try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
                   e._meleeDidHit = true;
+                  if (this.gs && this.gs.hp <= 0) {
+                    try {
+                      const eff = getPlayerEffects(this.gs);
+                      this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                      this.gs.nextScene = SceneKeys.Hub;
+                      SaveManager.saveToLocal(this.gs);
+                      this.scene.start(SceneKeys.Hub);
+                    } catch (_) {}
+                    return;
+                  }
                 }
               });
             }
@@ -4258,6 +4270,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 
