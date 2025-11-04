@@ -845,8 +845,8 @@ export default class CombatScene extends Phaser.Scene {
       'F: Ability',
       'Q: Swap Weapon',
       'Tab: Loadout',
-    ].join('
-');
+    ].join('\n');
+
     this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
       .setOrigin(1, 1)
       .setAlpha(0.9);
