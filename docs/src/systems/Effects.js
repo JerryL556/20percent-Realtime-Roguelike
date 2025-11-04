@@ -371,20 +371,23 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       // Horizontal drift (slow) — parabola controlled by vertical z only
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       // Emphasize horizontal motion; keep vertical (height) subtle
-      const sp = Phaser.Math.FloatBetween(60, 120) * power; // horizontal speed
-      const vx = Math.cos(a) * sp;
-      const vy = Phaser.Math.FloatBetween(-6, 6) * power; // minimal screen-space vertical drift
+      const sp = Phaser.Math.FloatBetween(18, 38) * power; // slower horizontal speed
+      let vx = Math.cos(a) * sp;
+      let vy = Phaser.Math.FloatBetween(-5, 5) * power; // minimal screen-space vertical drift
       // Vertical arc (height) with gentle launch and gravity
-      let z = Phaser.Math.FloatBetween(4, 8) * power;    // initial height
-      let vz = Phaser.Math.FloatBetween(35, 60) * power; // initial upward velocity
-      const g = 90; // gravity
-      const zScale = 0.35; // projection of height into screen-space
+      let z = Phaser.Math.FloatBetween(4, 7) * power;    // initial height
+      let vz = Phaser.Math.FloatBetween(22, 35) * power; // initial upward velocity
+      const g = 60; // gravity (gentle)
+      const zScale = 0.3; // projection of height into screen-space
+      const dragPerSecond = 0.6; // horizontal/vertical screen-space drag per second
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
       const onUpdate = () => {
         try {
           const dt = ((scene.game?.loop?.delta) || 16) / 1000;
-          // planar motion
+          // planar motion with drag
+          vx *= Math.pow(dragPerSecond, dt); // exponential drag
+          vy *= Math.pow(dragPerSecond, dt);
           const nx = img.x + vx * dt;
           const ny = img.y + vy * dt;
           // vertical motion
@@ -395,7 +398,7 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
           // landed
           if (z <= 0) {
             scene.events.off('update', onUpdate);
-            scene.tweens.add({ targets: img, alpha: 0, duration: 100, onComplete: () => { try { img.destroy(); } catch (_) {} } });
+            scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => { try { img.destroy(); } catch (_) {} } });
           }
           // offscreen safety
           const view = scene.cameras?.main?.worldView; if (view && !view.contains(img.x, img.y)) { scene.events.off('update', onUpdate); try { img.destroy(); } catch (_) {} }
