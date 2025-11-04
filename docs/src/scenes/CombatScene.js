@@ -533,6 +533,29 @@ export default class CombatScene extends Phaser.Scene {
       this,
     );
 
+    // Shield hitboxes for Rook (separate from body)
+    this.rookShieldGroup = this.physics.add.group();
+    this.physics.add.overlap(this.bullets, this.rookShieldGroup, (b, z) => {
+      try {
+        if (!b?.active || !z?.active) return;
+        if (b._rail) return; // rail pierces
+        const e = z._owner; if (!e?.active || !e.isRook) return;
+        const cx = z.x, cy = z.y; const r = (e._shieldRadius || 24);
+        const angToBullet = Math.atan2(b.y - cy, b.x - cx);
+        const shieldAng = e._shieldAngle || 0; const half = Phaser.Math.DegToRad(45);
+        const diff = Math.abs(Phaser.Math.Angle.Wrap(angToBullet - shieldAng));
+        if (diff <= half) {
+          // Place spark exactly on arc boundary
+          const hitX = cx + Math.cos(angToBullet) * r;
+          const hitY = cy + Math.sin(angToBullet) * r;
+          try { impactBurst(this, hitX, hitY, { color: 0xff3333, size: 'small' }); } catch (_) {}
+          try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+          try { b.setActive(false).setVisible(false); } catch (_) {}
+          this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+        }
+      } catch (_) {}
+    }, null, this);
+
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
       // Rook shield: block non-rail bullets (including rockets) within 90° front arc
@@ -2821,6 +2844,22 @@ export default class CombatScene extends Phaser.Scene {
               g.lineStyle(3, 0xff6666, 0.55 + 0.4 * p).beginPath(); g.arc(0, 0, radius, e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
               g.lineStyle(2, 0xff9999, 0.3 + 0.4 * p).beginPath(); g.arc(0, 0, Math.max(11, radius - 2.5), e._shieldAngle - half, e._shieldAngle + half, false); g.strokePath();
               try { g.setAlpha(alpha); } catch (_) {}
+            } catch (_) {}
+
+            // Maintain/update physics shield zone used for bullet/rocket blocking
+            try {
+              const needCreate = (!e._shieldZone || !e._shieldZone.body);
+              if (needCreate) {
+                const z = this.add.zone(cx, cy, Math.ceil(radius * 2), Math.ceil(radius * 2));
+                this.physics.world.enable(z);
+                z.body.setAllowGravity(false);
+                z.body.setImmovable(true);
+                try { z.body.setCircle(Math.max(8, Math.floor(radius))); } catch (_) { try { z.body.setSize(Math.ceil(radius * 2), Math.ceil(radius * 2)); } catch (_) {} }
+                z._owner = e; e._shieldZone = z; this.rookShieldGroup.add(z);
+              } else {
+                const z = e._shieldZone; z.setPosition(cx, cy);
+                try { z.body.setCircle(Math.max(8, Math.floor(radius))); } catch (_) { try { z.body.setSize(Math.ceil(radius * 2), Math.ceil(radius * 2)); } catch (_) {} }
+              }
             } catch (_) {}
           } catch (_) {}
         }
