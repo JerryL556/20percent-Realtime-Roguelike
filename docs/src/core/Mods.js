@@ -344,7 +344,7 @@ export const armourMods = [
   {
     id: 'a_shield_regen_plus',
     name: 'Large Capacitors',
-    desc: '++2 Energy Shield regen per second',
+    desc: '+2 Energy Shield regen per second',
     apply: (a) => a,
     applyEffect: (e) => ({ ...e, shieldRegenBonus: (e.shieldRegenBonus || 0) + 2 }),
   },
