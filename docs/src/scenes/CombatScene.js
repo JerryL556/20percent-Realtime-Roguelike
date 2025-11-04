@@ -4,7 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint } from '../systems/WeaponVisuals.js';
@@ -902,7 +902,7 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
     // Reward gold per standard enemy kill
     try { this.gs.gold += 5; } catch (_) {}
-    // Destroy the enemy sprite
+    // Death VFX (purely visual)\n    try { spawnDeathVfxForEnemy(this, e); } catch (_) {}\n    // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
   }
 
@@ -4275,6 +4275,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 

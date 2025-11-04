@@ -289,3 +289,53 @@ export function pixelSparks(scene, x, y, opts = {}) {
     }
   } catch (_) {}
 }
+
+// Pick a scrap tint based on enemy type flags
+export function getScrapTintForEnemy(e) {
+  try {
+    if (e?.isBoss) return 0xcc3333; // bosses: red for now
+    // Dark tan group: Prism, Shredder (base melee), Charger (runner), Rook
+    if (e?.isPrism || (e?.isMelee && !e?.isRunner && !e?.isRook) || e?.isRunner || e?.isRook) return 0x9a6c3a;
+    // Military green group: Bombardier (Grenadier), Shooter (generic), MachineGunner, Rocketeer
+    if (e?.isGrenadier || e?.isMachineGunner || e?.isRocketeer || e?.isShooter) return 0x4a6b3a;
+    // Dark grey group: Commander (Snitch), Sniper
+    if (e?.isSnitch || e?.isSniper) return 0x55585d;
+  } catch (_) {}
+  return 0x888888; // fallback neutral
+}
+
+// Small, purely visual death effect: a tiny pop and colored scrap sparks
+export function spawnDeathVfxForEnemy(scene, e, scale = 1) {
+  try {
+    const tint = getScrapTintForEnemy(e);
+    const x = e?.x ?? 0, y = e?.y ?? 0;
+    const r = Math.max(10, Math.floor(14 * scale));
+    impactBurst(scene, x, y, { color: tint, size: 'small', radius: Math.floor(r * 0.8) });
+    // Scrap count varies slightly by scale
+    const scraps = Math.max(6, Math.floor((e?.isBoss ? 14 : 10) * scale));
+    for (let i = 0; i < scraps; i += 1) {
+      const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      pixelSparks(scene, x, y, {
+        angleRad: ang,
+        count: 1,
+        spreadDeg: Phaser.Math.Between(4, 10),
+        speedMin: 180,
+        speedMax: 320,
+        lifeMs: Phaser.Math.Between(280, 420),
+        color: tint,
+        size: Phaser.Math.Between(2, 3),
+        alpha: 0.95,
+      });
+    }
+    // Optional soft smoke (very light)
+    try {
+      const key = ensureCircleParticle(scene, 'death_smoke_particle', 0x999999, 3);
+      for (let i = 0; i < 2; i += 1) {
+        const img = scene.add.image(x, y, key).setDepth(8500).setAlpha(0.18);
+        const dx = Phaser.Math.Between(-6, 6), dy = Phaser.Math.Between(-10, 0);
+        const sc = Phaser.Math.FloatBetween(0.8, 1.1) * (1 + 0.2 * scale);
+        scene.tweens.add({ targets: img, x: x + dx, y: y + dy, alpha: 0, scale: sc, duration: 260, ease: 'Cubic.Out', onComplete: () => { try { img.destroy(); } catch (_) {} } });
+      }
+    } catch (_) {}
+  } catch (_) {}
+}
