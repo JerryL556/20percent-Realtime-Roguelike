@@ -311,7 +311,7 @@ export default class BossScene extends Phaser.Scene {
             const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
             const hp1 = hp0 - dmg;
             try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
-            if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+            s.setData('hp', Math.max(1, hp1));
           } catch (_) {}
           return false; // skip separation/callback to let bullet continue
         }
@@ -362,7 +362,7 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150é—‚? 48px, 10 dmg
+  // Player melee (same as Combat): 150é—? 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
@@ -635,7 +635,7 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—‚?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2é—?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -681,7 +681,7 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120é—‚?s equals 2é—‚?frame at 60 FPS
+        // Turn rate (time-based): ~120é—?s equals 2é—?frame at 60 FPS
         b._turnRate = Phaser.Math.DegToRad(120);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
@@ -1943,7 +1943,7 @@ export default class BossScene extends Phaser.Scene {
       // Ensure fire field spawns on any explosive detonation, not only at target
       try { if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); } } catch (_) {}
     }
-    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    s.setData('hp', Math.max(1, hp1));
     try { b.destroy(); } catch (_) {}
   }
 
@@ -1953,7 +1953,7 @@ export default class BossScene extends Phaser.Scene {
     const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
     const hp1 = hp0 - dmg;
-    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    s.setData('hp', Math.max(1, hp1));
     try { b.destroy(); } catch (_) {}
   }
 
@@ -1968,7 +1968,7 @@ export default class BossScene extends Phaser.Scene {
         if ((dx * dx + dy * dy) <= r2) {
           const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
           const hp1 = hp0 - dmg;
-          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+          s.setData('hp', Math.max(1, hp1));
         }
       }
     } catch (_) {}
@@ -1984,7 +1984,7 @@ export default class BossScene extends Phaser.Scene {
     const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7));
     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
     const hp1 = hp0 - dmg;
-    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    s.setData('hp', Math.max(1, hp1));
   }
 
   createArenaWalls() {
@@ -2176,20 +2176,20 @@ export default class BossScene extends Phaser.Scene {
       if (this.boss?.active) { const dx = this.boss.x - ex; const dy = this.boss.y - ey; if ((dx * dx + dy * dy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; const splash = b._rocket ? (b.damage || 12) : Math.ceil((b.damage || 12) * 0.5); this.boss.hp -= splash; if (this.boss.hp <= 0) this.killBoss(this.boss); } }
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
     }
-    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+    s.setData('hp', Math.max(1, hp1));
     try { b.destroy(); } catch (_) {}
   }
 
   // Boss bullets into barricades
-  onBossBulletHitBarricade(b, s) { if (!b || !s) return; const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } try { b.destroy(); } catch (_) {} }
+  onBossBulletHitBarricade(b, s) { if (!b || !s) return; const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; s.setData('hp', Math.max(1, hp1)); try { b.destroy(); } catch (_) {} }
 
   // Utility AoE damage to soft barricades
   damageSoftBarricadesInRadius(x, y, radius, dmg) {
-    try { const r2 = radius * radius; const arr = this.barricadesSoft?.getChildren?.() || []; for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const dx = s.x - x; const dy = s.y - y; if ((dx * dx + dy * dy) <= r2) { const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } } } } catch (_) {}
+    try { const r2 = radius * radius; const arr = this.barricadesSoft?.getChildren?.() || []; for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const dx = s.x - x; const dy = s.y - y; if ((dx * dx + dy * dy) <= r2) { const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; s.setData('hp', Math.max(1, hp1)); } } } catch (_) {}
   }
 
   // Boss trying to push destructible cover
-  onEnemyHitBarricade(e, s) { if (!s?.active) return; const now = this.time.now; const last = s.getData('_lastMeleeHurtAt') || 0; if (now - last < 250) return; s.setData('_lastMeleeHurtAt', now); const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7)); const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } }
+  onEnemyHitBarricade(e, s) { if (!s?.active) return; const now = this.time.now; const last = s.getData('_lastMeleeHurtAt') || 0; if (now - last < 250) return; s.setData('_lastMeleeHurtAt', now); const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7)); const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; s.setData('hp', Math.max(1, hp1)); }
 
   // Optional walls
   createArenaWalls() {
@@ -2423,6 +2423,7 @@ export default class BossScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
