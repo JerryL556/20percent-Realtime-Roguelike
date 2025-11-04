@@ -2847,12 +2847,14 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
 
             // Transparent red sector from Rook to arc (visual coverage area)
+            // Connector lines from Rook center to arc endpoints (transparent red)
             try {
-              if (!e._shieldFillG) { e._shieldFillG = this.add.graphics(); try { e._shieldFillG.setDepth(8400); e._shieldFillG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
-              const fg = e._shieldFillG; fg.clear(); fg.setPosition(e.x, e.y);
-              const rFill = Math.max(6, off + radius);
-              fg.fillStyle(0xff3333, 0.12);
-              fg.beginPath(); fg.moveTo(0, 0); fg.arc(0, 0, rFill, e._shieldAngle - half, e._shieldAngle + half, false); fg.closePath(); fg.fillPath();
+              const rx = e.x - cx, ry = e.y - cy; // rook center in shield local coords
+              const a1 = e._shieldAngle - half; const a2 = e._shieldAngle + half;
+              const ex1 = Math.cos(a1) * radius, ey1 = Math.sin(a1) * radius;
+              const ex2 = Math.cos(a2) * radius, ey2 = Math.sin(a2) * radius;
+              g.lineStyle(1, 0xff3333, 0.18).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
+              g.lineStyle(1, 0xff3333, 0.18).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
             // Maintain/update physics shield zone used for bullet/rocket blocking

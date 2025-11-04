@@ -174,10 +174,10 @@ export function createRookEnemy(scene, x, y, hp = 300, damage = 25, speed = 35) 
   r._shieldAngle = 0; // radians, facing right initially
   r._shieldG = null;
   // Bring shield closer to Rook, keep size constant
-  r._shieldOffset = 8;
+  r._shieldOffset = 6;
   r._shieldRadius = 46; // fixed visual radius (unchanged size)
   r._shieldHalf = Phaser.Math.DegToRad ? Phaser.Math.DegToRad(45) : (Math.PI/4);
-  r.on('destroy', () => { try { r._g?.destroy(); } catch (_) {} try { r._shieldG?.destroy(); r._shieldG = null; } catch (_) {} try { r._igniteIndicator?.destroy(); r._igniteIndicator = null; } catch (_) {} try { r._toxinIndicator?.destroy(); r._toxinIndicator = null; } catch (_) {} });
+  r.on('destroy', () => { try { r._g?.destroy(); } catch (_) {} try { r._shieldG?.destroy(); r._shieldG = null; } catch (_) {} try { r._shieldFillG?.destroy(); r._shieldFillG = null; } catch (_) {} try { r._igniteIndicator?.destroy(); r._igniteIndicator = null; } catch (_) {} try { r._toxinIndicator?.destroy(); r._toxinIndicator = null; } catch (_) {} });
   // Ensure shield zone is cleaned up if managed by scene
   try { r.on('destroy', () => { try { r._shieldZone?.destroy?.(); r._shieldZone = null; } catch (_) {} }); } catch (_) {}
   return r;
