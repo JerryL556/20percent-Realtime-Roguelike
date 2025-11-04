@@ -311,7 +311,7 @@ export function createShooterEnemy(scene, x, y, hp = 90, damage = 10, speed = 45
   s.isShooter = true;
   s.fireRateMs = fireRateMs;
   s.lastShotAt = 0;
-  _attachEnemyVisuals(s, 'enemy_gunner', null, 12, 12);
+  _attachEnemyVisuals(s, 'enemy_gunner', null, 12, 12, 1.15);
   return s;
 }
 
@@ -407,7 +407,7 @@ export function createSnitchEnemy(scene, x, y, hp = 100, damage = 6, speed = 60)
   s.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   s.hp = hp; s.maxHp = hp; s.damage = damage; s.speed = speed;
   s.isEnemy = true; s.isShooter = true; s.isSnitch = true;
-  _attachEnemyVisuals(s, 'enemy_commander', null, 12, 12, 1.25);
+  _attachEnemyVisuals(s, 'enemy_commander', null, 12, 12, 1.3);
   return s;
 }
 
