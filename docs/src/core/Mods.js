@@ -322,7 +322,7 @@ export const armourMods = [
   { id: null, name: 'Empty', desc: 'No changes', apply: (a) => a, applyEffect: (e) => e },
   {
     id: 'a_hp_up',
-    name: 'Extra Padding',
+    name: 'Steel Padding',
     desc: '+40 max HP\n-10% movement speed',
     apply: (a) => ({ ...a, bonusHp: (a.bonusHp || 0) + 40, moveSpeedMult: (a.moveSpeedMult || 1) * 0.9 }),
     applyEffect: (e) => ({ ...e, bonusHp: (e.bonusHp || 0) + 40, moveSpeedMult: (e.moveSpeedMult || 1) * 0.9 }),
