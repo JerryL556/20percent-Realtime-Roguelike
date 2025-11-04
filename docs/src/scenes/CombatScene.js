@@ -562,7 +562,7 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isRook && !b._rail) {
         try {
           const r = (e._shieldRadius || 60);
-          const off = Math.max(0, (r - 6));
+          const off = Math.max(0, (r - 2));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const angToBullet = Math.atan2(b.y - cy, b.x - cx);
@@ -2831,7 +2831,7 @@ export default class CombatScene extends Phaser.Scene {
             if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
             const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
             const r = (e._shieldRadius || 60);
-          const off = Math.max(0, (r - 6));
+          const off = Math.max(0, (r - 2));
             const baseR = r;
             const cx = e.x + Math.cos(e._shieldAngle) * off;
             const cy = e.y + Math.sin(e._shieldAngle) * off;
@@ -4152,7 +4152,7 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isRook) {
         try {
           const r = (e._shieldRadius || 60);
-          const off = Math.max(0, (r - 6));
+          const off = Math.max(0, (r - 2));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const dirToSource = Math.atan2(sy - cy, sx - cx);
@@ -4253,6 +4253,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 
