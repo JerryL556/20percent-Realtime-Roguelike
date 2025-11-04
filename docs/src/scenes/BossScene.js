@@ -296,12 +296,27 @@ export default class BossScene extends Phaser.Scene {
       // Boss death check
       if (e.hp <= 0) this.killBoss(e);
     });
-    // Player bullets collide with barricades (block and damage them)
+    // Player bullets collide with barricades; allow piercing core to pass through breakable (soft)
     this.physics.add.collider(
       this.bullets,
       this.barricadesSoft,
       (b, s) => this.onBulletHitBarricade(b, s),
-      (b, s) => !(b && b._rail),
+      (b, s) => {
+        if (!b || !s) return false;
+        if (b._rail) return false; // rail pierces everything
+        if (b._core === 'pierce') {
+          // Apply damage to soft barricade but do not block the bullet
+          try {
+            const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+            const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
+            const hp1 = hp0 - dmg;
+            try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+            if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+          } catch (_) {}
+          return false; // skip separation/callback to let bullet continue
+        }
+        return true;
+      },
       this,
     );
 
