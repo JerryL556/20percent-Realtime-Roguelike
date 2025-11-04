@@ -363,5 +363,6 @@ export const armourDefs = [
   { id: null, name: 'No Armour' },
   { id: 'leather', name: 'Leather Vest' },
   { id: 'kevlar', name: 'Kevlar Suit' },
+  { id: 'exp_shield', name: 'Experimental Shield Generator' },
   { id: 'wasp_bits', name: 'WASP BITS' },
 ];

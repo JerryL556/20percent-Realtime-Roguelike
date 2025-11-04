@@ -295,7 +295,7 @@ export default class UIScene extends Phaser.Scene {
       const label = this.add.text(col2X, wy, `Slot ${slotIdx + 1}: ${getName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' });
       nodes.push(label);
       try { this.loadout.weaponLabels[slotIdx] = label; label.setStyle({ color: (gs.equippedWeapons && gs.equippedWeapons[slotIdx]) ? '#ffff33' : '#cccccc' }); } catch (e) {}
-      const btn = makeTextButton(this, col2X + 210, wy + 8, 'Chooseâ€¦', () => {
+      const btn = makeTextButton(this, col2X + 210, wy + 8, 'Chooseâ€?, () => {
         const list = (gs.ownedWeapons || []).map((id) => ({ id, name: getWeaponById(id)?.name || id }));
         if (!list.length) return;
         const current = gs.equippedWeapons[slotIdx] || null;
@@ -367,7 +367,7 @@ export default class UIScene extends Phaser.Scene {
       const label = this.add.text(col2X, wy, `Mod ${idx + 1}: ${getName()}`, { fontFamily: 'monospace', fontSize: 14, color: hasMod ? '#ffff33' : '#cccccc' });
       nodes.push(label);
       this.loadout.modLabels.push(label);
-      const btn = makeTextButton(this, col2X + 210, wy + 8, 'Chooseâ€¦', () => {
+      const btn = makeTextButton(this, col2X + 210, wy + 8, 'Chooseâ€?, () => {
         ensureBuild();
         const activeId = gs.activeWeapon;
         const baseW = getWeaponById(activeId) || {};
@@ -404,7 +404,7 @@ export default class UIScene extends Phaser.Scene {
       if (savedCore && (!exists || looksLikeMod)) { gs.weaponBuilds[gs.activeWeapon].core = null; SaveManager.saveToLocal(gs); }
     } catch (_) {}
     const coreLabel = this.add.text(col2X, coreWy, `Core: ${(weaponCores.find((c) => c.id === (gs.weaponBuilds[gs.activeWeapon].core || null)) || weaponCores[0]).name}`, { fontFamily: 'monospace', fontSize: 14, color: (!!gs.weaponBuilds[gs.activeWeapon].core) ? '#ffff33' : '#cccccc' }); nodes.push(coreLabel); this.loadout.coreLabel = coreLabel;
-    const coreBtn = makeTextButton(this, col2X + 210, coreWy + 8, 'Chooseâ€¦', () => {
+    const coreBtn = makeTextButton(this, col2X + 210, coreWy + 8, 'Chooseâ€?, () => {
       ensureBuild();
       const activeId = gs.activeWeapon;
       const baseW = getWeaponById(activeId) || {};
@@ -431,13 +431,24 @@ export default class UIScene extends Phaser.Scene {
     const armourName = () => (armourDefs.find((a) => a.id === (gs.armour?.id || null)) || armourDefs[0]).name;
     const armourLabel = this.add.text(col3X, y3, `Equipped: ${armourName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(armourLabel);
     try { this.loadout.armourLabel = armourLabel; armourLabel.setStyle({ color: (gs.armour && gs.armour.id) ? '#ffff33' : '#cccccc' }); } catch (e) {}
-    const armourBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Chooseâ€¦', () => {
+    const armourBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Chooseâ€?, () => {
       const opts = armourDefs.map((a) => ({ id: a.id, name: a.name }));
       const cur = gs.armour?.id || null;
       this.openChoicePopup('Choose Armour', opts, cur, (chosenId) => {
         gs.armour = gs.armour || { id: null, mods: [null, null] };
         gs.armour.id = chosenId;
-      armourLabel.setText(`Equipped: ${armourName()}`);
+        try {
+          if (chosenId === 'exp_shield') {
+            gs.maxHp = 50; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 40; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.shieldRegenDelayMs = 1500;
+          } else {
+            gs.maxHp = 100; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.shieldRegenDelayMs = 3000;
+          }
+        } catch (_) {}
+      armourLabel.setText('Equipped: ' + armourName());
       try { armourLabel.setStyle({ color: (gs.armour && gs.armour.id) ? '#ffff33' : '#cccccc' }); } catch (e) {}
       SaveManager.saveToLocal(gs);
       });
@@ -447,7 +458,7 @@ export default class UIScene extends Phaser.Scene {
       const getName = () => (armourMods.find((m) => m.id === (gs.armour?.mods?.[idx] ?? null)) || armourMods[0]).name;
       const lab = this.add.text(col3X, wy, `Mod ${idx + 1}: ${getName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(lab);
       try { this.loadout.armourModLabels[idx] = lab; lab.setStyle({ color: (gs.armour && gs.armour.mods && gs.armour.mods[idx]) ? '#ffff33' : '#cccccc' }); } catch (e) {}
-      const btn = makeTextButton(this, col3X + 210, wy + 8, 'Chooseâ€¦', () => {
+      const btn = makeTextButton(this, col3X + 210, wy + 8, 'Chooseâ€?, () => {
         gs.armour = gs.armour || { id: null, mods: [null, null] };
         const opts = armourMods.map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
         const cur = gs.armour.mods[idx] || null;
@@ -467,7 +478,7 @@ export default class UIScene extends Phaser.Scene {
     nodes.push(this.add.text(col3X, y3, 'Ability', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' })); y3 += 28;
     const abilityName = () => (getAbilityById(gs.abilityId)?.name || '-');
     const abilityLabel = this.add.text(col3X, y3, `Equipped: ${abilityName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(abilityLabel);
-    const abilityBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Chooseâ€¦', () => {
+    const abilityBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Chooseâ€?, () => {
       const opts = abilityDefs.map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
       const cur = gs.abilityId || null;
       this.openChoicePopup('Choose Ability', opts, cur, (chosenId) => {
@@ -576,3 +587,7 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
+
+
+
+
