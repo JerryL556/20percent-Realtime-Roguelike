@@ -6,6 +6,21 @@ export default class BootScene extends Phaser.Scene {
   preload() {
     // Load external PNG assets for weapons
     try { preloadWeaponAssets(this); } catch (_) {}
+    // Load enemy PNG assets (non-boss)
+    try {
+      const A = (k, p) => { if (!this.textures.exists(k)) this.load.image(k, p); };
+      A('enemy_shredder', 'assets/Shredder.png');       // base melee
+      A('enemy_charger', 'assets/Charger.png');         // runner
+      A('enemy_gunner', 'assets/Gunner.png');           // shooter
+      A('enemy_machine_gunner', 'assets/MachineGunner.png');
+      A('enemy_rocketeer', 'assets/Rocketeer.png');
+      A('enemy_sniper', 'assets/Sniper.png');
+      A('enemy_prism', 'assets/Prism.png');
+      A('enemy_commander', 'assets/Commander.png');     // snitch
+      A('enemy_rook', 'assets/Rook.png');
+      A('enemy_bombardier', 'assets/Bombardier.png');   // grenadier
+      A('enemy_bombardier_special', 'assets/BombardierSpecial.png');
+    } catch (_) {}
     // Generate simple textures used by bullets and optional sprites
     const g = this.make.graphics({ x: 0, y: 0, add: false });
     g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 4, 4);

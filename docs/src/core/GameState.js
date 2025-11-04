@@ -52,7 +52,7 @@ export class GameState {
     // Boss Rush sequence queue (array of boss type strings)
     this.bossRushQueue = [];
     // Track last spawned boss type in Normal mode to alternate
-    this.lastBossType = null; // 'Shotgunner' | 'Charger' | null
+    this.lastBossType = null; // 'Shotgunner' | 'Dasher' | null
     // Ability equipped (gadget)
     this.abilityId = 'ads';
     // Dash settings
@@ -130,11 +130,11 @@ export class GameState {
       if (!Array.isArray(this.bossRushQueue) || this.bossRushQueue.length === 0) {
         this.setGameMode('BossRush');
       }
-      return (this.bossRushQueue && this.bossRushQueue[0]) ? this.bossRushQueue[0] : 'Charger';
+      return (this.bossRushQueue && this.bossRushQueue[0]) ? this.bossRushQueue[0] : 'Dasher';
     }
     // Normal mode: alternate to ensure both appear over time
-    if (this.lastBossType === 'Charger') return 'Shotgunner';
-    return 'Charger';
+    if (this.lastBossType === 'Dasher') return 'Shotgunner';
+    return 'Dasher';
   }
 
   // Change game mode and initialize any mode-specific state
@@ -142,7 +142,7 @@ export class GameState {
     this.gameMode = (mode === 'BossRush') ? 'BossRush' : 'Normal';
     if (this.gameMode === 'BossRush') {
       // Initialize a shuffled list of bosses for this run
-      const bosses = ['Shotgunner', 'Charger'];
+      const bosses = ['Shotgunner', 'Dasher'];
       // Fisher–Yates using run RNG
       for (let i = bosses.length - 1; i > 0; i -= 1) {
         const j = this.rng.int(0, i);
