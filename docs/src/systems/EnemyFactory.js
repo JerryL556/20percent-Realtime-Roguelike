@@ -195,6 +195,45 @@ function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH
           else _ensureEnemyTexture(e.scene, wantKey, applySwap);
         }
       }
+      // Enhance sniper bullets: add tracer and slight speed boost (decorate once)
+      try {
+        const arrB = e.scene?.enemyBullets?.getChildren?.();
+        if (arrB && arrB.length) {
+          for (let i = 0; i < arrB.length; i += 1) {
+            const b = arrB[i]; if (!b?.active) continue;
+            if (!b._sniper || b._decorated) continue;
+            // One-time velocity boost
+            try {
+              if (!b._sniperBoosted && b.body && b.body.velocity) {
+                const mul = 1.15; // +15%
+                b.body.velocity.x *= mul; b.body.velocity.y *= mul;
+                b._sniperBoosted = true;
+              }
+            } catch (_) {}
+            // Add tracer graphics behind bullet, wrapping existing update method
+            try {
+              const g = e.scene.add.graphics();
+              try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+              const prevUpdate = b.update;
+              b.update = () => {
+                try {
+                  // Draw tail along motion vector
+                  g.clear();
+                  const vx0 = b.body?.velocity?.x || 0; const vy0 = b.body?.velocity?.y || 0;
+                  const ang = Math.atan2(vy0, vx0);
+                  const tail = 14;
+                  const tx = b.x - Math.cos(ang) * tail; const ty = b.y - Math.sin(ang) * tail;
+                  g.lineStyle(3, 0xff3333, 0.8).beginPath().moveTo(tx, ty).lineTo(b.x, b.y).strokePath();
+                  g.lineStyle(1, 0xffffff, 0.9).beginPath().moveTo(tx + Math.cos(ang) * 2, ty + Math.sin(ang) * 2).lineTo(b.x, b.y).strokePath();
+                } catch (_) {}
+                if (typeof prevUpdate === 'function') prevUpdate();
+              };
+              b.on('destroy', () => { try { g.destroy(); } catch (_) {} });
+            } catch (_) {}
+            b._decorated = true;
+          }
+        }
+      } catch (_) {}
     } catch (_) {}
   };
   try { e.scene?.events?.on?.('update', onUpdate); } catch (_) {}
