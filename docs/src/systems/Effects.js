@@ -310,23 +310,11 @@ export function spawnDeathVfxForEnemy(scene, e, scale = 1) {
     const tint = getScrapTintForEnemy(e);
     const x = e?.x ?? 0, y = e?.y ?? 0;
     const r = Math.max(10, Math.floor(14 * scale));
-    impactBurst(scene, x, y, { color: tint, size: 'small', radius: Math.floor(r * 0.8) });
-    // Scrap count varies slightly by scale
-    const scraps = Math.max(6, Math.floor((e?.isBoss ? 14 : 10) * scale));
-    for (let i = 0; i < scraps; i += 1) {
-      const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      pixelSparks(scene, x, y, {
-        angleRad: ang,
-        count: 1,
-        spreadDeg: Phaser.Math.Between(4, 10),
-        speedMin: 180,
-        speedMax: 320,
-        lifeMs: Phaser.Math.Between(280, 420),
-        color: tint,
-        size: Phaser.Math.Between(2, 3),
-        alpha: 0.95,
-      });
-    }
+    // Explosion pop: unified red
+    impactBurst(scene, x, y, { color: 0xff3333, size: 'small', radius: Math.floor(r * 0.8) });
+    // Scrap debris in parabolic arcs
+    const scraps = Math.max(8, Math.floor((e?.isBoss ? 18 : 12) * scale));
+    spawnScrapDebris(scene, x, y, { tint, count: scraps, power: 1 });
     // Optional soft smoke (very light)
     try {
       const key = ensureCircleParticle(scene, 'death_smoke_particle', 0x999999, 3);
@@ -337,5 +325,81 @@ export function spawnDeathVfxForEnemy(scene, e, scale = 1) {
         scene.tweens.add({ targets: img, x: x + dx, y: y + dy, alpha: 0, scale: sc, duration: 260, ease: 'Cubic.Out', onComplete: () => { try { img.destroy(); } catch (_) {} } });
       }
     } catch (_) {}
+  } catch (_) {}
+}
+
+// Ensure a small pool of irregular scrap polygon textures exists
+function ensureScrapTextures(scene) {
+  try {
+    if (scene.textures?.exists?.('scrap_shape_0')) return true;
+    const shapes = [
+      [ {x:0,y:1},{x:3,y:0},{x:6,y:2},{x:2,y:4} ],
+      [ {x:0,y:0},{x:4,y:1},{x:5,y:4},{x:1,y:5} ],
+      [ {x:1,y:0},{x:6,y:0},{x:4,y:3},{x:0,y:2} ],
+      [ {x:0,y:1},{x:2,y:0},{x:5,y:2},{x:3,y:5},{x:0,y:3} ],
+      [ {x:0,y:0},{x:5,y:0},{x:6,y:2},{x:1,y:3} ],
+      [ {x:1,y:0},{x:4,y:1},{x:6,y:3},{x:2,y:4},{x:0,y:2} ],
+    ];
+    for (let i = 0; i < shapes.length; i += 1) {
+      const key = `scrap_shape_${i}`;
+      const g = scene.make.graphics({ x: 0, y: 0, add: false });
+      g.clear(); g.fillStyle(0xffffff, 1);
+      const pts = shapes[i];
+      g.beginPath(); g.moveTo(pts[0].x, pts[0].y);
+      for (let j = 1; j < pts.length; j += 1) g.lineTo(pts[j].x, pts[j].y);
+      g.closePath(); g.fillPath();
+      const w = 7, h = 6;
+      g.generateTexture(key, w, h);
+      g.destroy();
+    }
+    return true;
+  } catch (_) { return false; }
+}
+
+// Spawn irregular scrap pieces flying in simple parabolas and disappearing on 'landing'
+export function spawnScrapDebris(scene, x, y, opts = {}) {
+  try {
+    ensureScrapTextures(scene);
+    const count = Math.max(1, opts.count || 10);
+    const tint = opts.tint ?? 0x888888;
+    const power = opts.power ?? 1;
+    for (let i = 0; i < count; i += 1) {
+      const key = `scrap_shape_${Phaser.Math.Between(0, 5)}`;
+      const img = scene.add.image(x, y, key);
+      img.setDepth(8600);
+      try { img.setTint(tint); } catch (_) {}
+      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const sp = Phaser.Math.FloatBetween(90, 180) * power;
+      const vx = Math.cos(a) * sp;
+      const vy = Math.sin(a) * sp;
+      let z = Phaser.Math.FloatBetween(8, 16) * power; // initial height
+      let vz = Phaser.Math.FloatBetween(120, 180) * power; // initial upward velocity
+      const g = 380; // gravity
+      const rotSpd = Phaser.Math.FloatBetween(-6, 6);
+      const x0 = x, y0 = y;
+      const onUpdate = () => {
+        try {
+          const dt = ((scene.game?.loop?.delta) || 16) / 1000;
+          // planar motion
+          const nx = img.x + vx * dt;
+          const ny = img.y + vy * dt;
+          // vertical motion
+          z += vz * dt; vz -= g * dt;
+          // display: raise by z
+          img.x = nx; img.y = ny - z;
+          img.rotation += rotSpd * dt;
+          // landed
+          if (z <= 0) {
+            scene.events.off('update', onUpdate);
+            scene.tweens.add({ targets: img, alpha: 0, duration: 100, onComplete: () => { try { img.destroy(); } catch (_) {} } });
+          }
+          // offscreen safety
+          const view = scene.cameras?.main?.worldView; if (view && !view.contains(img.x, img.y)) { scene.events.off('update', onUpdate); try { img.destroy(); } catch (_) {} }
+        } catch (_) { try { scene.events.off('update', onUpdate); img.destroy(); } catch (e) {} }
+      };
+      scene.events.on('update', onUpdate);
+      // ensure cleanup on scene shutdown
+      try { scene.events.once('shutdown', () => { try { scene.events.off('update', onUpdate); } catch (_) {} try { img.destroy(); } catch (_) {} }); } catch (_) {}
+    }
   } catch (_) {}
 }
