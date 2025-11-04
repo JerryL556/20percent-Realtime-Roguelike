@@ -562,7 +562,7 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isRook && !b._rail) {
         try {
           const r = (e._shieldRadius || 60);
-          const off = Math.max(0, Math.min(r - 10, (e._shieldOffset ?? (r - 12))));
+          const off = Math.max(0, Math.min(r - 6, (e._shieldOffset ?? (r - 6))));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const angToBullet = Math.atan2(b.y - cy, b.x - cx);
@@ -2831,7 +2831,7 @@ export default class CombatScene extends Phaser.Scene {
             if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
             const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
             const r = (e._shieldRadius || 60);
-          const off = Math.max(0, Math.min(r - 10, (e._shieldOffset ?? (r - 12))));
+          const off = Math.max(0, Math.min(r - 6, (e._shieldOffset ?? (r - 6))));
             const baseR = r;
             const cx = e.x + Math.cos(e._shieldAngle) * off;
             const cy = e.y + Math.sin(e._shieldAngle) * off;
@@ -2855,8 +2855,8 @@ export default class CombatScene extends Phaser.Scene {
               const a1 = e._shieldAngle - half; const a2 = e._shieldAngle + half;
               const ex1 = Math.cos(a1) * radius, ey1 = Math.sin(a1) * radius;
               const ex2 = Math.cos(a2) * radius, ey2 = Math.sin(a2) * radius;
-              g.lineStyle(6, 0xff3333, 0.4).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
-              g.lineStyle(6, 0xff3333, 0.4).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
+              g.lineStyle(2, 0xff3333, 0.25).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
+              g.lineStyle(2, 0xff3333, 0.25).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
             // Maintain/update physics shield zone used for bullet/rocket blocking
@@ -4152,7 +4152,7 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isRook) {
         try {
           const r = (e._shieldRadius || 60);
-          const off = Math.max(0, Math.min(r - 10, (e._shieldOffset ?? (r - 12))));
+          const off = Math.max(0, Math.min(r - 6, (e._shieldOffset ?? (r - 6))));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const dirToSource = Math.atan2(sy - cy, sx - cx);
@@ -4253,6 +4253,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 
