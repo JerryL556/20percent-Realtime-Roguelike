@@ -2855,8 +2855,8 @@ export default class CombatScene extends Phaser.Scene {
               const a1 = e._shieldAngle - half; const a2 = e._shieldAngle + half;
               const ex1 = Math.cos(a1) * radius, ey1 = Math.sin(a1) * radius;
               const ex2 = Math.cos(a2) * radius, ey2 = Math.sin(a2) * radius;
-              g.lineStyle(1, 0xff3333, 0.22).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
-              g.lineStyle(1, 0xff3333, 0.22).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
+              g.lineStyle(4, 0xff3333, 0.35).beginPath(); g.moveTo(rx, ry); g.lineTo(ex1, ey1); g.strokePath();
+              g.lineStyle(4, 0xff3333, 0.35).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
             // Maintain/update physics shield zone used for bullet/rocket blocking
@@ -4253,6 +4253,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
