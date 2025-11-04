@@ -396,15 +396,16 @@ export default class BossScene extends Phaser.Scene {
       const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
       let remaining = dmg;
       const s = Math.max(0, Math.floor(gs.shield || 0));
+      const hadShield = s > 0;
       if (s > 0) {
         const absorbed = Math.min(s, remaining);
         gs.shield = s - absorbed;
         remaining -= absorbed;
       }
       if (remaining > 0) {
-        if (gs.allowOverrun !== false) {
-          gs.hp = Math.max(0, (gs.hp | 0) - remaining);
-        }
+        let allow = (gs.allowOverrun !== false);
+        try { const eff = getPlayerEffects(gs) || {}; if (hadShield && eff.preventShieldOverflow) allow = false; } catch (_) {}
+        if (allow) gs.hp = Math.max(0, (gs.hp | 0) - remaining);
       }
       gs.lastDamagedAt = this.time.now;
     } catch (_) {}
@@ -2423,6 +2424,8 @@ export default class BossScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 

@@ -334,6 +334,14 @@ export const armourMods = [
     apply: (a) => ({ ...a, dashRegenMs: Math.min(4000, a.dashRegenMs || 4000) }),
     applyEffect: (e) => ({ ...e, dashRegenMs: Math.min(4000, e.dashRegenMs || 999999) }),
   },
+  {
+    id: 'a_no_overflow',
+    name: 'Emergency Power Supply',
+    desc: '+Prevents damage overflow when Energy Shield breaks',
+    apply: (a) => a,
+    // Mark an effect flag that scenes can honor when applying damage
+    applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),
+  },
 ];
 
 // Armour list is intentionally minimal; you can extend later.
