@@ -534,6 +534,29 @@ export default class CombatScene extends Phaser.Scene {
     );
 
     // Shield hitboxes for Rook (separate from body)
+    this.rookShieldGroup = this.physics.add.group();
+    this.physics.add.overlap(this.bullets, this.rookShieldGroup, (b, z) => {
+      try {
+        if (!b?.active || !z?.active) return;
+        if (b._rail) return; // rail pierces shields
+        const e = z._owner; if (!e?.active || !e.isRook) return;
+        const cx = z.x, cy = z.y; const r = (e._shieldRadius || 60);
+        const angToBullet = Math.atan2(b.y - cy, b.x - cx);
+        const shieldAng = e._shieldAngle || 0; const half = Phaser.Math.DegToRad(45);
+        const diff = Math.abs(Phaser.Math.Angle.Wrap(angToBullet - shieldAng));
+        if (diff <= half) {
+          const dxr = b.x - cx, dyr = b.y - cy; const d2 = dxr * dxr + dyr * dyr; const r2 = r * r;
+          if (d2 >= (r2 * 0.7)) {
+            const hitX = cx + Math.cos(angToBullet) * r;
+            const hitY = cy + Math.sin(angToBullet) * r;
+            try { impactBurst(this, hitX, hitY, { color: 0xff3333, size: 'small' }); } catch (_) {}
+            try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+            try { b.setActive(false).setVisible(false); } catch (_) {}
+            this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
+          }
+        }
+      } catch (_) {}
+    }, null, this);
     // Rook shield zone overlap disabled; blocking handled in bullets vs enemies outer-arc check
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
@@ -2839,7 +2862,24 @@ export default class CombatScene extends Phaser.Scene {
               g.lineStyle(1, 0xff3333, 0.22).beginPath(); g.moveTo(rx, ry); g.lineTo(ex2, ey2); g.strokePath();
             } catch (_) {}
 
-            // Shield zone disabled (outer-arc handles blocking)
+                        try {
+              const r = (e._shieldRadius || 60);
+              const gap = 35; const off = (gap - r);
+              const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
+              const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
+              const zoneR = Math.max(8, Math.floor(r));
+              if (!e._shieldZone || !e._shieldZone.body) {
+                const z = this.add.zone(cx, cy, Math.ceil(zoneR * 2), Math.ceil(zoneR * 2));
+                this.physics.world.enable(z);
+                z.body.setAllowGravity(false);
+                z.body.setImmovable(true);
+                try { z.body.setCircle(zoneR); } catch (_) { try { z.body.setSize(Math.ceil(zoneR * 2), Math.ceil(zoneR * 2)); } catch (_) {} }
+                z._owner = e; e._shieldZone = z; this.rookShieldGroup.add(z);
+              } else {
+                const z = e._shieldZone; z.setPosition(cx, cy);
+                try { z.body.setCircle(zoneR); } catch (_) { try { z.body.setSize(Math.ceil(zoneR * 2), Math.ceil(zoneR * 2)); } catch (_) {} }
+              }
+            } catch (_) {}
           } catch (_) {}
         }
         // Melee attack state machine (for base + runner + rook)
@@ -4218,6 +4258,8 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
+
 
 
 
