@@ -417,7 +417,7 @@ export function createRookEnemy(scene, x, y, hp = 300, damage = 25, speed = 35) 
   r.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   r.hp = hp; r.maxHp = hp; r.damage = damage; r.speed = speed;
   r.isEnemy = true; r.isMelee = true; r.isRook = true;
-  _attachEnemyVisuals(r, 'enemy_rook', null, 12, 12);
+  _attachEnemyVisuals(r, 'enemy_rook', null, 12, 12, 1.15);
   // Shield state: front arc (90 deg), slow turning
   r._shieldAngle = 0; // radians, facing right initially
   r._shieldG = null;
@@ -449,6 +449,6 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed =
   g.detonateTriggerRadius = 55;
   // Explosion radius used for damage and VFX (keep in sync)
   g.explosionRadius = 70;
-  _attachEnemyVisuals(g, 'enemy_bombardier', 'enemy_bombardier_special', 12, 12, 1.3);
+  _attachEnemyVisuals(g, 'enemy_bombardier', 'enemy_bombardier_special', 12, 12, 1.2);
   return g;
 }
