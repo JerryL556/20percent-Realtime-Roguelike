@@ -330,7 +330,7 @@ export const armourMods = [
   {
     id: 'a_dr_small',
     name: 'Carbon Fiber Frame',
-    desc: 'Dash recharge 4s per charge',
+    desc: '-1s Dash Cooldown',
     apply: (a) => ({ ...a, dashRegenMs: Math.min(4000, a.dashRegenMs || 4000) }),
     applyEffect: (e) => ({ ...e, dashRegenMs: Math.min(4000, e.dashRegenMs || 999999) }),
   },
