@@ -2830,12 +2830,14 @@ export default class CombatScene extends Phaser.Scene {
             e._shieldAngle = cur + step;
             if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
             const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
-            const collR = (e._shieldRadius || 60);
-            const visR = 30; // visual-only radius to appear much closer
-            const cx = e.x; const cy = e.y;
+            const r = (e._shieldRadius || 60);
+          const off = Math.max(0, (r - 2));
+            const baseR = r;
+            const cx = e.x + Math.cos(e._shieldAngle) * off;
+            const cy = e.y + Math.sin(e._shieldAngle) * off;
             // Match player shield VFX style: pulsing radius and alpha, two stroke layers
             const t = ((this.time?.now || 0) % 1000) / 1000;
-            const radius = visR + Math.sin(t * Math.PI * 2) * 1.0;
+            const radius = baseR + Math.sin(t * Math.PI * 2) * 1.0;
             const p = 1; // no shield HP for enemies; use full visual strength
             const alpha = (0.12 + 0.28 * p) + Math.sin(t * Math.PI * 2) * 0.04 * p;
             try {
@@ -2849,7 +2851,7 @@ export default class CombatScene extends Phaser.Scene {
             // Transparent red sector from Rook to arc (visual coverage area)
             // Connector lines from Rook center to arc endpoints (transparent red)
             try {
-              const rx = 0, ry = 0;
+              const rx = e.x - cx, ry = e.y - cy; // rook center in shield local coords
               const a1 = e._shieldAngle - half; const a2 = e._shieldAngle + half;
               const ex1 = Math.cos(a1) * radius, ey1 = Math.sin(a1) * radius;
               const ex2 = Math.cos(a2) * radius, ey2 = Math.sin(a2) * radius;
@@ -4251,7 +4253,6 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
-
 
 
 
