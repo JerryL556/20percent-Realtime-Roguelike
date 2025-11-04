@@ -66,7 +66,8 @@ function _applyTextureAndScale(e, key, bodyW, bodyH) {
           const src = tex?.getSourceImage?.();
           const h = (src && (src.naturalHeight || src.height)) || tex?.frames?.['__BASE']?.height || img.height || 1;
           const bodyHNow = (e.body && e.body.height) ? e.body.height : (bodyH || 12);
-          if (h > 0) img.setScale((bodyHNow / h) * ENEMY_SPRITE_VISUAL_MULT);
+          const mul = (typeof e._visMult === 'number' && e._visMult > 0) ? e._visMult : 1;
+          if (h > 0) img.setScale((bodyHNow / h) * ENEMY_SPRITE_VISUAL_MULT * mul);
         } catch (_) {}
         e._vis = img;
         // Ensure the underlying physics sprite is invisible
@@ -160,9 +161,10 @@ function _resetBodySize(e) {
   } catch (_) {}
 }
 
-function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH = null) {
+function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH = null, visMult = 1) {
   // Remember intended physics body size to keep collisions stable regardless of display scale
   if (bodyW && bodyH) { e._bodyW = bodyW; e._bodyH = bodyH; }
+  try { e._visMult = (typeof visMult === 'number' && visMult > 0) ? visMult : 1; } catch (_) {}
   try {
     if (keyNormal) {
       const applyNormal = () => { try { _applyTextureAndScale(e, keyNormal, bodyW, bodyH); _resetBodySize(e); } catch (_) {} };
@@ -280,7 +282,7 @@ export function createRunnerEnemy(scene, x, y, hp = 60, damage = 10, speed = 120
   r.isEnemy = true;
   r.isMelee = true;
   r.isRunner = true;
-  _attachEnemyVisuals(r, 'enemy_charger', null, 12, 12);
+  _attachEnemyVisuals(r, 'enemy_charger', null, 12, 12, 0.9);
   return r;
 }
 
@@ -395,7 +397,7 @@ export function createPrismEnemy(scene, x, y, hp = 180, damage = 16, speed = 46)
   p.isPrism = true;
   // Visual distinction
   try { p.setScale(1.15); } catch (_) {}
-  _attachEnemyVisuals(p, 'enemy_prism', null, 12, 12);
+  _attachEnemyVisuals(p, 'enemy_prism', null, 12, 12, 1.3);
   return p;
 }
 
@@ -405,7 +407,7 @@ export function createSnitchEnemy(scene, x, y, hp = 100, damage = 6, speed = 60)
   s.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   s.hp = hp; s.maxHp = hp; s.damage = damage; s.speed = speed;
   s.isEnemy = true; s.isShooter = true; s.isSnitch = true;
-  _attachEnemyVisuals(s, 'enemy_commander', null, 12, 12);
+  _attachEnemyVisuals(s, 'enemy_commander', null, 12, 12, 1.25);
   return s;
 }
 
@@ -447,6 +449,6 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed =
   g.detonateTriggerRadius = 55;
   // Explosion radius used for damage and VFX (keep in sync)
   g.explosionRadius = 70;
-  _attachEnemyVisuals(g, 'enemy_bombardier', 'enemy_bombardier_special', 12, 12);
+  _attachEnemyVisuals(g, 'enemy_bombardier', 'enemy_bombardier_special', 12, 12, 1.3);
   return g;
 }
