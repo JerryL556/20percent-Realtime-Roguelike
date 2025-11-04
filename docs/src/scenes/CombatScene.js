@@ -561,7 +561,7 @@ export default class CombatScene extends Phaser.Scene {
       // Rook shield: block non-rail bullets (including rockets) within 90° front arc
       if (e.isRook && !b._rail) {
         try {
-          const off = e._shieldOffset || 12;
+          const off = Math.max(0, Math.floor(((e._shieldOffset ?? 12)) * 0.4));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const angToBullet = Math.atan2(b.y - cy, b.x - cx);
@@ -2829,7 +2829,7 @@ export default class CombatScene extends Phaser.Scene {
             e._shieldAngle = cur + step;
             if (!e._shieldG) { e._shieldG = this.add.graphics(); try { e._shieldG.setDepth(8500); e._shieldG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
             const g = e._shieldG; const half = Phaser.Math.DegToRad(45);
-            const off = e._shieldOffset || 12;
+            const off = Math.max(0, Math.floor(((e._shieldOffset ?? 12)) * 0.4));
             const baseR = (e._shieldRadius || (24 + off));
             const cx = e.x + Math.cos(e._shieldAngle) * off;
             const cy = e.y + Math.sin(e._shieldAngle) * off;
@@ -4149,7 +4149,7 @@ export default class CombatScene extends Phaser.Scene {
       // Rook shield: treat 90° arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
-          const off = e._shieldOffset || 12;
+          const off = Math.max(0, Math.floor(((e._shieldOffset ?? 12)) * 0.4));
           const cx = e.x + Math.cos(e._shieldAngle || 0) * off;
           const cy = e.y + Math.sin(e._shieldAngle || 0) * off;
           const dirToSource = Math.atan2(sy - cy, sx - cx);
