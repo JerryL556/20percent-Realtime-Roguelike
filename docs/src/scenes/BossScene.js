@@ -311,7 +311,7 @@ export default class BossScene extends Phaser.Scene {
             const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
             const hp1 = hp0 - dmg;
             try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
-            s.setData('hp', Math.max(1, hp1));
+            if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
           } catch (_) {}
           return false; // skip separation/callback to let bullet continue
         }
@@ -1943,7 +1943,7 @@ export default class BossScene extends Phaser.Scene {
       // Ensure fire field spawns on any explosive detonation, not only at target
       try { if (b._firefield) { this.spawnFireField(ex, ey, radius); this.applyNapalmIgniteToBoss(ex, ey, radius); } } catch (_) {}
     }
-    s.setData('hp', Math.max(1, hp1));
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
     try { b.destroy(); } catch (_) {}
   }
 
@@ -1953,7 +1953,7 @@ export default class BossScene extends Phaser.Scene {
     const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
     const hp1 = hp0 - dmg;
-    s.setData('hp', Math.max(1, hp1));
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
     try { b.destroy(); } catch (_) {}
   }
 
@@ -1968,7 +1968,7 @@ export default class BossScene extends Phaser.Scene {
         if ((dx * dx + dy * dy) <= r2) {
           const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
           const hp1 = hp0 - dmg;
-          s.setData('hp', Math.max(1, hp1));
+          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
         }
       }
     } catch (_) {}
@@ -1984,7 +1984,7 @@ export default class BossScene extends Phaser.Scene {
     const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7));
     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
     const hp1 = hp0 - dmg;
-    s.setData('hp', Math.max(1, hp1));
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
   }
 
   createArenaWalls() {
@@ -2176,20 +2176,20 @@ export default class BossScene extends Phaser.Scene {
       if (this.boss?.active) { const dx = this.boss.x - ex; const dy = this.boss.y - ey; if ((dx * dx + dy * dy) <= r2) { if (typeof this.boss.hp !== 'number') this.boss.hp = this.boss.maxHp || 300; const splash = b._rocket ? (b.damage || 12) : Math.ceil((b.damage || 12) * 0.5); this.boss.hp -= splash; if (this.boss.hp <= 0) this.killBoss(this.boss); } }
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
     }
-    s.setData('hp', Math.max(1, hp1));
+    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
     try { b.destroy(); } catch (_) {}
   }
 
   // Boss bullets into barricades
-  onBossBulletHitBarricade(b, s) { if (!b || !s) return; const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; s.setData('hp', Math.max(1, hp1)); try { b.destroy(); } catch (_) {} }
+  onBossBulletHitBarricade(b, s) { if (!b || !s) return; const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } try { b.destroy(); } catch (_) {} }
 
   // Utility AoE damage to soft barricades
   damageSoftBarricadesInRadius(x, y, radius, dmg) {
-    try { const r2 = radius * radius; const arr = this.barricadesSoft?.getChildren?.() || []; for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const dx = s.x - x; const dy = s.y - y; if ((dx * dx + dy * dy) <= r2) { const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; s.setData('hp', Math.max(1, hp1)); } } } catch (_) {}
+    try { const r2 = radius * radius; const arr = this.barricadesSoft?.getChildren?.() || []; for (let i = 0; i < arr.length; i += 1) { const s = arr[i]; if (!s?.active) continue; const dx = s.x - x; const dy = s.y - y; if ((dx * dx + dy * dy) <= r2) { const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } } } } catch (_) {}
   }
 
   // Boss trying to push destructible cover
-  onEnemyHitBarricade(e, s) { if (!s?.active) return; const now = this.time.now; const last = s.getData('_lastMeleeHurtAt') || 0; if (now - last < 250) return; s.setData('_lastMeleeHurtAt', now); const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7)); const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; s.setData('hp', Math.max(1, hp1)); }
+  onEnemyHitBarricade(e, s) { if (!s?.active) return; const now = this.time.now; const last = s.getData('_lastMeleeHurtAt') || 0; if (now - last < 250) return; s.setData('_lastMeleeHurtAt', now); const dmg = Math.max(6, Math.floor((e?.damage || 12) * 0.7)); const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20; const hp1 = hp0 - dmg; if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); } }
 
   // Optional walls
   createArenaWalls() {
@@ -2423,6 +2423,7 @@ export default class BossScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 

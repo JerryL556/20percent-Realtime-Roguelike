@@ -538,7 +538,7 @@ export default class CombatScene extends Phaser.Scene {
             const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
             const hp1 = hp0 - dmg;
             try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
-            s.setData('hp', Math.max(1, hp1));
+            if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
           } catch (_) {}
           return false;
         }
@@ -1013,7 +1013,7 @@ export default class CombatScene extends Phaser.Scene {
         if ((dx * dx + dy * dy) <= r2) {
       const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
           const hp1 = hp0 - dmg;
-          s.setData('hp', Math.max(1, hp1));
+          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
         }
       }
     } catch (_) {}
@@ -4284,6 +4284,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
