@@ -36,6 +36,20 @@ export default class BossScene extends Phaser.Scene {
     this.dash.charges = this.gs.dashMaxCharges;
     this.registry.set('dashCharges', this.dash.charges);
     this.registry.set('dashRegenProgress', 1);
+    // Keybinds hint (bottom-right, small font)
+    const binds = [
+      'W/A/S/D: Move',
+      'Space: Dash',
+      'E: Interact',
+      'C: Melee',
+      'LMB: Shoot',
+      'F: Ability',
+      'Q: Swap Weapon',
+      'Tab: Loadout',
+    ].join('\n');
+    this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
+      .setOrigin(1, 1)
+      .setAlpha(0.9);
     // Weapon visuals (match CombatScene)
     try { createPlayerWeaponSprite(this); } catch (_) {}
     // Keep weapon sprite updated every frame (follows player even if boss is stunned)
