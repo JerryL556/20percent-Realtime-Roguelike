@@ -371,15 +371,15 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       // Horizontal drift (slow) — parabola controlled by vertical z only
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       // Emphasize horizontal motion; keep vertical (height) subtle
-      const sp = Phaser.Math.FloatBetween(18, 38) * power; // slower horizontal speed
+      const sp = Phaser.Math.FloatBetween(8, 20) * power; // very slow horizontal speed for tighter curvature
       let vx = Math.cos(a) * sp;
-      let vy = Phaser.Math.FloatBetween(-5, 5) * power; // minimal screen-space vertical drift
+      let vy = Phaser.Math.FloatBetween(-2, 2) * power; // tiny screen-space vertical drift
       // Vertical arc (height) with gentle launch and gravity
-      let z = Phaser.Math.FloatBetween(4, 7) * power;    // initial height
-      let vz = Phaser.Math.FloatBetween(22, 35) * power; // initial upward velocity
-      const g = 60; // gravity (gentle)
-      const zScale = 0.3; // projection of height into screen-space
-      const dragPerSecond = 0.6; // horizontal/vertical screen-space drag per second
+      let z = Phaser.Math.FloatBetween(2, 4) * power;    // small initial height
+      let vz = Phaser.Math.FloatBetween(18, 28) * power; // small upward velocity
+      const g = 120; // stronger gravity for curvier trajectory
+      const zScale = 0.25; // small projection of height into screen-space (small arc)
+      const dragPerSecond = 0.5; // more drag to slow quickly
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
       const onUpdate = () => {
