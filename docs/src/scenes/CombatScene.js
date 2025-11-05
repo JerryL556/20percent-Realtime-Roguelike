@@ -851,7 +851,16 @@ export default class CombatScene extends Phaser.Scene {
     // Move in-game prompt down to avoid overlapping UI
     this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
     // Keybinds hint (bottom-right, small font)
-    const binds = 'W/A/S/D: Move`nSpace: Dash`nE: Interact`nLMB: Shoot`nF: Ability`nQ: Swap Weapon`nTab: Loadout';
+    const binds = [
+  'W/A/S/D: Move',
+  'Space: Dash',
+  'E: Interact',
+  'C: Melee',
+  'LMB: Shoot',
+  'F: Ability',
+  'Q: Swap Weapon',
+  'Tab: Loadout',
+].join('\n');
 
     this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
       .setOrigin(1, 1)
