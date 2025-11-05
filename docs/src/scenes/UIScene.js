@@ -518,30 +518,81 @@ export default class UIScene extends Phaser.Scene {
     overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, width, height);
     const panel = this.add.graphics();
     const w = 420;
-    // Compute dynamic height based on options and their descriptions (with extra spacing)
+    // Measure total content height (name + descriptions + spacing per option)
     let contentHeight = 0;
-    options.forEach((opt) => {
+    const measureOption = (opt) => {
       const desc = (opt.desc || '').split('\n').filter((s) => s.trim().length > 0);
       const nameH = 26; // taller name row
       const lineH = 20; // more spacing per description line
       const afterGap = desc.length ? 10 : 8; // extra gap between options
-      const block = nameH + (desc.length * lineH) + afterGap;
-      contentHeight += block;
-    });
-    const maxH = Math.min(520, Math.max(120, 60 + contentHeight));
+      return nameH + (desc.length * lineH) + afterGap;
+    };
+    options.forEach((opt) => { contentHeight += measureOption(opt); });
+    const maxH = 520; // cap the popup height to avoid covering whole screen
     const x = (width - w) / 2; const y = (height - maxH) / 2;
     panel.fillStyle(0x1a1a1a, 0.96).fillRect(x, y, w, maxH);
     panel.lineStyle(2, 0xffffff, 1).strokeRect(x, y, w, maxH);
+
     const nodes = [];
     nodes.push(this.add.text(x + w / 2, y + 12, title, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5));
-    let yy = y + 48;
+
+    // Scrollable viewport area inside the panel
+    const viewportTop = y + 44;
+    const viewportBottom = y + maxH - 44; // leave room for close button
+    const viewportH = Math.max(80, viewportBottom - viewportTop);
+
+    // Container for scrollable content
+    const content = this.add.container(x, viewportTop);
+    // Mask to clip content within viewport
+    const maskG = this.add.graphics();
+    maskG.fillStyle(0x000000, 1).fillRect(x + 1, viewportTop + 1, w - 2, viewportH - 2);
+    const geoMask = maskG.createGeometryMask();
+    content.setMask(geoMask);
+
+    // Build option entries into the content container
+    let yy = 0; // relative to viewport top
+    const addText = (tx, ty, text, style, originX = 0, originY = 0.5) => {
+      const t = this.add.text(tx, ty, text, style).setOrigin(originX, originY);
+      content.add(t);
+      return t;
+    };
+    const addOptionButton = (tx, ty, label, onClick) => {
+      // Build a simple button (text + border) within the content container
+      const t = this.add.text(tx, ty, label, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0, 0.5);
+      t.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => { t.setStyle({ color: '#ffff66' }); drawBorder(); })
+        .on('pointerout', () => { t.setStyle({ color: '#ffffff' }); drawBorder(); })
+        .on('pointerdown', () => onClick?.());
+      const g = this.add.graphics();
+      const drawBorder = () => {
+        try {
+          g.clear();
+          g.lineStyle(1, 0xffffff, 1);
+          const b = t.getBounds();
+          const bx = Math.floor(b.x) - 4 + 0.5;
+          const by = Math.floor(b.y) - 4 + 0.5;
+          const bw = Math.ceil(b.width) + 8;
+          const bh = Math.ceil(b.height) + 8;
+          g.strokeRect(bx, by, bw, bh);
+        } catch (_) {}
+      };
+      drawBorder();
+      // Add both to content so they scroll and mask together
+      content.add([t, g]);
+      // Keep border in sync after the first frame
+      this.time.delayedCall(0, drawBorder);
+      // Expose a refresh method for scroll updates
+      return { text: t, border: g, refresh: drawBorder };
+    };
+
+    const itemRecords = [];
     options.forEach((opt) => {
       const isCurrent = opt.id === currentId;
       const name = opt.name + (isCurrent ? ' (current)' : '');
-      const btn = makeTextButton(this, x + 16, yy, name, () => {
+      const btn = addOptionButton(16, yy, name, () => {
         try { onChoose?.(opt.id); } finally { this.closeChoicePopup(); }
-      }).setOrigin(0, 0.5);
-      nodes.push(btn);
+      });
+      itemRecords.push(btn);
       yy += 26;
       if (opt.desc) {
         const lines = opt.desc.split('\n');
@@ -557,7 +608,6 @@ export default class UIScene extends Phaser.Scene {
             const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
             color = isHarmfulPos ? '#ff6666' : '#66ff66';
           } else if (t.startsWith('-')) {
-            // Some negatives are beneficial (e.g., -spread)
             const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) || lower.includes('less') || lower.includes('reduced');
             color = isBeneficialNeg ? '#66ff66' : '#ff6666';
           } else if (positiveHints.some((k) => lower.includes(k))) {
@@ -565,7 +615,8 @@ export default class UIScene extends Phaser.Scene {
           } else if (negativeHints.some((k) => lower.includes(k))) {
             color = '#ff6666';
           }
-          nodes.push(this.add.text(x + 24, yy, t, { fontFamily: 'monospace', fontSize: 12, color }).setOrigin(0, 0.5));
+          const tObj = addText(24, yy, t, { fontFamily: 'monospace', fontSize: 12, color });
+          itemRecords.push({ text: tObj, border: null, refresh: null });
           yy += 20;
         });
         yy += 10;
@@ -573,16 +624,71 @@ export default class UIScene extends Phaser.Scene {
         yy += 8;
       }
     });
-    // Footer close button
+
+    // Footer close button (fixed, not scrolled)
     const closeBtn = makeTextButton(this, x + w - 16, y + maxH - 16, 'Close', () => this.closeChoicePopup()).setOrigin(1, 1);
     nodes.push(closeBtn);
-    this.choicePopup = { overlay, panel, nodes };
+
+    // Scroll handling
+    const contentTotalH = Math.max(yy, 0);
+    let scrollY = 0;
+    const maxScroll = Math.max(0, contentTotalH - viewportH);
+    const setScroll = (val) => {
+      scrollY = Math.max(0, Math.min(maxScroll, val));
+      content.y = viewportTop - scrollY;
+      // update borders for crisp lines after move
+      itemRecords.forEach((r) => r.refresh && r.refresh());
+      // Update scroll indicator
+      drawScrollbar();
+    };
+
+    // Scrollbar indicator at right
+    const scrollG = this.add.graphics();
+    const drawScrollbar = () => {
+      scrollG.clear();
+      if (maxScroll <= 0) return; // nothing to draw
+      const trackX = x + w - 8; // inside right edge
+      const trackY = viewportTop + 4;
+      const trackH = viewportH - 8;
+      scrollG.fillStyle(0xffffff, 0.15).fillRoundedRect(trackX, trackY, 4, trackH, 2);
+      // thumb size proportional to viewport/content
+      const thumbH = Math.max(20, Math.floor((viewportH / contentTotalH) * trackH));
+      const thumbY = trackY + Math.floor((scrollY / maxScroll) * (trackH - thumbH));
+      scrollG.fillStyle(0xffffff, 0.6).fillRoundedRect(trackX, thumbY, 4, thumbH, 2);
+    };
+
+    // Wheel listener (only when pointer over viewport rect)
+    const wheelHandler = (_pointers, _gobjs, dx, dy) => {
+      const pointer = _pointers?.worldX !== undefined ? _pointers : (_pointers && _pointers[0]) || null;
+      const px = pointer ? (pointer.worldX ?? pointer.x) : 0;
+      const py = pointer ? (pointer.worldY ?? pointer.y) : 0;
+      if (px >= x && px <= x + w && py >= viewportTop && py <= viewportTop + viewportH) {
+        const step = 40; // pixels per wheel notch
+        setScroll(scrollY + (dy > 0 ? step : -step));
+      }
+    };
+    this.input.on('wheel', wheelHandler);
+
+    // Initialize positions and indicator
+    setScroll(0);
+
+    this.choicePopup = { overlay, panel, nodes, content, maskG, geoMask, scrollG, wheelHandler };
   }
 
   closeChoicePopup() {
     if (!this.choicePopup) return;
+    try { if (this.choicePopup.wheelHandler) this.input.off('wheel', this.choicePopup.wheelHandler); } catch (_) {}
     this.choicePopup.overlay?.destroy();
     this.choicePopup.panel?.destroy();
+    this.choicePopup.scrollG?.destroy();
+    if (this.choicePopup.content) {
+      (this.choicePopup.content.list || []).forEach((obj) => obj?.destroy?.());
+      this.choicePopup.content.destroy();
+    }
+    if (this.choicePopup.maskG) {
+      try { this.choicePopup.content?.clearMask?.(); } catch (_) {}
+      this.choicePopup.maskG.destroy();
+    }
     (this.choicePopup.nodes || []).forEach((n) => n?.destroy());
     this.choicePopup = null;
   }
