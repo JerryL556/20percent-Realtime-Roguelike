@@ -548,6 +548,8 @@ export default class UIScene extends Phaser.Scene {
     maskG.fillStyle(0x000000, 1).fillRect(x + 1, viewportTop + 1, w - 2, viewportH - 2);
     const geoMask = maskG.createGeometryMask();
     content.setMask(geoMask);
+    // Hide the geometry used for the mask so it doesn't render as a black box
+    maskG.setVisible(false);
 
     // Build option entries into the content container
     let yy = 0; // relative to viewport top
