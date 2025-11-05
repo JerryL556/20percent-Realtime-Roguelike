@@ -9,6 +9,8 @@ export const weaponMods = [
     id: 'w_spread_down',
     name: 'Muzzle Brake',
     desc: '-20% spread angle & bloom cap',
+    // Not applicable to Laser weapons
+    allow: (base) => !!base && !base.isLaser,
     apply: (w) => {
       const newBase = Math.max(0, Math.floor((w.spreadDeg || 0) * 0.8));
       const hasMax = typeof w.maxSpreadDeg === 'number';
@@ -16,7 +18,7 @@ export const weaponMods = [
       return hasMax ? { ...w, spreadDeg: newBase, maxSpreadDeg: newMax } : { ...w, spreadDeg: newBase };
     },
   },
-  { id: 'w_speed_up', name: 'Advanced Propellant', desc: '+15% bullet speed', apply: (w) => ({ ...w, bulletSpeed: Math.floor(w.bulletSpeed * 1.15) }) },
+  { id: 'w_speed_up', name: 'Advanced Propellant', desc: '+15% bullet speed', allow: (base) => !!base && !base.isLaser, apply: (w) => ({ ...w, bulletSpeed: Math.floor(w.bulletSpeed * 1.15) }) },
   // (Incendiary/Toxic moved to cores per design)
   {
     id: 'w_mag_improved',
