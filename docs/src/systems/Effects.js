@@ -373,30 +373,34 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       // Emphasize horizontal motion; keep vertical (height) subtle
       const sp = Phaser.Math.FloatBetween(8, 20) * power; // very slow horizontal speed for tighter curvature
       let vx = Math.cos(a) * sp;
-      let vy = Phaser.Math.FloatBetween(-2, 2) * power; // tiny screen-space vertical drift
+      let vy = Phaser.Math.FloatBetween(-1, 1) * power; // tiny screen-space vertical drift
       // Vertical arc (height) with gentle launch and gravity
-      let z = Phaser.Math.FloatBetween(2, 4) * power;    // small initial height
-      let vz = Phaser.Math.FloatBetween(18, 28) * power; // small upward velocity
-      const g = 120; // stronger gravity for curvier trajectory
-      const zScale = 0.25; // small projection of height into screen-space (small arc)
-      const dragPerSecond = 0.5; // more drag to slow quickly
+      let z = Phaser.Math.FloatBetween(1.5, 3) * power;   // very small initial height
+      let vz = Phaser.Math.FloatBetween(16, 24) * power;  // small upward velocity
+      const g = 90; // gravity for tighter curve
+      const zScale = 0.12; // minimal projection of height into screen-space
+      const dragPerSecond = 0.4; // moderate drag to slow smoothly
+      let sx = x, sy = y; // ground-projected positions
+      const maxLife = 1000; // ms safety cap
+      let lived = 0;
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
       const onUpdate = () => {
         try {
           const dt = ((scene.game?.loop?.delta) || 16) / 1000;
           // planar motion with drag
-          vx *= Math.pow(dragPerSecond, dt); // exponential drag
-          vy *= Math.pow(dragPerSecond, dt);
-          const nx = img.x + vx * dt;
-          const ny = img.y + vy * dt;
+          const decay = Math.pow(dragPerSecond, dt);
+          vx *= decay; vy *= decay;
+          sx += vx * dt; sy += vy * dt;
           // vertical motion
           z += vz * dt; vz -= g * dt;
           // display: raise by z
-          img.x = nx; img.y = ny - z * zScale;
+          img.x = sx; img.y = sy - z * zScale;
           img.rotation += rotSpd * dt;
           // landed
-          if (z <= 0) {
+          lived += dt * 1000;
+          if (z <= 0 || lived >= maxLife) {
+            z = 0;
             scene.events.off('update', onUpdate);
             scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => { try { img.destroy(); } catch (_) {} } });
           }
