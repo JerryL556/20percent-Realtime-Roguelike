@@ -185,7 +185,6 @@ export const weaponCores = [
     desc: [
       'Explosive weapons only',
       '+ Proximity-detonates when enemies are near',
-      '+ Detect radius < blast radius',
       '+ If no target at aim point, becomes a mine',
     ].join('\n'),
     apply: (w) => {
@@ -200,7 +199,6 @@ export const weaponCores = [
     desc: [
       'Explosive weapons only',
       '+ Proximity-detonates when enemies are near',
-      '+ Detect radius < blast radius',
       '+ If no target at aim point, becomes a mine',
     ].join('\n'),
     apply: (w) => {
@@ -215,7 +213,7 @@ export const weaponCores = [
     desc: [
       'MGL only',
       '+ Leaves fire field on explosion (2s)',
-      '+ Enemies inside gain 10 Ignite/s',
+      '+ Fire Field applies Ignition buildup to enemies inside',
       '- Explosion damage reduced to 25%',
       '- Mag size set to 4',
     ].join('\n'),
