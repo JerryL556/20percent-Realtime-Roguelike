@@ -297,8 +297,9 @@ export const weaponCores = [
     onlyFor: 'smg',
     desc: [
       'SMG only',
-      '+ +2 Toxin value per bullet on hit',
-      '- Direct damage -2',
+      '+ Bullets apply Toxin buildup on hit',
+      '+2 Toxin per bullet',
+      '-2 direct damage',
     ].join('\\n'),
     apply: (w) => {
       if (!w || w.id !== 'smg') return w;
