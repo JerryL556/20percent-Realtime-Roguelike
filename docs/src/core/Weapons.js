@@ -57,8 +57,8 @@ export const weaponDefs = [
     fireRateMs: 350,
     bulletSpeed: 1560,
     pelletCount: 1,
-    spreadDeg: 10, // uncharged spread (deg)
-    maxSpreadDeg: 10,
+    spreadDeg: 5, // uncharged spread (deg)
+    maxSpreadDeg: 5,
     color: 0x66aaff,
     price: 200,
     singleFire: true,
