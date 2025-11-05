@@ -552,15 +552,15 @@ export default class UIScene extends Phaser.Scene {
     maskG.setVisible(false);
 
     // Build option entries into the content container
-    let yy = 0; // relative to viewport top
-    const addText = (tx, ty, text, style, originX = 0, originY = 0.5) => {
+    let yy = 8; // relative to viewport top; start with padding so first row isn't clipped
+    const addText = (tx, ty, text, style, originX = 0, originY = 0) => {
       const t = this.add.text(tx, ty, text, style).setOrigin(originX, originY);
       content.add(t);
       return t;
     };
     const addOptionButton = (tx, ty, label, onClick) => {
       // Build a simple button (text + border) within the content container
-      const t = this.add.text(tx, ty, label, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0, 0.5);
+      const t = this.add.text(tx, ty, label, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0, 0);
       t.setInteractive({ useHandCursor: true })
         .on('pointerover', () => { t.setStyle({ color: '#ffff66' }); drawBorder(); })
         .on('pointerout', () => { t.setStyle({ color: '#ffffff' }); drawBorder(); })
@@ -570,11 +570,11 @@ export default class UIScene extends Phaser.Scene {
         try {
           g.clear();
           g.lineStyle(1, 0xffffff, 1);
-          const b = t.getBounds();
-          const bx = Math.floor(b.x) - 4 + 0.5;
-          const by = Math.floor(b.y) - 4 + 0.5;
-          const bw = Math.ceil(b.width) + 8;
-          const bh = Math.ceil(b.height) + 8;
+          // Use local coords within the content container so it stays aligned while scrolling
+          const bx = Math.floor(t.x) - 4 + 0.5;
+          const by = Math.floor(t.y) - 4 + 0.5;
+          const bw = Math.ceil(t.width) + 8;
+          const bh = Math.ceil(t.height) + 8;
           g.strokeRect(bx, by, bw, bh);
         } catch (_) {}
       };
