@@ -103,14 +103,16 @@ export const weaponMods = [
 // Weapon cores (1 slot)
 export const weaponCores = [
   { id: null, name: 'No Core', desc: 'No special effect', apply: (w) => w },
-  { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', apply: (w) => ({ ...w, _core: 'pierce' }) },
+  { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', allow: (base) => !!base && !base.isLaser, apply: (w) => { if (w?.isLaser) return w; return ({ ...w, _core: 'pierce' }); } },
   {
     id: 'core_blast',
     name: 'Explosive Core',
     desc: '+Small explosion on hit',
-    // Do not apply to explosive weapons (rocket-like projectiles)
+    // Do not apply to explosive weapons (rocket-like projectiles) or Laser
+    allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket',
     apply: (w) => {
       if (!w) return w;
+      if (w.isLaser) return w; // disallow on Laser
       if (w.projectile === 'rocket') return w; // disallow on explosive weapons (e.g., rocket, mgl)
       return { ...w, _core: 'blast' };
     },
