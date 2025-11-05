@@ -4,13 +4,13 @@
 export const weaponMods = [
   { id: null, name: 'Empty', desc: 'No changes', apply: (w) => w },
   { id: 'w_dmg_up', name: 'FMJ Rounds', desc: '+10% damage', apply: (w) => ({ ...w, damage: Math.floor(w.damage * 1.1) }) },
-  { id: 'w_firerate_up', name: 'Custom Trigger', desc: '+12% fire rate', apply: (w) => ({ ...w, fireRateMs: Math.max(60, Math.floor(w.fireRateMs * 0.88)) }) },
+  { id: 'w_firerate_up', name: 'Custom Trigger', desc: '+12% fire rate', allow: (base) => !!base && base.projectile !== 'rocket', apply: (w) => ({ ...w, fireRateMs: Math.max(60, Math.floor(w.fireRateMs * 0.88)) }) },
   {
     id: 'w_spread_down',
     name: 'Muzzle Brake',
     desc: '-20% spread angle & bloom cap',
-    // Not applicable to Laser weapons
-    allow: (base) => !!base && !base.isLaser,
+    // Not applicable to Laser or rocket-projectile weapons (e.g., Rocket/MGL)
+    allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket',
     apply: (w) => {
       const newBase = Math.max(0, Math.floor((w.spreadDeg || 0) * 0.8));
       const hasMax = typeof w.maxSpreadDeg === 'number';
@@ -103,7 +103,7 @@ export const weaponMods = [
 // Weapon cores (1 slot)
 export const weaponCores = [
   { id: null, name: 'No Core', desc: 'No special effect', apply: (w) => w },
-  { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', allow: (base) => !!base && !base.isLaser, apply: (w) => { if (w?.isLaser) return w; return ({ ...w, _core: 'pierce' }); } },
+  { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket', apply: (w) => { if (w?.isLaser) return w; if (w?.projectile === 'rocket') return w; return ({ ...w, _core: 'pierce' }); } },
   {
     id: 'core_blast',
     name: 'Explosive Core',
