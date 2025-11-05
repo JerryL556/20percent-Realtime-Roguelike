@@ -259,9 +259,9 @@ export const weaponCores = [
     desc: [
       'Battle Rifle only',
       '- Single-fire',
-      '- Mag size: 25 -> 18 (-28%)',
-      '+ Damage: 16 -> 28 (+75%)',
-      '+ Bullet speed: 575 -> 750 (+30%)',
+      '-7 magazine size',
+      '+12 damage',
+      '+175 bullet speed',
     ].join('\n'),
     apply: (w) => {
       if (!w || w.id !== 'battle_rifle') return w;
