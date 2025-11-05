@@ -108,12 +108,13 @@ export const weaponCores = [
     id: 'core_blast',
     name: 'Explosive Core',
     desc: '+Small explosion on hit',
-    // Do not apply to explosive weapons (rocket-like projectiles) or Laser
-    allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket',
+    // Do not apply to explosive weapons (rocket-like projectiles), Laser, or L-G Missiles
+    allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket' && base.id !== 'guided_missiles',
     apply: (w) => {
       if (!w) return w;
       if (w.isLaser) return w; // disallow on Laser
       if (w.projectile === 'rocket') return w; // disallow on explosive weapons (e.g., rocket, mgl)
+      if (w.id === 'guided_missiles') return w; // disallow on L-G Missiles
       return { ...w, _core: 'blast' };
     },
   },
