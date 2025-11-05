@@ -412,6 +412,7 @@ export default class UIScene extends Phaser.Scene {
       const opts = weaponCores
         .filter((c) => !c.onlyFor || c.onlyFor === activeId)
         .filter((c) => !(c.id === 'core_blast' && isExplosive))
+        .filter((c) => !c.allow || c.allow(baseW))
         .filter((c) => !String(c.id || '').startsWith('w_'))
         .map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
@@ -699,7 +700,6 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
-
 
 
 
