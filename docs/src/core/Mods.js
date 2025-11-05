@@ -22,9 +22,9 @@ export const weaponMods = [
     id: 'w_mag_improved',
     name: 'Improved Magazine',
     desc: [
-      '+ Mag size +10% (round up)',
-      '+ Reload time -30% (faster)',
-      'Not available for MGL, Railgun, Rocket, Laser',
+      '+ Magazine size +10% (rounded up)',
+      '- Reload time -30%',
+      'Not available: MGL, Railgun, Rocket, Laser',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -46,8 +46,8 @@ export const weaponMods = [
     id: 'w_mag_extended',
     name: 'Extended Magazine',
     desc: [
-      '+ Mag size +30% (round up)',
-      'Not available for MGL, Railgun, Rocket, Laser',
+      '+ Magazine size +30% (rounded up)',
+      'Not available: MGL, Railgun, Rocket, Laser',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -65,12 +65,12 @@ export const weaponMods = [
   },
   {
     id: 'w_stun_ammo',
-    name: 'Stun Ammunitions',
+    name: 'Stun Ammunition',
     desc: [
       '+ Bullets apply Stun buildup on hit',
-      '+ +2 Stun per hit (10 for Railgun/MGL/Rocket)',
+      '+ +2 Stun per hit (Railgun/MGL/Rocket: +10)',
       '- Bullet speed -10%',
-      'Not available for Laser',
+      'Not available: Laser',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -295,12 +295,12 @@ export const weaponCores = [
   // removed mistaken mod entry
   {
     id: 'w_stun_ammo',
-    name: 'Stun Ammunitions',
+    name: 'Stun Ammunition',
     desc: [
       '+ Bullets apply Stun buildup on hit',
-      '+ +2 Stun per hit (10 for Railgun/MGL/Rocket)',
+      '+ +2 Stun per hit (Railgun/MGL/Rocket: +10)',
       '- Bullet speed -10%',
-      'Not available for Laser',
+      'Not available: Laser',
     ].join('\n'),
     allow: (base) => {
       if (!base) return false;
