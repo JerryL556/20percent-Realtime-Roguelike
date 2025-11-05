@@ -588,6 +588,7 @@ export default class UIScene extends Phaser.Scene {
     };
 
     const itemRecords = [];
+    const wrapWidth = Math.max(120, w - 40);
     options.forEach((opt) => {
       const isCurrent = opt.id === currentId;
       const name = opt.name + (isCurrent ? ' (current)' : '');
@@ -617,11 +618,12 @@ export default class UIScene extends Phaser.Scene {
           } else if (negativeHints.some((k) => lower.includes(k))) {
             color = '#ff6666';
           }
-          const tObj = addText(24, yy, t, { fontFamily: 'monospace', fontSize: 12, color });
+          const style = { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: wrapWidth, useAdvancedWrap: true } };
+          const tObj = addText(24, yy, t, style);
           itemRecords.push({ text: tObj, border: null, refresh: null });
-          yy += 20;
+          yy += Math.ceil(tObj.height) + 4;
         });
-        yy += 10;
+        yy += 8;
       } else {
         yy += 8;
       }
