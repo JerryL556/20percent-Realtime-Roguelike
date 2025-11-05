@@ -147,7 +147,8 @@ export default class HubScene extends Phaser.Scene {
     nodes.push(header);
 
     // Populate weapons into the scroll container
-    let ly = 0;
+    // Start slightly lower so the first line isn't clipped by the mask
+    let ly = 8;
     const lineGap = 34;
     weaponDefs.forEach((w) => {
       if (!this.gs.ownedWeapons.includes(w.id) && w.price > 0) {
@@ -158,7 +159,7 @@ export default class HubScene extends Phaser.Scene {
           border.clear(); border.lineStyle(1, 0xffffff, 1);
           const b = label.getBounds();
           const bx = Math.floor(viewport.w / 2 - b.width / 2) - 6 + 0.5;
-          const by = Math.floor(0) - 4 + 0.5;
+          const by = Math.floor(label.y) - 4 + 0.5;
           const bw = Math.ceil(b.width) + 12; const bh = Math.ceil(b.height) + 8;
           border.strokeRect(bx, by, bw, bh);
         };
@@ -188,18 +189,40 @@ export default class HubScene extends Phaser.Scene {
       const px = pointer.worldX ?? pointer.x; const py = pointer.worldY ?? pointer.y;
       if (px >= viewport.x && px <= viewport.x + viewport.w && py >= viewport.y && py <= viewport.y + viewport.h) {
         list.y = clamp(list.y - dy * 0.5, minY, maxY);
+        drawScrollbar();
       }
     };
     this.input.on('wheel', onWheel);
     this._shopWheelHandler = onWheel;
 
+    // Right-side scroll indicator (shows only when scrolling is possible)
+    const scrollG = this.add.graphics();
+    const drawScrollbar = () => {
+      scrollG.clear();
+      const canScroll = listContentHeight > viewport.h + 1;
+      if (!canScroll) return;
+      const trackX = viewport.x + viewport.w - 6; // slim bar near right edge
+      const trackY = viewport.y + 4;
+      const trackH = viewport.h - 8;
+      scrollG.fillStyle(0xffffff, 0.14).fillRoundedRect(trackX, trackY, 3, trackH, 2);
+      // Compute current scroll amount from list.y
+      const total = listContentHeight - viewport.h;
+      const scrolled = (viewport.y - list.y);
+      const ratio = Math.max(0, Math.min(1, total > 0 ? (scrolled / total) : 0));
+      const thumbH = Math.max(16, Math.floor((viewport.h / listContentHeight) * trackH));
+      const thumbY = trackY + Math.floor((trackH - thumbH) * ratio);
+      scrollG.fillStyle(0xffffff, 0.6).fillRoundedRect(trackX, thumbY, 3, thumbH, 2);
+    };
+    // Initial indicator state
+    drawScrollbar();
+
     // Close button stays anchored to bottom of panel
     const close = makeTextButton(this, width / 2, panelY + panelH - 20, 'Close', () => {
-      this.closePanel([t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, close]);
+      this.closePanel([t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, scrollG, close]);
       try { this.input.off('wheel', onWheel); this._shopWheelHandler = null; } catch (_) {}
     });
     // Track all extras for cleanup on generic close
-    this.panel._extra = [t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, close];
+    this.panel._extra = [t, buy, buyMax, dashUp, header, listBgG, list, listMaskG, scrollG, close];
   }
 
   openModePanel() {
