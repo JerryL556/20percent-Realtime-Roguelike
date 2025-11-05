@@ -298,7 +298,6 @@ export const weaponCores = [
     desc: [
       'SMG only',
       '+ Bullets apply Toxin buildup on hit',
-      '+2 Toxin per bullet',
       '-2 direct damage',
     ].join('\\n'),
     apply: (w) => {
