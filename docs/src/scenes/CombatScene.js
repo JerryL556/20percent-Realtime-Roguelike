@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+Ôªøimport { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -61,7 +61,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150Êé?cone, 48px range, 10 damage
+  // Player melee implementation: 150Èé∫?cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -181,7 +181,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180Êé? safe for lerp)
+          // Linear interpolate angles (range is <= 180Èé∫? safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -576,7 +576,7 @@ export default class CombatScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
-      // Rook shield: block non-rail bullets (including rockets) within 90¬∞ front arc
+      // Rook shield: block non-rail bullets (including rockets) within 90Êé≥ front arc
       if (e.isRook && !b._rail) {
         try {
           const r = (e._shieldRadius || 60);
@@ -1142,7 +1142,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Èé?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2Èñπ?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1206,8 +1206,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1Èé?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90Èé?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1Èñπ?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90Èñπ?cone total
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1232,7 +1232,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45Èé?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45Èñπ?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2774,7 +2774,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150Êé? 48px, 10 dmg
+    // Player melee: C key, 150Èé∫? 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -2831,7 +2831,7 @@ export default class CombatScene extends Phaser.Scene {
         let speed = e.speed || 60;
         // Global speed boost for all enemies
         speed *= 1.5;
-        // Rook: update and draw shield; turn slowly toward player (30¬∞/s)
+        // Rook: update and draw shield; turn slowly toward player (30Êé≥/s)
         if (e.isRook) {
           try {
             const targetAng = Math.atan2(dy, dx);
@@ -3126,7 +3126,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors Èñ?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors ÈóÅ?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -4172,7 +4172,7 @@ export default class CombatScene extends Phaser.Scene {
     const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
       const e = enemies[i]; if (!e?.active) continue;
-      // Rook shield: treat 90¬∞ arc as obstacle if facing the beam source
+      // Rook shield: treat 90Êé≥ arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
           const r = (e._shieldRadius || 60);
