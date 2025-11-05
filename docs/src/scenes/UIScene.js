@@ -521,7 +521,8 @@ export default class UIScene extends Phaser.Scene {
     // Measure total content height (name + descriptions + spacing per option)
     let contentHeight = 0;
     const measureOption = (opt) => {
-      const desc = (opt.desc || '').split('\n').filter((s) => s.trim().length > 0);
+      const descStr = String(opt.desc || '').replace(/\\n/g, '\n');
+      const desc = descStr.split('\n').filter((s) => s.trim().length > 0);
       const nameH = 26; // taller name row
       const lineH = 20; // more spacing per description line
       const afterGap = desc.length ? 10 : 8; // extra gap between options
@@ -598,7 +599,8 @@ export default class UIScene extends Phaser.Scene {
       itemRecords.push(btn);
       yy += 26;
       if (opt.desc) {
-        const lines = opt.desc.split('\n');
+        const normalized = String(opt.desc).replace(/\\n/g, '\n');
+        const lines = normalized.split('\n');
         lines.forEach((ln) => {
           const t = ln.trim(); if (!t) return;
           let color = '#cccccc';
@@ -697,7 +699,6 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
-
 
 
 
