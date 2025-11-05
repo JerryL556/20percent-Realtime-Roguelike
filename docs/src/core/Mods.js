@@ -22,9 +22,8 @@ export const weaponMods = [
     id: 'w_mag_improved',
     name: 'Improved Magazine',
     desc: [
-      '+ Magazine size +10% (rounded up)',
+      '+ Magazine size +10%',
       '- Reload time -30%',
-      'Not available: MGL, Railgun, Rocket, Laser',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -46,8 +45,7 @@ export const weaponMods = [
     id: 'w_mag_extended',
     name: 'Extended Magazine',
     desc: [
-      '+ Magazine size +30% (rounded up)',
-      'Not available: MGL, Railgun, Rocket, Laser',
+      '+ Magazine size +30%',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -68,9 +66,7 @@ export const weaponMods = [
     name: 'Stun Ammunition',
     desc: [
       '+ Bullets apply Stun buildup on hit',
-      '+ +2 Stun per hit (Railgun/MGL/Rocket: +10)',
       '- Bullet speed -10%',
-      'Not available: Laser',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -299,9 +295,7 @@ export const weaponCores = [
     desc: [
       '+ Bullets apply Stun buildup on hit',
       '+ +2 Stun per hit (Railgun/MGL/Rocket: +10)',
-      '- Bullet speed -10%',
-      'Not available: Laser',
-    ].join('\n'),
+      '- Bullet speed -10%',\n    ].join('\n'),
     allow: (base) => {
       if (!base) return false;
       return !base.isLaser; // cannot be used by laser
