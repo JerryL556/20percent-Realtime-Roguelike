@@ -1,4 +1,4 @@
-// Simple, customizable mod/core system. Extend these lists as you add content.
+﻿// Simple, customizable mod/core system. Extend these lists as you add content.
 
 // Weapon normal mods (3 slots)
 export const weaponMods = [
@@ -104,7 +104,7 @@ export const weaponCores = [
     onlyFor: 'guided_missiles',
     desc: [
       'Guided Missiles only',
-      '+ Lock-on to nearest enemy within 90° cone',
+      '+ Lock-on to nearest enemy within 90掳 cone',
       '+ Tracks enemies instead of cursor',
       '- Reduced turn rate for tighter arcs',
       'Missiles still collide with walls/barricades',
@@ -112,7 +112,7 @@ export const weaponCores = [
     apply: (w) => {
       if (!w || w.id !== 'guided_missiles') return w;
       // Enable smart seeking and reduce per-frame turn rate
-      // Base guided turn is ~2°/frame; reduce further
+      // Base guided turn is ~2掳/frame; reduce further
       // Make turning significantly harder: reduce per-frame turn to ~25%
       const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 2000;
       const reloadMs = Math.max(200, Math.floor(baseReload * 0.9));
@@ -294,8 +294,8 @@ export const weaponCores = [
     name: 'Stun Ammunition',
     desc: [
       '+ Bullets apply Stun buildup on hit',
-      '+ +2 Stun per hit (Railgun/MGL/Rocket: +10)',
-      '- Bullet speed -10%',\n    ].join('\n'),
+      '- Bullet speed -10%',
+    ].join('\n'),
     allow: (base) => {
       if (!base) return false;
       return !base.isLaser; // cannot be used by laser
