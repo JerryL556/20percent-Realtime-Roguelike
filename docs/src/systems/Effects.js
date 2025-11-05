@@ -371,17 +371,17 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       // Horizontal drift (slow) — parabola controlled by vertical z only
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       // Emphasize horizontal motion; keep vertical (height) subtle
-      const sp = Phaser.Math.FloatBetween(40, 80) * power; // faster horizontal travel for bigger arcs
+      const sp = Phaser.Math.FloatBetween(60, 120) * power; // faster overall travel
       let vx = Math.cos(a) * sp;
-      let vy = Phaser.Math.FloatBetween(-3, 3) * power; // small screen-space vertical drift
+      let vy = Phaser.Math.FloatBetween(-6, 6) * power; // a bit more vertical drift on screen for energy
       // Vertical arc (height) with gentle launch and gravity
-      let z = Phaser.Math.FloatBetween(8, 14) * power;     // higher initial height
-      let vz = Phaser.Math.FloatBetween(50, 90) * power;   // higher upward velocity
-      const g = 110; // stronger gravity to ensure landing with higher vz
-      const zScale = 0.3; // more projection so height is visible
-      const dragPerSecond = 0.85; // light drag to keep speed while decaying
+      let z = Phaser.Math.FloatBetween(10, 18) * power;     // higher initial height
+      let vz = Phaser.Math.FloatBetween(100, 160) * power;  // strong upward velocity
+      const g = 220; // strong gravity to pull back down quickly
+      const zScale = 0.45; // project height more into screen-space (more vertical look)
+      const dragPerSecond = 0.9; // very light drag to keep motion snappy
       let sx = x, sy = y; // ground-projected positions
-      const maxLife = 1700; // lifespan cap
+      const maxLife = 1500; // lifespan cap (keep concise)
       let lived = 0;
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
