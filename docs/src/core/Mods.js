@@ -22,8 +22,8 @@ export const weaponMods = [
     id: 'w_mag_improved',
     name: 'Improved Magazine',
     desc: [
-      '+ Magazine size +10%',
-      '- Reload time -30%',
+      '+10% magazine size',
+      '-30% reload time',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -45,7 +45,7 @@ export const weaponMods = [
     id: 'w_mag_extended',
     name: 'Extended Magazine',
     desc: [
-      '+ Magazine size +30%',
+      '+30% magazine size',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
@@ -66,7 +66,7 @@ export const weaponMods = [
     name: 'Stun Ammunition',
     desc: [
       '+ Bullets apply Stun buildup on hit',
-      '- Bullet speed -10%',
+      '-10% bullet speed',
     ].join('\\n'),
     allow: (base) => {
       if (!base) return false;
