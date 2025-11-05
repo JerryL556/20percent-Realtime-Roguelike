@@ -83,6 +83,21 @@ export const weaponMods = [
       return { ...w, bulletSpeed: bs, _stunOnHit: stun };
     },
   },
+  {
+    id: 'w_laser_heatsink',
+    name: 'Quick Swap HeatSink',
+    desc: [
+      '-30% reload time (overheat cooldown)',
+    ].join('\\n'),
+    // Laser only
+    allow: (base) => !!base && !!base.isLaser,
+    apply: (w) => {
+      if (!w || !w.isLaser) return w;
+      const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 2000;
+      const reloadMs = Math.max(100, Math.floor(baseReload * 0.7));
+      return { ...w, reloadMs };
+    },
+  },
 ];
 
 // Weapon cores (1 slot)
