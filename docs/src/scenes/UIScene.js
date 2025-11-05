@@ -610,11 +610,12 @@ export default class UIScene extends Phaser.Scene {
           const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
           const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
           const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+          const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
           if (t.startsWith('+')) {
             const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
             color = isHarmfulPos ? '#ff6666' : '#66ff66';
           } else if (t.startsWith('-')) {
-            const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) || lower.includes('less') || lower.includes('reduced');
+            const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
             color = isBeneficialNeg ? '#66ff66' : '#ff6666';
           } else if (positiveHints.some((k) => lower.includes(k))) {
             color = '#66ff66';
@@ -700,7 +701,6 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
-
 
 
 
