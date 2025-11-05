@@ -66,6 +66,7 @@ export default class HubScene extends Phaser.Scene {
       'W/A/S/D: Move',
       'Space: Dash',
       'E: Interact',
+      'C: Melee',
       'F: Ability',
       'LMB: Shoot',
       'Q: Swap Weapon',
