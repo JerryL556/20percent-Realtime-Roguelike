@@ -381,7 +381,7 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       const zScale = 0.42; // less vertical projection for a flatter look
       const dragPerSecond = 0.65; // a bit lighter drag for wider spread
       let sx = x, sy = y; // ground-projected positions
-          const maxLife = 1250; // concise lifespan
+      const maxLife = 1700; // slightly longer lifespan before safety purge
       let lived = 0;
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
@@ -402,7 +402,15 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
           if (z <= 0 || lived >= maxLife) {
             z = 0;
             scene.events.off('update', onUpdate);
-            scene.tweens.add({ targets: img, alpha: 0, duration: 140, onComplete: () => { try { img.destroy(); } catch (_) {} } });
+            // Hold briefly on the ground before fade-out
+            const holdMs = 220;
+            try {
+              scene.time.delayedCall(holdMs, () => {
+                try { scene.tweens.add({ targets: img, alpha: 0, duration: 160, onComplete: () => { try { img.destroy(); } catch (_) {} } }); } catch (_) { try { img.destroy(); } catch (e) {} }
+              });
+            } catch (_) {
+              try { img.destroy(); } catch (e) {}
+            }
           }
           // offscreen safety
           const view = scene.cameras?.main?.worldView; if (view && !view.contains(img.x, img.y)) { scene.events.off('update', onUpdate); try { img.destroy(); } catch (_) {} }
