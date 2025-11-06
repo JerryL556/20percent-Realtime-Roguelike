@@ -386,7 +386,7 @@ export const armourDefs = [
     desc: [
       'HP: 80',
       'Shield: 10',
-      '+30% move speed; reduced dash recharge time',
+      '+30% move speed; -30% dash cooldown',
     ].join('\n'),
   },
   {
@@ -395,7 +395,6 @@ export const armourDefs = [
     desc: [
       'HP: 40',
       'Shield: 30',
-      'Large energy shield capacity',
     ].join('\n'),
   },
   {
@@ -404,7 +403,7 @@ export const armourDefs = [
     desc: [
       'HP: 70',
       'Shield: 15',
-      'Spawns two WASP BITs that attack and stun nearby enemies',
+      '+ Spawns two WASP BITs that attack and stun nearby enemies',
     ].join('\n'),
   },
 ];

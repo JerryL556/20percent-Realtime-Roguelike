@@ -765,8 +765,29 @@ export default class UIScene extends Phaser.Scene {
           lines.forEach((ln) => {
             const line = ln.trim(); if (!line) return;
             let color = '#cccccc';
-            if (line.toLowerCase().startsWith('hp:')) color = '#66ff66';
-            else if (line.toLowerCase().startsWith('shield:')) color = '#66aaff';
+            const lower = line.toLowerCase();
+            if (lower.startsWith('hp:')) {
+              color = '#66ff66';
+            } else if (lower.startsWith('shield:')) {
+              color = '#66aaff';
+            } else {
+              const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
+              const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
+              const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+              const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+              const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+              if (line.startsWith('+')) {
+                const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
+                color = isHarmfulPos ? '#ff6666' : '#66ff66';
+              } else if (line.startsWith('-')) {
+                const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+                color = isBeneficialNeg ? '#66ff66' : '#ff6666';
+              } else if (positiveHints.some((k) => lower.includes(k))) {
+                color = '#66ff66';
+              } else if (negativeHints.some((k) => lower.includes(k))) {
+                color = '#ff6666';
+              }
+            }
             const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
