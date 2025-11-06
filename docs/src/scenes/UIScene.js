@@ -652,19 +652,17 @@ export default class UIScene extends Phaser.Scene {
               descLines.forEach((ln) => { const t = this.add.text(24, ly, ln.trim(), { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0); list.add(t); ly += Math.ceil(t.height) + 6; });
             }
             // Stats lines (white)
-            const dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
+            let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
             const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
-            const velLine = `Bullet Velocity: ${w.bulletSpeed}`;
+            let velLine = `Bullet Velocity: ${w.bulletSpeed}`;
             const magLine = `Mag Size: ${w.magSize}`;
-            const linesOut = [dmgLine];
             if (w.id === 'railgun') {
-              const chargedDmg = Math.round((w.damage || 0) * 2);
-              const chargedVel = Math.round((w.bulletSpeed || 0) * 2);
-              linesOut.push(`After Max Charge Damage: ${chargedDmg}`);
-              linesOut.push(`After Max Charge Bullet Velocity: ${chargedVel}`);
+              const chargedDmg = Math.round((w.damage || 0) * 3);
+              const chargedVel = Math.round((w.bulletSpeed || 0) * 3);
+              dmgLine = `Damage: ${w.damage} (Max Charge: ${chargedDmg})`;
+              velLine = `Bullet Velocity: ${w.bulletSpeed} (Max Charge: ${chargedVel})`;
             }
-            linesOut.push(rofLine, velLine, magLine);
-            linesOut.forEach((ln) => {
+            [dmgLine, rofLine, velLine, magLine].forEach((ln) => {
               const t = this.add.text(24, ly, ln, { fontFamily: 'monospace', fontSize: 12, color: '#ffffff', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
               list.add(t); ly += Math.ceil(t.height) + 6;
             });
