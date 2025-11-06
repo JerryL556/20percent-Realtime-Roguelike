@@ -302,10 +302,18 @@ export default class UIScene extends Phaser.Scene {
           const w = getWeaponById(id) || { id, name: id };
           const fmtRof = (x) => { if (!x || x.fireRateMs === 0) return 'Continuous'; const perSec = 1000 / (x.fireRateMs || 1); return `${perSec.toFixed(1)}/s`; };
           const dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
-          const rofLine = `Rate of Fire: ${fmtRof(w)}`;
+          const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
           const velLine = `Bullet Velocity: ${w.bulletSpeed}`;
           const magLine = `Mag Size: ${w.magSize}`;
-          const stats = [dmgLine, rofLine, velLine, magLine].join('\n');
+          const linesOut = [dmgLine];
+          if (w.id === 'railgun') {
+            const chargedDmg = Math.round((w.damage || 0) * 2);
+            const chargedVel = Math.round((w.bulletSpeed || 0) * 2);
+            linesOut.push(`After Max Charge Damage: ${chargedDmg}`);
+            linesOut.push(`After Max Charge Bullet Velocity: ${chargedVel}`);
+          }
+          linesOut.push(rofLine, velLine, magLine);
+          const stats = linesOut.join('\n');
           const descTop = w.desc ? String(w.desc) + '\n' : '';
           return ({ id: w.id, name: w.name, desc: descTop + stats });
         });
@@ -647,10 +655,18 @@ export default class UIScene extends Phaser.Scene {
             }
             // Stats lines (white)
             const dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
-            const rofLine = `Rate of Fire: ${fmtRof(w)}`;
+            const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
             const velLine = `Bullet Velocity: ${w.bulletSpeed}`;
             const magLine = `Mag Size: ${w.magSize}`;
-            [dmgLine, rofLine, velLine, magLine].forEach((ln) => {
+            const linesOut = [dmgLine];
+            if (w.id === 'railgun') {
+              const chargedDmg = Math.round((w.damage || 0) * 2);
+              const chargedVel = Math.round((w.bulletSpeed || 0) * 2);
+              linesOut.push(`After Max Charge Damage: ${chargedDmg}`);
+              linesOut.push(`After Max Charge Bullet Velocity: ${chargedVel}`);
+            }
+            linesOut.push(rofLine, velLine, magLine);
+            linesOut.forEach((ln) => {
               const t = this.add.text(24, ly, ln, { fontFamily: 'monospace', fontSize: 12, color: '#ffffff', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
               list.add(t); ly += Math.ceil(t.height) + 6;
             });
