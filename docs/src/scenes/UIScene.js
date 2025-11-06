@@ -572,6 +572,12 @@ export default class UIScene extends Phaser.Scene {
     const onWheel = (pointer, _objs, _dx, dy) => { const px = pointer.worldX ?? pointer.x; const py = pointer.worldY ?? pointer.y; if (px>=view.x && px<=view.x+view.w && py>=view.y && py<=view.y+view.h) { list.y = clamp(list.y - dy * 0.5, minY, maxY); drawScrollbar(minY === view.y ? view.h : (view.y - minY + view.h)); } };
     this.input.on('wheel', onWheel); this._shopWheelHandler = onWheel;
 
+    // Ensure all cores are owned for now (temporary per request)
+    try {
+      const allCoreIds = (weaponCores || []).map((c) => c.id).filter(Boolean);
+      if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = [];
+      allCoreIds.forEach((id) => { if (!gs.ownedWeaponCores.includes(id)) gs.ownedWeaponCores.push(id); });
+    } catch (_) {}
     const priceMod = 120; const priceCoreG = 200; const priceCoreDC = 1;
     const renderList = () => {
       try { list.removeAll(true); } catch (_) {}
@@ -579,13 +585,56 @@ export default class UIScene extends Phaser.Scene {
       const pushRow = (text, buyFn) => { const row = this.add.container(0, ly); const label = this.add.text(Math.floor(view.w/2), 0, text, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5, 0); const border = this.add.graphics(); const refresh = () => { border.clear(); border.lineStyle(1, 0xffffff, 1); const b = label.getBounds(); const bx = Math.floor(view.w/2 - b.width/2) - 6 + 0.5; const by = Math.floor(label.y) - 4 + 0.5; const bw = Math.ceil(b.width)+12; const bh = Math.ceil(b.height)+8; border.strokeRect(bx, by, bw, bh); }; refresh(); row.add(border); row.add(label); if (buyFn) label.setInteractive({ useHandCursor: true }).on('pointerover', () => { label.setStyle({ color: '#ffff66' }); refresh(); }).on('pointerout', () => { label.setStyle({ color: '#ffffff' }); refresh(); }).on('pointerdown', buyFn); list.add(row); rows.push(row); ly += 34; };
       if (cat === 'weapons') {
         header.setText('Weapons');
-        (weaponDefs || []).forEach((w) => { if (!gs.ownedWeapons.includes(w.id) && w.price > 0) { pushRow(`Buy ${w.name} (${w.price}g)`, () => { const g0 = this.registry.get('gameState'); if (g0.gold >= w.price) { g0.gold -= w.price; g0.ownedWeapons.push(w.id); SaveManager.saveToLocal(g0); renderList(); } }); } });
+        weaponDefs.forEach((w) => {
+          if (!gs.ownedWeapons.includes(w.id) && w.price > 0) {
+            pushRow(`Buy ${w.name} (${w.price}g)`, () => {
+              const g0 = this.registry.get('gameState');
+              if (g0.gold >= w.price) { g0.gold -= w.price; g0.ownedWeapons.push(w.id); SaveManager.saveToLocal(g0); renderList(); }
+            });
+          }
+        });
       } else if (cat === 'weapon_mods') {
         header.setText('Weapon Mods');
-        (weaponMods || []).forEach((m) => { if (!m.id) return; const owned = (gs.ownedWeaponMods || []).includes(m.id); const label = owned ? `${m.name} (Owned)` : `Buy ${m.name} (${priceMod}g)`; pushRow(label, owned ? null : () => { const g1 = this.registry.get('gameState'); if (g1.gold >= priceMod) { g1.gold -= priceMod; if (!g1.ownedWeaponMods) g1.ownedWeaponMods = []; g1.ownedWeaponMods.push(m.id); SaveManager.saveToLocal(g1); renderList(); } }); });
+        (weaponMods || []).forEach((m) => {
+          if (!m.id) return;
+          const owned = (gs.ownedWeaponMods || []).includes(m.id);
+          const head = owned ? `${m.name} (Owned)` : `Buy ${m.name} (${priceMod}g)`;
+          const buyFn = owned ? null : () => {
+            const g1 = this.registry.get('gameState');
+            if (g1.gold >= priceMod) {
+              g1.gold -= priceMod; if (!g1.ownedWeaponMods) g1.ownedWeaponMods = []; g1.ownedWeaponMods.push(m.id); SaveManager.saveToLocal(g1); renderList();
+            }
+          };
+          pushRow(head, buyFn);
+          const forName = m.onlyFor ? (getWeaponById(m.onlyFor)?.name || m.onlyFor) : 'Multiple';
+          const text = ((m.desc ? String(m.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable: ${forName}`).split('\n');
+          text.forEach((line) => {
+            if (!line.trim()) return;
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+            list.add(t); ly += Math.ceil(t.height) + 6;
+          });
+        });
       } else if (cat === 'weapon_cores') {
         header.setText('Weapon Cores');
-        (weaponCores || []).forEach((c) => { if (!c.id) return; const owned = (gs.ownedWeaponCores || []).includes(c.id); const label = owned ? `${c.name} (Owned)` : `Buy ${c.name} (${priceCoreG}g + ${priceCoreDC} DC)`; pushRow(label, owned ? null : () => { const g2 = this.registry.get('gameState'); if ((g2.gold >= priceCoreG) && ((g2.droneCores||0) >= priceCoreDC)) { g2.gold -= priceCoreG; g2.droneCores = (g2.droneCores||0) - priceCoreDC; if (!g2.ownedWeaponCores) g2.ownedWeaponCores = []; g2.ownedWeaponCores.push(c.id); SaveManager.saveToLocal(g2); renderList(); } }); });
+        (weaponCores || []).forEach((c) => {
+          if (!c.id) return;
+          const owned = (gs.ownedWeaponCores || []).includes(c.id);
+          const head = owned ? `${c.name} (Owned)` : `Buy ${c.name} (${priceCoreG}g + ${priceCoreDC} DC)`;
+          const buyFn = owned ? null : () => {
+            const g2 = this.registry.get('gameState');
+            if ((g2.gold >= priceCoreG) && ((g2.droneCores||0) >= priceCoreDC)) {
+              g2.gold -= priceCoreG; g2.droneCores = (g2.droneCores||0) - priceCoreDC; if (!g2.ownedWeaponCores) g2.ownedWeaponCores = []; g2.ownedWeaponCores.push(c.id); SaveManager.saveToLocal(g2); renderList();
+            }
+          };
+          pushRow(head, buyFn);
+          const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
+          const text = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable: ${forName}`).split('\n');
+          text.forEach((line) => {
+            if (!line.trim()) return;
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+            list.add(t); ly += Math.ceil(t.height) + 6;
+          });
+        });
       } else if (cat === 'armours') { header.setText('Armours'); pushRow('Coming soon: armour shop', null); }
       else if (cat === 'armour_mods') { header.setText('Armour Mods'); pushRow('Coming soon: armour mods', null); }
       else if (cat === 'abilities') { header.setText('Abilities'); pushRow('Coming soon: abilities shop', null); }
