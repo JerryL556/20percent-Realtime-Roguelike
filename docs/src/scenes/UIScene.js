@@ -298,7 +298,17 @@ export default class UIScene extends Phaser.Scene {
       nodes.push(label);
       try { this.loadout.weaponLabels[slotIdx] = label; label.setStyle({ color: (gs.equippedWeapons && gs.equippedWeapons[slotIdx]) ? '#ffff33' : '#cccccc' }); } catch (e) {}
       const btn = makeTextButton(this, col2X + 210, wy + 8, 'Choose', () => {
-        const list = (gs.ownedWeapons || []).map((id) => ({ id, name: getWeaponById(id)?.name || id }));
+        const list = (gs.ownedWeapons || []).map((id) => {
+          const w = getWeaponById(id) || { id, name: id };
+          const fmtRof = (x) => { if (!x || x.fireRateMs === 0) return 'Continuous'; const perSec = 1000 / (x.fireRateMs || 1); return `${perSec.toFixed(1)}/s`; };
+          const dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
+          const rofLine = `Rate of Fire: ${fmtRof(w)}`;
+          const velLine = `Bullet Velocity: ${w.bulletSpeed}`;
+          const magLine = `Mag Size: ${w.magSize}`;
+          const stats = [dmgLine, rofLine, velLine, magLine].join('\n');
+          const descTop = w.desc ? String(w.desc) + '\n' : '';
+          return ({ id: w.id, name: w.name, desc: descTop + stats });
+        });
         if (!list.length) return;
         const current = gs.equippedWeapons[slotIdx] || null;
         this.openChoicePopup(`Choose Weapon (Slot ${slotIdx + 1})`, list, current, (chosenId) => {
@@ -619,11 +629,30 @@ export default class UIScene extends Phaser.Scene {
       const pushRow = (text, buyFn) => { const row = this.add.container(0, ly); const label = this.add.text(Math.floor(view.w/2), 0, text, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5, 0); const border = this.add.graphics(); const refresh = () => { border.clear(); border.lineStyle(1, 0xffffff, 1); const b = label.getBounds(); const bx = Math.floor(view.w/2 - b.width/2) - 6 + 0.5; const by = Math.floor(label.y) - 4 + 0.5; const bw = Math.ceil(b.width)+12; const bh = Math.ceil(b.height)+8; border.strokeRect(bx, by, bw, bh); }; refresh(); row.add(border); row.add(label); if (buyFn) label.setInteractive({ useHandCursor: true }).on('pointerover', () => { label.setStyle({ color: '#ffff66' }); refresh(); }).on('pointerout', () => { label.setStyle({ color: '#ffffff' }); refresh(); }).on('pointerdown', buyFn); list.add(row); rows.push(row); ly += 34; };
       if (cat === 'weapons') {
         header.setText('Weapons');
+        const fmtRof = (w) => {
+          if (!w || w.fireRateMs === 0) return 'Continuous';
+          const perSec = 1000 / (w.fireRateMs || 1);
+          return `${perSec.toFixed(1)}/s`;
+        };
         (weaponDefs || []).forEach((w) => {
           if (!gs.ownedWeapons.includes(w.id) && w.price > 0) {
             pushRow(`Buy ${w.name} (${w.price}g)`, () => {
               const g0 = this.registry.get('gameState');
               if (g0.gold >= w.price) { g0.gold -= w.price; g0.ownedWeapons.push(w.id); SaveManager.saveToLocal(g0); renderList(); }
+            });
+            // Optional short description if present
+            if (w.desc) {
+              const descLines = String(w.desc).replace(/\\n/g, '\n').split('\n');
+              descLines.forEach((ln) => { const t = this.add.text(24, ly, ln.trim(), { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0); list.add(t); ly += Math.ceil(t.height) + 6; });
+            }
+            // Stats lines (white)
+            const dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
+            const rofLine = `Rate of Fire: ${fmtRof(w)}`;
+            const velLine = `Bullet Velocity: ${w.bulletSpeed}`;
+            const magLine = `Mag Size: ${w.magSize}`;
+            [dmgLine, rofLine, velLine, magLine].forEach((ln) => {
+              const t = this.add.text(24, ly, ln, { fontFamily: 'monospace', fontSize: 12, color: '#ffffff', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+              list.add(t); ly += Math.ceil(t.height) + 6;
             });
           }
         });

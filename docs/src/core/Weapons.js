@@ -18,6 +18,10 @@ export const weaponDefs = [
   {
     id: 'laser',
     name: 'Laser Beam',
+    desc: [
+      'A prototype handheld laser weapon that fires a scorching particle stream.',
+      'The Laser has perfect accuracy even at long range and can ignite enemies.',
+    ].join('\n'),
     // Continuous beam weapon: no magazine, uses heat/overheat
     damage: 40, // DPS applied continuously in code
     fireRateMs: 0, // handled continuously
