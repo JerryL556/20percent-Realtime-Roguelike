@@ -8,7 +8,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { getPlayerEffects } from '../core/Loadout.js';
 import { weaponMods, weaponCores, armourMods, armourDefs } from '../core/Mods.js';
 import { abilityDefs, getAbilityById } from '../core/Abilities.js';
-import { getWeaponById } from '../core/Weapons.js';
+import { weaponDefs, getWeaponById } from '../core/Weapons.js';
 
 export default class UIScene extends Phaser.Scene {
   constructor() { super(SceneKeys.UI); }
@@ -602,6 +602,8 @@ export default class UIScene extends Phaser.Scene {
     try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
     if (this.shop.panel) { try { this.shop.panel.destroy(); } catch (_) {} this.shop.panel = null; }
     (this.shop.nodes || []).forEach((n) => { try { n?.destroy?.(); } catch (_) {} }); this.shop.nodes = []; this.shop.activeCat = 'weapons';
+    // Belt-and-suspenders: ensure any Hub panel underlay is closed too
+    try { const hub = this.scene.get(SceneKeys.Hub); if (hub && typeof hub.closePanel === 'function') hub.closePanel(); } catch (_) {}
   }
 
   // Helper to refresh the loadout overlay without the user having to toggle Tab
@@ -800,3 +802,4 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
+

@@ -102,6 +102,7 @@ export default class HubScene extends Phaser.Scene {
     this.closePanel();
     // Open a UI overlay version of the shop so it renders above all UI elements
     try { const ui = this.scene.get(SceneKeys.UI); if (ui && typeof ui.openShopOverlay === 'function') { ui.openShopOverlay(); return; } } catch (_) {}
+    return;
     const { width } = this.scale;
     // Larger panel to host future category menu + scrollable content
     const panelX = width / 2 - 380;
