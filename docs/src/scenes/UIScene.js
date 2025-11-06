@@ -666,6 +666,7 @@ export default class UIScene extends Phaser.Scene {
               const t = this.add.text(24, ly, ln, { fontFamily: 'monospace', fontSize: 12, color: '#ffffff', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
               list.add(t); ly += Math.ceil(t.height) + 6;
             });
+            ly += 12;
           }
         });
       } else if (cat === 'weapon_mods') {
@@ -832,6 +833,7 @@ export default class UIScene extends Phaser.Scene {
             const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
+          ly += 12;
         });
       } else if (cat === 'armour_mods') {
         header.setText('Armour Mods');
@@ -871,7 +873,9 @@ export default class UIScene extends Phaser.Scene {
             const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
-        });
+          ly += 12;
+          });
+          ly += 12;
       } else if (cat === 'abilities') {
         header.setText('Abilities');
         const t = this.add.text(24, ly, 'Abilities coming soon', { fontFamily: 'monospace', fontSize: 12, color: '#aaaaaa', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
