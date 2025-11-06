@@ -1022,7 +1022,7 @@ export default class UIScene extends Phaser.Scene {
   showResourceHint(text) {
     try {
       const { width } = this.scale;
-      // Place below the in-game "Clear enemies" prompt (y ≈ 40)
+      // Place below the in-game "Clear enemies" prompt (y �?40)
       const baseY = 64;
       const gap = 18;
       const idx = (this._resourceToasts || []).length;
