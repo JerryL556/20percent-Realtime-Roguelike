@@ -361,8 +361,11 @@ export const armourMods = [
   },
   {
     id: 'a_no_overflow',
-    name: 'Emergency Power Supply',
-    desc: '+Prevents damage overflow when Energy Shield breaks',
+    name: 'Emergency Pulse',
+    desc: [
+      '+Prevents damage overflow when Energy Shield breaks',
+      '+Automatically releases a Repulsion Pulse on shield break',
+    ].join('\n'),
     apply: (a) => a,
     // Mark an effect flag that scenes can honor when applying damage
     applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),

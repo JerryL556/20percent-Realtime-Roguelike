@@ -61,6 +61,8 @@ export class GameState {
     this.lastBossType = null; // 'Shotgunner' | 'Dasher' | null
     // Ability equipped (gadget)
     this.abilityId = 'ads';
+    // Owned abilities for shop gating (default: ADS)
+    this.ownedAbilities = ['ads'];
     // Dash settings
     this.dashMaxCharges = 3;
     this.dashRegenMs = 6000;
@@ -97,6 +99,7 @@ export class GameState {
     this.bossRushQueue = [];
     this.lastBossType = null;
     this.abilityId = 'ads';
+    this.ownedAbilities = ['ads'];
     this.dashMaxCharges = 3;
     this.dashRegenMs = 6000;
   }
@@ -203,6 +206,7 @@ export class GameState {
       bossRushQueue: this.bossRushQueue,
       lastBossType: this.lastBossType,
       abilityId: this.abilityId,
+      ownedAbilities: this.ownedAbilities,
       dashMaxCharges: this.dashMaxCharges,
       dashRegenMs: this.dashRegenMs,
     };
@@ -229,6 +233,11 @@ export class GameState {
     if (!Array.isArray(gs.bossRushQueue)) gs.bossRushQueue = [];
     if (!('lastBossType' in gs)) gs.lastBossType = null;
     if (!gs.abilityId) gs.abilityId = 'ads';
+    // Ensure ability ownership defaults and consistency
+    if (!Array.isArray(gs.ownedAbilities)) gs.ownedAbilities = ['ads'];
+    if (!gs.ownedAbilities.includes('ads')) gs.ownedAbilities.push('ads');
+    // If equipped ability is not owned, fall back to ADS
+    if (!gs.ownedAbilities.includes(gs.abilityId)) gs.abilityId = 'ads';
     // Ensure shield defaults
     if (typeof gs.shieldMax !== 'number') gs.shieldMax = 20;
     if (typeof gs.shield !== 'number') gs.shield = Math.min(gs.shieldMax, 20);

@@ -411,16 +411,32 @@ export default class BossScene extends Phaser.Scene {
       let remaining = dmg;
       const s = Math.max(0, Math.floor(gs.shield || 0));
       const hadShield = s > 0;
+      let shieldBroke = false;
       if (s > 0) {
         const absorbed = Math.min(s, remaining);
         gs.shield = s - absorbed;
         remaining -= absorbed;
+        if (s > 0 && gs.shield === 0) shieldBroke = true;
       }
       if (remaining > 0) {
         let allow = (gs.allowOverrun !== false);
         try { const eff = getPlayerEffects(gs) || {}; if (hadShield && eff.preventShieldOverflow) allow = false; } catch (_) {}
         if (allow) gs.hp = Math.max(0, (gs.hp | 0) - remaining);
       }
+      // Auto-release Repulsion Pulse on shield break when Emergency Pulse mod is active
+      try {
+        if (shieldBroke) {
+          const eff = getPlayerEffects(gs) || {};
+          if (eff.preventShieldOverflow) {
+            const nowT = this.time.now;
+            if (nowT >= (this._emPulseCdUntil || 0)) {
+              this._emPulseCdUntil = nowT + 12000;
+              const blue = { trail: 0x66aaff, outer: 0x66aaff, inner: 0x99ccff, spark: 0x66aaff, pixel: 0x66aaff, impact: 0x66aaff };
+              this.deployRepulsionPulse(blue);
+            }
+          }
+        }
+      } catch (_) {}
       gs.lastDamagedAt = this.time.now;
     } catch (_) {}
   }
@@ -544,7 +560,14 @@ export default class BossScene extends Phaser.Scene {
 
   win() {
     // Reward and spawn portal; require E to confirm exit
-    if (this.gs) { this.gs.gold += 50; this.gs.xp = (this.gs.xp || 0) + 150; }
+    if (this.gs) {
+      const ui = (() => { try { return this.scene.get(SceneKeys.UI); } catch (_) { return null; } })();
+      this.gs.gold = (this.gs.gold || 0) + 200;
+      this.gs.droneCores = (this.gs.droneCores || 0) + 3;
+      this.gs.xp = (this.gs.xp || 0) + 150;
+      try { if (ui?.showResourceHint) ui.showResourceHint(`+200 Gold`); } catch (_) {}
+      try { if (ui?.showResourceHint) ui.showResourceHint(`+3 Drone Cores`); } catch (_) {}
+    }
     const px = this.scale.width - 50 + 20; // near previous exit area
     const py = this.scale.height / 2;
     this.exitG.clear();
@@ -1684,15 +1707,21 @@ export default class BossScene extends Phaser.Scene {
           if (!rp._trail) rp._trail = [];
           if ((rp.r - rp._lastTrailR) > 10) { rp._trail.push({ r: rp.r, t: now3 }); rp._lastTrailR = rp.r; }
           while (rp._trail.length > 6) rp._trail.shift();
+          const colTrail = (rp.colTrail !== undefined ? rp.colTrail : 0xffaa33);
+          const colOuter = (rp.colOuter !== undefined ? rp.colOuter : 0xffaa33);
+          const colInner = (rp.colInner !== undefined ? rp.colInner : 0xffdd88);
+          const colSpark = (rp.colSpark !== undefined ? rp.colSpark : 0xffaa66);
+          const colPixel = (rp.colPixel !== undefined ? rp.colPixel : 0xffaa33);
+          const colImpact = (rp.colImpact !== undefined ? rp.colImpact : 0xffaa33);
           for (let i = 0; i < rp._trail.length; i += 1) {
             const it = rp._trail[i];
             const age = (now3 - it.t) / 300;
             const a = Math.max(0, 0.22 * (1 - Math.min(1, age)));
             if (a <= 0) continue;
-            rp.g.lineStyle(6, 0xffaa33, a).strokeCircle(0, 0, it.r);
+            rp.g.lineStyle(6, colTrail, a).strokeCircle(0, 0, it.r);
           }
-          rp.g.lineStyle(8, 0xffaa33, 0.20).strokeCircle(0, 0, rp.r);
-          rp.g.lineStyle(3, 0xffdd88, 0.95).strokeCircle(0, 0, Math.max(1, rp.r - 1));
+          rp.g.lineStyle(8, colOuter, 0.20).strokeCircle(0, 0, rp.r);
+          rp.g.lineStyle(3, colInner, 0.95).strokeCircle(0, 0, Math.max(1, rp.r - 1));
           if (!rp._nextSparkAt) rp._nextSparkAt = now3;
           if (now3 >= rp._nextSparkAt) {
             const sparks = 8;
@@ -1700,8 +1729,8 @@ export default class BossScene extends Phaser.Scene {
               const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
               const sx = rp.x + Math.cos(a) * rp.r;
               const sy = rp.y + Math.sin(a) * rp.r;
-              try { pulseSpark(this, sx, sy, { color: 0xffaa66, size: 2, life: 180 }); } catch (_) {}
-              try { pixelSparks(this, sx, sy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 90, speedMax: 160, lifeMs: 160, color: 0xffaa33, size: 2, alpha: 0.8 }); } catch (_) {}
+              try { pulseSpark(this, sx, sy, { color: colSpark, size: 2, life: 180 }); } catch (_) {}
+              try { pixelSparks(this, sx, sy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 90, speedMax: 160, lifeMs: 160, color: colPixel, size: 2, alpha: 0.8 }); } catch (_) {}
             }
             rp._nextSparkAt = now3 + 28;
           }
@@ -1712,11 +1741,11 @@ export default class BossScene extends Phaser.Scene {
         try {
           const arrB = this.bossBullets?.getChildren?.() || [];
           for (let i = 0; i < arrB.length; i += 1) {
-            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: colImpact, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
           }
           const arrG = this.grenades?.getChildren?.() || [];
           for (let i = 0; i < arrG.length; i += 1) {
-            const b = arrG[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+            const b = arrG[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy; if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: colImpact, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
           }
         } catch (_) {}
         try {
@@ -2257,7 +2286,7 @@ export default class BossScene extends Phaser.Scene {
   }
 
 
-  deployRepulsionPulse() {
+  deployRepulsionPulse(colors) {
     if (!this._repulses) this._repulses = [];
     const x = this.player.x, y = this.player.y;
     const g = this.add.graphics({ x, y });
@@ -2267,6 +2296,14 @@ export default class BossScene extends Phaser.Scene {
     const corners = [ { x: rect.left, y: rect.top }, { x: rect.right, y: rect.top }, { x: rect.right, y: rect.bottom }, { x: rect.left, y: rect.bottom } ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
     const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g };
+    if (colors && typeof colors === 'object') {
+      obj.colTrail = colors.trail;
+      obj.colOuter = colors.outer;
+      obj.colInner = colors.inner;
+      obj.colSpark = colors.spark;
+      obj.colPixel = colors.pixel;
+      obj.colImpact = colors.impact;
+    }
     this._repulses.push(obj);
   }
 

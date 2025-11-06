@@ -39,6 +39,8 @@ export default class UIScene extends Phaser.Scene {
     // Ability label + cooldown square
     this.abilityText = this.add.text(weaponX0 + 340, uiTextY + 2, 'Ability: -', { fontFamily: 'monospace', fontSize: 14, color: '#66aaff' }).setOrigin(0, 0);
     this.abilityG = this.add.graphics();
+    // Resource toast stack (top of screen)
+    this._resourceToasts = [];
 
     // Reload bar graphics (lazy show/hide during reload)
     this.reloadBar = { g: null, tween: null, wasActive: false };
@@ -75,6 +77,7 @@ export default class UIScene extends Phaser.Scene {
       this.dashBar.destroy();
       this.closeLoadout();
       this.closeChoicePopup();
+      try { (this._resourceToasts || []).forEach((t) => t?.destroy?.()); this._resourceToasts = []; } catch (_) {}
     });
   }
 
@@ -492,21 +495,28 @@ export default class UIScene extends Phaser.Scene {
     const armourLabel = this.add.text(col3X, y3, `Equipped: ${armourName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(armourLabel);
     try { this.loadout.armourLabel = armourLabel; armourLabel.setStyle({ color: (gs.armour && gs.armour.id) ? '#ffff33' : '#cccccc' }); } catch (e) {}
     const armourBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Choose', () => {
-      const opts = armourDefs.map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
+      // Only show Standard Issue (null) and armours the player owns
+      const ownedSet = new Set((gs.ownedArmours || []).filter(Boolean));
+      const opts = (armourDefs || [])
+        .filter((a) => a && (a.id === null || ownedSet.has(a.id)))
+        .map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
       const cur = gs.armour?.id || null;
       this.openChoicePopup('Choose Armour', opts, cur, (chosenId) => {
         gs.armour = gs.armour || { id: null, mods: [null, null] };
-        gs.armour.id = chosenId;
+        // Safety: only allow equipping Standard Issue or owned armours
+        const canEquip = (chosenId === null) || (Array.isArray(gs.ownedArmours) && gs.ownedArmours.includes(chosenId));
+        gs.armour.id = canEquip ? chosenId : null;
         try {
-          if (chosenId === 'exp_shield') {
+          const id = gs.armour.id;
+          if (id === 'exp_shield') {
             gs.maxHp = 40; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
             gs.shieldMax = 30; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
-          } else if (chosenId === 'proto_thrusters') {
+          } else if (id === 'proto_thrusters') {
             gs.maxHp = 80; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
             gs.shieldMax = 10; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
-          } else if (chosenId === 'wasp_bits') {
+          } else if (id === 'wasp_bits') {
             gs.maxHp = 70; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
             gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
@@ -550,10 +560,16 @@ export default class UIScene extends Phaser.Scene {
     const abilityName = () => (getAbilityById(gs.abilityId)?.name || '-');
     const abilityLabel = this.add.text(col3X, y3, `Equipped: ${abilityName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(abilityLabel);
     const abilityBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Choose', () => {
-      const opts = abilityDefs.map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
+      // Only show abilities the player owns
+      const owned = Array.isArray(gs.ownedAbilities) ? gs.ownedAbilities : ['ads'];
+      const opts = abilityDefs
+        .filter((a) => owned.includes(a.id))
+        .map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
       const cur = gs.abilityId || null;
       this.openChoicePopup('Choose Ability', opts, cur, (chosenId) => {
-        gs.abilityId = chosenId;
+        // Safety: only allow equipping owned abilities
+        const canEquip = (Array.isArray(gs.ownedAbilities) ? gs.ownedAbilities : ['ads']).includes(chosenId);
+        gs.abilityId = canEquip ? chosenId : 'ads';
         abilityLabel.setText(`Equipped: ${abilityName()}`);
         SaveManager.saveToLocal(gs);
       });
@@ -881,8 +897,70 @@ export default class UIScene extends Phaser.Scene {
           ly += 12;
       } else if (cat === 'abilities') {
         header.setText('Abilities');
-        const t = this.add.text(24, ly, 'Abilities coming soon', { fontFamily: 'monospace', fontSize: 12, color: '#aaaaaa', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
-        list.add(t); ly += Math.ceil(t.height) + 6;
+        // Pricing for purchasable abilities (ADS is owned by default)
+        const abilityPrices = { bits: 300, repulse: 300 };
+        const owned = Array.isArray(gs.ownedAbilities) ? gs.ownedAbilities : ['ads'];
+
+        abilityDefs.forEach((a) => {
+          if (!a || !a.id) return;
+          const id = a.id;
+          const name = a.name || id;
+          const descStr = String(a.desc || '').replace(/\\n/g, '\n');
+          const isDefault = id === 'ads';
+          const isOwned = owned.includes(id);
+          const price = abilityPrices[id] ?? 0;
+
+          // Determine header/label and buy handler
+          let head = '';
+          let buyFn = null;
+          if (isDefault) {
+            head = `${name} (Owned by default)`;
+          } else if (isOwned) {
+            head = `${name} (Owned)`;
+          } else if (price > 0) {
+            head = `Buy ${name} (${price}g)`;
+            buyFn = () => {
+              const g = this.registry.get('gameState');
+              if (!g) return;
+              if ((g.gold || 0) >= price) {
+                g.gold -= price;
+                if (!Array.isArray(g.ownedAbilities)) g.ownedAbilities = ['ads'];
+                if (!g.ownedAbilities.includes(id)) g.ownedAbilities.push(id);
+                SaveManager.saveToLocal(g);
+                renderList();
+              }
+            };
+          } else {
+            head = `${name}`;
+          }
+          pushRow(head, buyFn);
+          // Description lines
+          const lines = descStr.split('\n');
+          lines.forEach((ln) => {
+            const line = ln.trim(); if (!line) return;
+            let color = '#cccccc';
+            const lower = line.toLowerCase();
+            const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
+            const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
+            const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+            if (line.startsWith('+')) {
+              const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
+              color = isHarmfulPos ? '#ff6666' : '#66ff66';
+            } else if (line.startsWith('-')) {
+              const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+              color = isBeneficialNeg ? '#66ff66' : '#ff6666';
+            } else if (positiveHints.some((k) => lower.includes(k))) {
+              color = '#66ff66';
+            } else if (negativeHints.some((k) => lower.includes(k))) {
+              color = '#ff6666';
+            }
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+            list.add(t); ly += Math.ceil(t.height) + 6;
+          });
+          ly += 12;
+        });
       } else if (cat === 'special') {
         header.setText('Special');
         const maxCharges = 5;
@@ -937,6 +1015,35 @@ export default class UIScene extends Phaser.Scene {
     (this.shop.nodes || []).forEach((n) => { try { n?.destroy?.(); } catch (_) {} }); this.shop.nodes = []; this.shop.activeCat = 'weapons';
     // Belt-and-suspenders: ensure any Hub panel underlay is closed too
     try { const hub = this.scene.get(SceneKeys.Hub); if (hub && typeof hub.closePanel === 'function') hub.closePanel(); } catch (_) {}
+  }
+
+  // Show a brief top-of-screen resource hint. Newer messages are placed below existing ones to avoid overlap.
+  showResourceHint(text) {
+    try {
+      const { width } = this.scale;
+      // Place below the in-game "Clear enemies" prompt (y ≈ 40)
+      const baseY = 64;
+      const gap = 18;
+      const idx = (this._resourceToasts || []).length;
+      const y = baseY + idx * gap;
+      const t = this.add.text(width / 2, y, text, { fontFamily: 'monospace', fontSize: 14, color: '#ffff66' }).setOrigin(0.5, 0).setAlpha(0);
+      if (!this._resourceToasts) this._resourceToasts = [];
+      this._resourceToasts.push(t);
+      // Fade in, hold, fade out
+      this.tweens.add({ targets: t, alpha: 1, duration: 160, ease: 'quad.out', onComplete: () => {
+        this.time.delayedCall(900, () => {
+          this.tweens.add({ targets: t, alpha: 0, duration: 400, onComplete: () => {
+            try {
+              const arr = this._resourceToasts || [];
+              const i = arr.indexOf(t);
+              if (i >= 0) arr.splice(i, 1);
+              t.destroy();
+              // Optional: no upward reflow; new messages always stack below current ones
+            } catch (_) {}
+          } });
+        });
+      } });
+    } catch (_) {}
   }
 
   // Helper to refresh the loadout overlay without the user having to toggle Tab

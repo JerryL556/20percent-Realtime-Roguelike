@@ -111,16 +111,33 @@ export default class CombatScene extends Phaser.Scene {
       let remaining = dmg;
       const s = Math.max(0, Math.floor(gs.shield || 0));
       const hadShield = s > 0;
+      let shieldBroke = false;
       if (s > 0) {
         const absorbed = Math.min(s, remaining);
         gs.shield = s - absorbed;
         remaining -= absorbed;
+        if (s > 0 && gs.shield === 0) shieldBroke = true;
       }
       if (remaining > 0) {
         let allow = (gs.allowOverrun !== false);
         try { const eff = getPlayerEffects(gs) || {}; if (hadShield && eff.preventShieldOverflow) allow = false; } catch (_) {}
         if (allow) gs.hp = Math.max(0, (gs.hp | 0) - remaining);
       }
+      // If shield just broke and the Emergency Pulse mod is active, auto-release a Repulsion Pulse
+      try {
+        if (shieldBroke) {
+          const eff = getPlayerEffects(gs) || {};
+          if (eff.preventShieldOverflow) {
+            const nowT = this.time.now;
+            // Hidden cooldown: trigger at most once every 12s
+            if (nowT >= (this._emPulseCdUntil || 0)) {
+              this._emPulseCdUntil = nowT + 12000;
+              const blue = { trail: 0x66aaff, outer: 0x66aaff, inner: 0x99ccff, spark: 0x66aaff, pixel: 0x66aaff, impact: 0x66aaff };
+              this.deployRepulsionPulse(blue);
+            }
+          }
+        }
+      } catch (_) {}
       gs.lastDamagedAt = this.time.now;
     } catch (_) {}
   }
@@ -909,8 +926,22 @@ export default class CombatScene extends Phaser.Scene {
         e._exploded = true;
       }
     } catch (_) {}
-    // Reward gold per standard enemy kill
-    try { this.gs.gold += 5; } catch (_) {}
+    // Reward resources on kill (normal vs elite)
+    try {
+      if (!e.isDummy) {
+        const ui = (() => { try { return this.scene.get(SceneKeys.UI); } catch (_) { return null; } })();
+        const isElite = !!(e.isPrism || e.isSnitch || e.isRook || e.isGrenadier);
+        const goldGain = isElite ? 20 : 10;
+        this.gs.gold = (this.gs.gold || 0) + goldGain;
+        if (ui?.showResourceHint) ui.showResourceHint(`+${goldGain} Gold`);
+        const roll = Phaser.Math.Between(1, 100);
+        const chance = isElite ? 50 : 10;
+        if (roll <= chance) {
+          this.gs.droneCores = (this.gs.droneCores || 0) + 1;
+          if (ui?.showResourceHint) ui.showResourceHint(`+1 Drone Core`);
+        }
+      }
+    } catch (_) {}
     // Death VFX (purely visual)
     try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
     // Destroy the enemy sprite
@@ -2297,16 +2328,22 @@ export default class CombatScene extends Phaser.Scene {
           // Keep last few rings
           while (rp._trail.length > 6) rp._trail.shift();
           // Draw trail rings (older = fainter)
+          const colTrail = (rp.colTrail !== undefined ? rp.colTrail : 0xffaa33);
+          const colOuter = (rp.colOuter !== undefined ? rp.colOuter : 0xffaa33);
+          const colInner = (rp.colInner !== undefined ? rp.colInner : 0xffdd88);
+          const colSpark = (rp.colSpark !== undefined ? rp.colSpark : 0xffaa66);
+          const colPixel = (rp.colPixel !== undefined ? rp.colPixel : 0xffaa33);
+          const colImpact = (rp.colImpact !== undefined ? rp.colImpact : 0xffaa33);
           for (let i = 0; i < rp._trail.length; i += 1) {
             const it = rp._trail[i];
             const age = (now - it.t) / 300; // 0..~
             const a = Math.max(0, 0.22 * (1 - Math.min(1, age)));
             if (a <= 0) continue;
-            rp.g.lineStyle(6, 0xffaa33, a).strokeCircle(0, 0, it.r);
+            rp.g.lineStyle(6, colTrail, a).strokeCircle(0, 0, it.r);
           }
           // Current ring: bright thin edge + faint outer halo
-          rp.g.lineStyle(8, 0xffaa33, 0.20).strokeCircle(0, 0, rp.r);
-          rp.g.lineStyle(3, 0xffdd88, 0.95).strokeCircle(0, 0, Math.max(1, rp.r - 1));
+          rp.g.lineStyle(8, colOuter, 0.20).strokeCircle(0, 0, rp.r);
+          rp.g.lineStyle(3, colInner, 0.95).strokeCircle(0, 0, Math.max(1, rp.r - 1));
           // Periodic sparks along the band (denser for a lively pulse)
           if (!rp._nextSparkAt) rp._nextSparkAt = now;
           if (now >= rp._nextSparkAt) {
@@ -2315,8 +2352,8 @@ export default class CombatScene extends Phaser.Scene {
               const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
               const sx = rp.x + Math.cos(a) * rp.r;
               const sy = rp.y + Math.sin(a) * rp.r;
-              try { pulseSpark(this, sx, sy, { color: 0xffaa66, size: 2, life: 180 }); } catch (_) {}
-              try { pixelSparks(this, sx, sy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 90, speedMax: 160, lifeMs: 160, color: 0xffaa33, size: 2, alpha: 0.8 }); } catch (_) {}
+              try { pulseSpark(this, sx, sy, { color: colSpark, size: 2, life: 180 }); } catch (_) {}
+              try { pixelSparks(this, sx, sy, { angleRad: a, count: 1, spreadDeg: 6, speedMin: 90, speedMax: 160, lifeMs: 160, color: colPixel, size: 2, alpha: 0.8 }); } catch (_) {}
             }
             rp._nextSparkAt = now + 28; // faster cadence
           }
@@ -2329,7 +2366,7 @@ export default class CombatScene extends Phaser.Scene {
           const arrB = this.enemyBullets?.getChildren?.() || [];
           for (let i = 0; i < arrB.length; i += 1) {
             const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy;
-            if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+            if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: colImpact, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
           }
         } catch (_) {}
         // Push enemies and apply 5 dmg once per enemy per pulse
@@ -3733,7 +3770,7 @@ export default class CombatScene extends Phaser.Scene {
     this._gadgets.push(obj);
   }
 
-  deployRepulsionPulse() {
+  deployRepulsionPulse(colors) {
     if (!this._repulses) this._repulses = [];
     const x = this.player.x; const y = this.player.y;
     const g = this.add.graphics({ x, y });
@@ -3748,6 +3785,15 @@ export default class CombatScene extends Phaser.Scene {
     ];
     let maxD = 0; for (let i = 0; i < corners.length; i += 1) { const dx = corners[i].x - x; const dy = corners[i].y - y; const d = Math.hypot(dx, dy); if (d > maxD) maxD = d; }
     const obj = { x, y, r: 0, band: 8, speed: 300, maxR: maxD + 24, g };
+    // Optional color palette override
+    if (colors && typeof colors === 'object') {
+      obj.colTrail = colors.trail;
+      obj.colOuter = colors.outer;
+      obj.colInner = colors.inner;
+      obj.colSpark = colors.spark;
+      obj.colPixel = colors.pixel;
+      obj.colImpact = colors.impact;
+    }
     this._repulses.push(obj);
   }
 
