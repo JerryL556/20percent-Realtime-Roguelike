@@ -737,7 +737,25 @@ export default class UIScene extends Phaser.Scene {
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
         });
-      } else if (cat === 'armours') { header.setText('Armours'); pushRow('Coming soon: armour shop', null); }
+      } else if (cat === 'armours') {
+  header.setText('Armours');
+  const prices = { exp_shield: 200, wasp_bits: 300, proto_thrusters: 400 };
+  (armourDefs || []).forEach((a) => {
+    if (!a) return;
+    const id = a.id;
+    if (id === null) return; // Standard Issue not in shop
+    const owned = Array.isArray(gs.ownedArmours) && gs.ownedArmours.includes(id);
+    const price = prices[id] ?? 200;
+    const head = owned ? ${a.name} (Owned) : Buy  (g);
+    const buyFn = owned ? null : () => {
+      const g = this.registry.get('gameState');
+      if (g.gold >= price) {
+        g.gold -= price; if (!Array.isArray(g.ownedArmours)) g.ownedArmours = []; if (!g.ownedArmours.includes(id)) g.ownedArmours.push(id); SaveManager.saveToLocal(g); renderList();
+      }
+    };
+    pushRow(head, buyFn);
+  });
+}
       else if (cat === 'armour_mods') { header.setText('Armour Mods'); pushRow('Coming soon: armour mods', null); }
       else if (cat === 'abilities') { header.setText('Abilities'); pushRow('Coming soon: abilities shop', null); }
       else if (cat === 'special') { header.setText('Special'); pushRow(`Dash Slot +1 (100g) [Now: ${gs.dashMaxCharges}]`, () => { if (gs.dashMaxCharges >= 5) return; const g3 = this.registry.get('gameState'); if (g3.gold >= 100) { g3.gold -= 100; g3.dashMaxCharges = Math.min(5, g3.dashMaxCharges + 1); SaveManager.saveToLocal(g3); renderList(); } }); }

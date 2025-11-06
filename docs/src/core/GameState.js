@@ -38,6 +38,7 @@ export class GameState {
     this.equippedWeapons = ['pistol', null]; // ids or null
     this.activeWeapon = 'pistol'; // mirrors currently active equipped weapon
     // Armour slot
+    this.ownedArmours = [];
     this.armour = { id: null, mods: [null, null] };
     // Per-weapon build: mods (3) + core (1); keyed by weaponId
     this.weaponBuilds = {}; // weaponId -> { mods: [m1,m2,m3], core: coreId }
@@ -85,6 +86,7 @@ export class GameState {
     this.ownedWeaponCores = [];
     if (seed) this.runSeed = seed >>> 0;
     if (difficulty) this.difficulty = difficulty;
+    this.ownedArmours = [];
     this.rng = new RNG(this.runSeed);
     this.roomsClearedInCycle = 0;
     this.currentDepth = 1;
@@ -184,6 +186,7 @@ export class GameState {
       equippedWeapons: this.equippedWeapons,
       activeWeapon: this.activeWeapon,
       armour: this.armour,
+      ownedArmours: this.ownedArmours,
       weaponBuilds: this.weaponBuilds,
       ownedWeaponMods: this.ownedWeaponMods,
       ownedWeaponCores: this.ownedWeaponCores,
@@ -213,6 +216,7 @@ export class GameState {
     if (!gs.equippedWeapons || !Array.isArray(gs.equippedWeapons)) gs.equippedWeapons = [gs.ownedWeapons[0] || 'pistol', null];
     if (!gs.activeWeapon) gs.activeWeapon = gs.equippedWeapons[0] || gs.ownedWeapons[0] || 'pistol';
     if (!gs.armour) gs.armour = { id: null, mods: [null, null] };
+    if (!Array.isArray(gs.ownedArmours)) gs.ownedArmours = [];
     if (!gs.weaponBuilds) gs.weaponBuilds = {};
     if (!Array.isArray(gs.ownedWeaponMods)) gs.ownedWeaponMods = [];
     if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = [];
