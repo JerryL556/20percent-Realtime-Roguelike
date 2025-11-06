@@ -16,6 +16,17 @@ export default class HubScene extends Phaser.Scene {
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
 
+    // Fully restore player HP and Shield upon entering Hub
+    try {
+      const eff = getPlayerEffects(this.gs) || {};
+      const effectiveMaxHp = Math.max(0, (this.gs?.maxHp || 0) + (eff.bonusHp || 0));
+      this.gs.hp = effectiveMaxHp;
+      // Restore shields to max and clear damage timestamp to allow immediate regen visuals
+      this.gs.shield = Math.max(0, Math.floor(this.gs?.shieldMax || 0));
+      this.gs.lastDamagedAt = 0;
+      SaveManager.saveToLocal(this.gs);
+    } catch (_) {}
+
     // World bounds
     this.physics.world.setBounds(0, 0, width, height);
 
