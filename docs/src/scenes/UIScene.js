@@ -641,11 +641,14 @@ export default class UIScene extends Phaser.Scene {
           return `${perSec.toFixed(1)}/s`;
         };
         (weaponDefs || []).forEach((w) => {
-          if (!gs.ownedWeapons.includes(w.id) && w.price > 0) {
-            pushRow(`Buy ${w.name} (${w.price}g)`, () => {
+          if (w.price > 0) {
+            const ownedW = Array.isArray(gs.ownedWeapons) && gs.ownedWeapons.includes(w.id);
+            const head = ownedW ? `${w.name} (Owned)` : `Buy ${w.name} (${w.price}g)`;
+            const buyFn = ownedW ? null : () => {
               const g0 = this.registry.get('gameState');
               if (g0.gold >= w.price) { g0.gold -= w.price; g0.ownedWeapons.push(w.id); SaveManager.saveToLocal(g0); renderList(); }
-            });
+            };
+            pushRow(head, buyFn);
             // Optional short description if present
             if (w.desc) {
               const descLines = String(w.desc).replace(/\\n/g, '\n').split('\n');
