@@ -134,7 +134,7 @@ export default class BossScene extends Phaser.Scene {
     // Boss (modernized: pick variant and tune stats)
     const mods = this.gs.getDifficultyMods();
     const pistol = getWeaponById('pistol');
-    let bossType = 'Charger';
+    let bossType = 'Dasher';
     try {
       if (typeof this.gs.chooseBossType === 'function') bossType = this.gs.chooseBossType();
       else if (this.gs.gameMode === 'BossRush' && Array.isArray(this.gs.bossRushQueue) && this.gs.bossRushQueue.length) bossType = this.gs.bossRushQueue[0];
@@ -147,8 +147,8 @@ export default class BossScene extends Phaser.Scene {
       const bh = Math.max(1, Math.round(this.boss.displayHeight));
       this.boss.setSize(bw, bh).setOffset(0, 0);
     } catch (_) {}
-    if (bossType === 'Charger') {
-      this.boss.bossType = 'Charger';
+    if (bossType === 'Dasher') {
+      this.boss.bossType = 'Dasher';
       this.boss.maxHp = Math.floor(750 * (mods.enemyHp || 1));
       this.boss.hp = this.boss.maxHp;
       this.boss.speed = 80;
@@ -167,7 +167,7 @@ export default class BossScene extends Phaser.Scene {
     this._dashNextAt = this.time.now + 3000;
     // Reset transient boss ability state to avoid leaking across BossRush rounds
     this._castingGrenades = false; // Shotgunner grenade volley gate
-    this._bossBurstLeft = 0; // Charger burst/shooting timers
+    this._bossBurstLeft = 0; // Dasher burst/shooting timers
     this._bossNextBurstAt = 0;
     this.lastBossShot = 0;
     // Group the boss into a physics group for consistent overlap handling
@@ -200,7 +200,7 @@ export default class BossScene extends Phaser.Scene {
     this.barricadesSoft = this.physics.add.staticGroup();
     try { this.generateBossBarricades(); } catch (_) {}
     this.physics.add.collider(this.player, this.barricadesSoft);
-    // Boss vs barricades: allow melee chip when not dashing; no separation during Charger dash
+    // Boss vs barricades: allow melee chip when not dashing; no separation during Dasher dash
     this.physics.add.collider(
       this.boss,
       this.barricadesSoft,
@@ -365,7 +365,7 @@ export default class BossScene extends Phaser.Scene {
     // Place near top area
     this.bossHpBar = new HpBar(this, barX, 60, barW, 10);
     // Boss name above the HP bar (dynamic)
-    this.bossName = (this.boss?.bossType === 'Charger') ? 'Charger' : 'Shotgunner';
+    this.bossName = (this.boss?.bossType === 'Dasher') ? 'Dasher' : 'Shotgunner';
     this.bossNameText = this.add.text(width / 2, 48, this.bossName, { fontFamily: 'monospace', fontSize: 16, color: '#ff6666' }).setOrigin(0.5);
     this.exitRect = null;
     this.exitG = this.add.graphics();
@@ -376,7 +376,7 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150闂? 48px, 10 dmg
+  // Player melee (same as Combat): 150�? 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
@@ -651,9 +651,11 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2闂?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2�?frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
+        // Slightly increase Smart HMG homing: ~0.75��/frame (~45��/s)
+        b._maxTurn = Phaser.Math.DegToRad(0.75);
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
 
         const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
@@ -668,7 +670,8 @@ export default class BossScene extends Phaser.Scene {
               if (!valid(b._target)) { b._target = enemies.find((e) => valid(e)) || null; }
               if (b._target && b._target.active) desired = Phaser.Math.Angle.Between(b.x, b.y, b._target.x, b._target.y);
             }
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, b._maxTurn);
+            const dtHmg = (this.game?.loop?.delta || 16.7) / 1000;
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * (60 * dtHmg));
             const vx = Math.cos(b._angle) * b._speed; const vy = Math.sin(b._angle) * b._speed; b.setVelocity(vx, vy);
           } catch (_) {}
           try {
@@ -697,11 +700,17 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120闂?s equals 2闂?frame at 60 FPS
-        b._turnRate = Phaser.Math.DegToRad(120);
+        // Turn rate (time-based): ~120�?s equals 2�?frame at 60 FPS
+        // Drastically higher when no Smart Core: 480��/s baseline
+        b._turnRate = Phaser.Math.DegToRad(480);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
-        if (b._smart) { const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5; b._turnRate *= mult; b._fov = Phaser.Math.DegToRad(90); }
+        if (b._smart) {
+          const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
+          // Preserve Smart Core homing identical to old behavior (120��/s scaled by mult)
+          b._turnRate = Phaser.Math.DegToRad(120) * mult;
+          b._fov = Phaser.Math.DegToRad(90);
+        }
         b._noTurnUntil = this.time.now + 200;
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
         const g = this.add.graphics(); b._g = g; try { g.setDepth(8000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
@@ -1083,12 +1092,26 @@ export default class BossScene extends Phaser.Scene {
       this.dash.active = true; this.dash.until = now + dur; this.dash.cooldownUntil = now + 600;
       this.dash.vx = Math.cos(angle) * dashSpeed; this.dash.vy = Math.sin(angle) * dashSpeed;
       this.player.iframesUntil = now + dur;
+      // Initialize dash trail start
+      this._dashTrailLast = { x: this.player.x, y: this.player.y };
       this.dash.charges -= 1; this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
     if (this.dash.active && now < this.dash.until) {
+      // Draw a fading white tracer behind the player while dashing
+      try {
+        if (this._dashTrailLast) {
+          const g = this.add.graphics();
+          try { g.setDepth(9800); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+          g.lineStyle(4, 0xffffff, 0.9);
+          g.beginPath(); g.moveTo(this._dashTrailLast.x, this._dashTrailLast.y); g.lineTo(this.player.x, this.player.y); g.strokePath();
+          this.tweens.add({ targets: g, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => { try { g.destroy(); } catch (_) {} } });
+          this._dashTrailLast.x = this.player.x; this._dashTrailLast.y = this.player.y;
+        }
+      } catch (_) {}
       this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
+      this._dashTrailLast = null;
       const speed = 200 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
@@ -1312,7 +1335,7 @@ export default class BossScene extends Phaser.Scene {
       // Update wasps
       if (this._wasps.length) {
         const dtw = (this.game?.loop?.delta || 16.7) / 1000; const noww = this.time.now;
-        const detectR = 160; const detectR2 = detectR * detectR;
+        const detectR = 200; const detectR2 = detectR * detectR;
         const boss = (this.boss && this.boss.active) ? this.boss : null;
         this._wasps = this._wasps.filter((w) => {
           if (!w?.g?.active) { try { w?._thr?.destroy?.(); } catch (_) {} return false; }
@@ -1747,9 +1770,9 @@ export default class BossScene extends Phaser.Scene {
       const nx = dx / len;
       const ny = dy / len;
       const wobble = Math.sin(time / 300) * 60;
-      const isCharger = (this.boss.bossType === 'Charger');
+      const isDasher = (this.boss.bossType === 'Dasher');
       // Charger multi-dash window
-      if (isCharger) {
+      if (isDasher) {
         if (!this._dashSeq && !this._castingGrenades && time >= (this._dashNextAt || 0)) {
           this._dashSeq = { phase: 'prep', until: time + 600, idx: 0 };
           try {
@@ -1823,11 +1846,11 @@ export default class BossScene extends Phaser.Scene {
 
     // Boss shooting pattern (pause during dash)
     if (this.boss && this.boss.active && !this._castingGrenades) {
-      const isCharger = (this.boss.bossType === 'Charger');
+      const isDasher = (this.boss.bossType === 'Dasher');
       // Do not shoot while any dash sequence is active
       const canShoot = !this._dashSeq;
       const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
-      if (isCharger) {
+      if (isDasher) {
         if (canShoot) {
           const nowT = time;
           if (!this._bossBurstLeft && (!this.lastBossShot || nowT - this.lastBossShot > 600)) {
@@ -1874,7 +1897,7 @@ export default class BossScene extends Phaser.Scene {
     } catch (_) {}
 
     // Boss ability: grenade volley for Shotgunner
-    if (this.boss && this.boss.active && this.boss.bossType !== 'Charger') {
+    if (this.boss && this.boss.active && this.boss.bossType !== 'Dasher') {
       if (time >= (this._grenadeNextAvailableAt || 0)) {
         if (!this._lastAbilityRollAt || (time - this._lastAbilityRollAt) > 500) {
           this._lastAbilityRollAt = time; if (Math.random() < 0.35) { this.castGrenadeVolley(); this._grenadeNextAvailableAt = time + 6000; }

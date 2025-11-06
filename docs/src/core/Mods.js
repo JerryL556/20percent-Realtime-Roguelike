@@ -1,4 +1,4 @@
-// Simple, customizable mod/core system. Extend these lists as you add content.
+﻿// Simple, customizable mod/core system. Extend these lists as you add content.
 
 // Weapon normal mods (3 slots)
 export const weaponMods = [
@@ -18,6 +18,7 @@ export const weaponMods = [
       return hasMax ? { ...w, spreadDeg: newBase, maxSpreadDeg: newMax } : { ...w, spreadDeg: newBase };
     },
   },
+  
   { id: 'w_speed_up', name: 'Advanced Propellant', desc: '+15% bullet speed', allow: (base) => !!base && !base.isLaser, apply: (w) => ({ ...w, bulletSpeed: Math.floor(w.bulletSpeed * 1.15) }) },
   // (Incendiary/Toxic moved to cores per design)
   {
@@ -124,7 +125,7 @@ export const weaponCores = [
     onlyFor: 'guided_missiles',
     desc: [
       'Guided Missiles only',
-      '+ Lock-on to nearest enemy within 90° cone',
+      '+ Lock-on to nearest enemy within 90掳 cone',
       '+ Tracks enemies instead of cursor',
       '- Reduced turn rate for tighter arcs',
       'Missiles still collide with walls/barricades',
@@ -132,7 +133,7 @@ export const weaponCores = [
     apply: (w) => {
       if (!w || w.id !== 'guided_missiles') return w;
       // Enable smart seeking and reduce per-frame turn rate
-      // Base guided turn is ~2°/frame; reduce further
+      // Base guided turn is ~2掳/frame; reduce further
       // Make turning significantly harder: reduce per-frame turn to ~25%
       const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 2000;
       const reloadMs = Math.max(200, Math.floor(baseReload * 0.9));
@@ -176,6 +177,35 @@ export const weaponCores = [
       if (!w || w.id !== 'pistol') return w;
       const slower = Math.floor((w.fireRateMs || 220) * 1.2); // +20% interval between pulls
       return { ...w, _twoTap: true, fireRateMs: slower };
+    },
+  },
+  {
+    id: 'core_hmg_propelled',
+    name: 'Standard Bullets',
+    onlyFor: 'smart_hmg',
+    desc: [
+      'Smart HMG only',
+      '+ Magazine size set to 60',
+      '+ 25% bullet speed',
+      '+ 50% damage',
+      '- Removes homing effect',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'smart_hmg') return w;
+      const newDmg = Math.max(1, (w.damage || 0) + 4); // buff damage (8 -> 12)
+      return {
+        ...w,
+        // Disable homing by clearing special projectile type
+        projectile: null,
+        // Spread values
+        spreadDeg: 0,
+        maxSpreadDeg: 6,
+        // Stronger rounds
+        damage: newDmg,
+        bulletSpeed: 600,
+        // Bigger belt
+        magSize: 60,
+      };
     },
   },
   {
@@ -372,9 +402,8 @@ export const armourMods = [
 
 // Armour list is intentionally minimal; you can extend later.
 export const armourDefs = [
-  { id: null, name: 'No Armour' },
-  { id: 'leather', name: 'Leather Vest' },
-  { id: 'kevlar', name: 'Kevlar Suit' },
+  { id: null, name: 'Standard Issue' },
+  { id: 'proto_thrusters', name: 'Prototype Thrusters' },
   { id: 'exp_shield', name: 'Experimental Shield Generator' },
-  { id: 'wasp_bits', name: 'WASP BITS' },
+  { id: 'wasp_bits', name: 'BIT Carrier' },
 ];

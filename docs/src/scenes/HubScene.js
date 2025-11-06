@@ -293,12 +293,26 @@ export default class HubScene extends Phaser.Scene {
       this.dash.active = true; this.dash.until = now + dur; this.dash.cooldownUntil = now + 600;
       this.dash.vx = Math.cos(angle) * dashSpeed; this.dash.vy = Math.sin(angle) * dashSpeed;
       this.player.iframesUntil = now + dur;
+      // Initialize dash trail start
+      this._dashTrailLast = { x: this.player.x, y: this.player.y };
       this.dash.charges -= 1; this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
     if (this.dash.active && now < this.dash.until) {
+      // Draw a fading white tracer behind the player while dashing
+      try {
+        if (this._dashTrailLast) {
+          const g = this.add.graphics();
+          try { g.setDepth(9800); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+          g.lineStyle(4, 0xffffff, 0.9);
+          g.beginPath(); g.moveTo(this._dashTrailLast.x, this._dashTrailLast.y); g.lineTo(this.player.x, this.player.y); g.strokePath();
+          this.tweens.add({ targets: g, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => { try { g.destroy(); } catch (_) {} } });
+          this._dashTrailLast.x = this.player.x; this._dashTrailLast.y = this.player.y;
+        }
+      } catch (_) {}
       this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
+      this._dashTrailLast = null;
       const speed = 160 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
     }

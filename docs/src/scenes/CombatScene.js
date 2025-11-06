@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+﻿﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -1153,6 +1153,8 @@ export default class CombatScene extends Phaser.Scene {
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
         b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2閹?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
+        // Slightly increase Smart HMG homing: ~0.75°/frame (~45°/s)
+        b._maxTurn = Phaser.Math.DegToRad(0.75);
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -1174,7 +1176,8 @@ export default class CombatScene extends Phaser.Scene {
               }
               if (b._target && b._target.active) { desired = Phaser.Math.Angle.Between(b.x, b.y, b._target.x, b._target.y); }
             }
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, b._maxTurn);
+            const dtHmg = (this.game?.loop?.delta || 16.7) / 1000;
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * (60 * dtHmg));
             const vx = Math.cos(b._angle) * b._speed; const vy = Math.sin(b._angle) * b._speed; b.setVelocity(vx, vy);
           } catch (_) {}
           try {
@@ -1209,14 +1212,20 @@ export default class CombatScene extends Phaser.Scene {
         // Homing parameters
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0); // low velocity
-        // Max turn per frame (reduced turn rate ~2 deg/frame)
-        b._maxTurn = Phaser.Math.DegToRad(2);
+        // Max turn per frame baseline is increased for no-core missiles (effectively time-scaled later)
+        // Drastically higher base homing for no-core: 8 deg/frame (~480°/s at 60 FPS)
+        b._maxTurn = Phaser.Math.DegToRad(8);
         // Smart Missiles core: enable enemy-seeking and reduce turn further
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
           b._maxTurn = b._maxTurn * mult; // e.g., 1閹?frame
           b._fov = Phaser.Math.DegToRad(90); // 90閹?cone total
+        }
+        // Preserve Smart Core homing equal to old behavior: 2 deg/frame scaled by mult
+        if (b._smart) {
+          const mult2 = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
+          b._maxTurn = Phaser.Math.DegToRad(2) * mult2;
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -1279,7 +1288,8 @@ export default class CombatScene extends Phaser.Scene {
                 desired = Phaser.Math.Angle.Between(b.x, b.y, tx, ty);
               }
             } // else: within straight-flight window; keep current desired (= b._angle)
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, b._maxTurn);
+            const dt = (this.game?.loop?.delta || 16.7) / 1000;
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * (60 * dt));
             const vx = Math.cos(b._angle) * b._speed;
             const vy = Math.sin(b._angle) * b._speed;
             b.setVelocity(vx, vy);
@@ -1828,15 +1838,29 @@ export default class CombatScene extends Phaser.Scene {
       this.dash.vx = Math.cos(angle) * dashSpeed;
       this.dash.vy = Math.sin(angle) * dashSpeed;
       this.player.iframesUntil = now + dur; // i-frames while dashing
+      // Initialize dash trail start
+      this._dashTrailLast = { x: this.player.x, y: this.player.y };
       // consume charge and queue regen
       this.dash.charges -= 1;
       this.dash.regen.push(now + (eff.dashRegenMs || this.gs.dashRegenMs));
     }
 
     if (this.dash.active && now < this.dash.until) {
+      // Draw a fading white tracer behind the player while dashing
+      try {
+        if (this._dashTrailLast) {
+          const g = this.add.graphics();
+          try { g.setDepth(9800); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+          g.lineStyle(4, 0xffffff, 0.9);
+          g.beginPath(); g.moveTo(this._dashTrailLast.x, this._dashTrailLast.y); g.lineTo(this.player.x, this.player.y); g.strokePath();
+          this.tweens.add({ targets: g, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => { try { g.destroy(); } catch (_) {} } });
+          this._dashTrailLast.x = this.player.x; this._dashTrailLast.y = this.player.y;
+        }
+      } catch (_) {}
       this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
+      this._dashTrailLast = null;
       const mv = this.inputMgr.moveVec;
       const speed = 200 * (eff.moveSpeedMult || 1);
       this.player.setVelocity(mv.x * speed, mv.y * speed);
@@ -2571,7 +2595,7 @@ export default class CombatScene extends Phaser.Scene {
         const dt = (this.game?.loop?.delta || 16.7) / 1000;
         const now = this.time.now;
         // Reduced detection radius per request
-        const detectR = 160; const detectR2 = detectR * detectR;
+        const detectR = 200; const detectR2 = detectR * detectR;
         const enemiesArr = this.enemies?.getChildren?.() || [];
         this._wasps = this._wasps.filter((w) => {
           if (!w?.g?.active) { try { w?._thr?.destroy?.(); } catch (_) {} return false; }

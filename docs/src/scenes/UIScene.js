@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { HpBar } from '../ui/HpBar.js';
 import { ShieldBar } from '../ui/ShieldBar.js';
 import { DashBar } from '../ui/DashBar.js';
@@ -440,12 +440,20 @@ export default class UIScene extends Phaser.Scene {
         gs.armour.id = chosenId;
         try {
           if (chosenId === 'exp_shield') {
-            gs.maxHp = 50; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 40; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.maxHp = 40; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 30; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.shieldRegenDelayMs = 4000;
+          } else if (chosenId === 'proto_thrusters') {
+            gs.maxHp = 80; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 10; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.shieldRegenDelayMs = 4000;
+          } else if (chosenId === 'wasp_bits') {
+            gs.maxHp = 70; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else {
-            gs.maxHp = 100; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.maxHp = 85; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           }
         } catch (_) {}
@@ -701,6 +709,4 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
-
-
 

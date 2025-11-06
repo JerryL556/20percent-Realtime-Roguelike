@@ -48,5 +48,16 @@ export function getPlayerEffects(gs) {
       eff = m.applyEffect(eff);
     }
   });
+  // Apply base armour-type effects
+  try {
+    const armourId = gs?.armour?.id || null;
+    if (armourId === 'proto_thrusters') {
+      // Prototype Thrusters: +30% move speed, reduce dash recharge time (~30%)
+      eff.moveSpeedMult = (eff.moveSpeedMult || 1) * 1.3;
+      const baseDash = gs?.dashRegenMs || 6000;
+      eff.dashRegenMs = Math.min(eff.dashRegenMs || baseDash, Math.floor(baseDash * 0.7));
+      // HP and Shield baselines are handled on equip (UIScene); effects layer stays additive
+    }
+  } catch (_) {}
   return eff;
 }
