@@ -38,6 +38,10 @@ export const weaponDefs = [
   {
     id: 'mgl',
     name: 'MGL',
+    desc: [
+      'A powerful grenade launcher that fires six explosive rounds in succession.',
+      'However, it has a long reload time.',
+    ].join('\n'),
     // 6-round mag grenade launcher; explosive rounds
     damage: 20, // direct hit
     aoeDamage: 35, // AoE splash
@@ -57,6 +61,10 @@ export const weaponDefs = [
   {
     id: 'railgun',
     name: 'Railgun',
+    desc: [
+      'Hard-hitting prototype that pierces barricades, shields, and enemies.',
+      'Launches a tungsten slug via electromagnetic coils; charging boosts damage, accuracy, and velocity.',
+    ].join('\n'),
     damage: 24,
     fireRateMs: 350,
     bulletSpeed: 1560,
@@ -72,6 +80,9 @@ export const weaponDefs = [
   {
     id: 'rifle',
     name: 'Assult Rifle',
+    desc: [
+      'Standard-issue rifle with moderate damage and rate of fire.',
+    ].join('\n'),
     damage: 10,
     fireRateMs: 111,
     bulletSpeed: 500,
@@ -85,6 +96,9 @@ export const weaponDefs = [
   {
     id: 'battle_rifle',
     name: 'Battle Rifle',
+    desc: [
+      'Fires high-caliber rounds, trading magazine size and rate of fire for higher damage and accuracy.',
+    ].join('\n'),
     // Higher damage than rifle, slower fire rate, more accurate, 25-round mag
     damage: 16,
     fireRateMs: 160,
@@ -99,6 +113,10 @@ export const weaponDefs = [
   {
     id: 'shotgun',
     name: 'Shotgun',
+    desc: [
+      'Semi-auto shotgun that is devastating at close range.',
+      'Fires 5 pellets per shot.',
+    ].join('\n'),
     damage: 12,
     fireRateMs: 450,
     bulletSpeed: 340,
