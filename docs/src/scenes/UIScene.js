@@ -512,7 +512,10 @@ export default class UIScene extends Phaser.Scene {
       try { this.loadout.armourModLabels[idx] = lab; lab.setStyle({ color: (gs.armour && gs.armour.mods && gs.armour.mods[idx]) ? '#ffff33' : '#cccccc' }); } catch (e) {}
       const btn = makeTextButton(this, col3X + 210, wy + 8, 'Choose', () => {
         gs.armour = gs.armour || { id: null, mods: [null, null] };
-        const opts = armourMods.map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
+        const owned = new Set((gs.ownedArmourMods || []).filter(Boolean));
+        const opts = armourMods
+          .filter((m) => (m.id === null) || owned.has(m.id))
+          .map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
         const cur = gs.armour.mods[idx] || null;
         this.openChoicePopup(`Choose Armour Mod ${idx + 1}`, opts, cur, (chosenId) => {
           gs.armour.mods[idx] = chosenId;
@@ -558,7 +561,8 @@ export default class UIScene extends Phaser.Scene {
 
   openShopOverlay() {
     const gs = this.registry.get('gameState'); if (!gs || this.shop.panel) return;
-    const { width, height } = this.scale; const panelW = 780; const panelH = Math.max(320, Math.min(520, height - 80)); const left = Math.floor(width / 2 - panelW / 2); const top = Math.max(20, Math.floor((height - panelH) / 2));
+    try {
+      const { width, height } = this.scale; const panelW = 780; const panelH = Math.max(320, Math.min(520, height - 80)); const left = Math.floor(width / 2 - panelW / 2); const top = Math.max(20, Math.floor((height - panelH) / 2));
     const nodes = [];
     // Full-screen input blocker so clicks don't hit underlying scenes/UI
     const blocker = this.add.zone(0, 0, width, height).setOrigin(0, 0).setInteractive();
@@ -609,12 +613,13 @@ export default class UIScene extends Phaser.Scene {
     } catch (_) {}
     const priceMod = 120; const priceCoreG = 200; const priceCoreDC = 1;
     const renderList = () => {
-      try { list.removeAll(true); } catch (_) {}
-      const cat = this.shop.activeCat || 'weapons'; let ly = 8; const rows = [];
+      try {
+        try { list.removeAll(true); } catch (_) {}
+        const cat = this.shop.activeCat || 'weapons'; let ly = 8; const rows = [];
       const pushRow = (text, buyFn) => { const row = this.add.container(0, ly); const label = this.add.text(Math.floor(view.w/2), 0, text, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5, 0); const border = this.add.graphics(); const refresh = () => { border.clear(); border.lineStyle(1, 0xffffff, 1); const b = label.getBounds(); const bx = Math.floor(view.w/2 - b.width/2) - 6 + 0.5; const by = Math.floor(label.y) - 4 + 0.5; const bw = Math.ceil(b.width)+12; const bh = Math.ceil(b.height)+8; border.strokeRect(bx, by, bw, bh); }; refresh(); row.add(border); row.add(label); if (buyFn) label.setInteractive({ useHandCursor: true }).on('pointerover', () => { label.setStyle({ color: '#ffff66' }); refresh(); }).on('pointerout', () => { label.setStyle({ color: '#ffffff' }); refresh(); }).on('pointerdown', buyFn); list.add(row); rows.push(row); ly += 34; };
       if (cat === 'weapons') {
         header.setText('Weapons');
-        weaponDefs.forEach((w) => {
+        (weaponDefs || []).forEach((w) => {
           if (!gs.ownedWeapons.includes(w.id) && w.price > 0) {
             pushRow(`Buy ${w.name} (${w.price}g)`, () => {
               const g0 = this.registry.get('gameState');
@@ -738,34 +743,113 @@ export default class UIScene extends Phaser.Scene {
           });
         });
       } else if (cat === 'armours') {
-  header.setText('Armours');
-  const prices = { exp_shield: 200, wasp_bits: 300, proto_thrusters: 400 };
-  (armourDefs || []).forEach((a) => {
-    if (!a) return;
-    const id = a.id;
-    if (id === null) return; // Standard Issue not in shop
-    const owned = Array.isArray(gs.ownedArmours) && gs.ownedArmours.includes(id);
-    const price = prices[id] ?? 200;
-    const head = owned ? ${a.name} (Owned) : Buy  (g);
-    const buyFn = owned ? null : () => {
-      const g = this.registry.get('gameState');
-      if (g.gold >= price) {
-        g.gold -= price; if (!Array.isArray(g.ownedArmours)) g.ownedArmours = []; if (!g.ownedArmours.includes(id)) g.ownedArmours.push(id); SaveManager.saveToLocal(g); renderList();
+        header.setText('Armours');
+        const prices = { exp_shield: 200, wasp_bits: 300, proto_thrusters: 400 };
+        (armourDefs || []).forEach((a) => {
+          if (!a) return;
+          const id = a.id;
+          if (id === null) return; // Standard Issue not in shop
+          const owned = Array.isArray(gs.ownedArmours) && gs.ownedArmours.includes(id);
+          const price = prices[id] ?? 200;
+          const head = owned ? `${a.name} (Owned)` : `Buy ${a.name} (${price}g)`;
+          const buyFn = owned ? null : () => {
+            const g = this.registry.get('gameState');
+            if (g.gold >= price) {
+              g.gold -= price; if (!Array.isArray(g.ownedArmours)) g.ownedArmours = []; if (!g.ownedArmours.includes(id)) g.ownedArmours.push(id); SaveManager.saveToLocal(g); renderList();
+            }
+          };
+          pushRow(head, buyFn);
+        });
+      } else if (cat === 'armour_mods') {
+        header.setText('Armour Mods');
+        const priceArmourMod = 120;
+        (armourMods || []).forEach((m) => {
+          if (!m.id) return; // skip Empty in shop
+          const owned = Array.isArray(gs.ownedArmourMods) && gs.ownedArmourMods.includes(m.id);
+          const head = owned ? `${m.name} (Owned)` : `Buy ${m.name} (${priceArmourMod}g)`;
+          const buyFn = owned ? null : () => {
+            const g = this.registry.get('gameState');
+            if (g.gold >= priceArmourMod) {
+              g.gold -= priceArmourMod; if (!Array.isArray(g.ownedArmourMods)) g.ownedArmourMods = []; g.ownedArmourMods.push(m.id); SaveManager.saveToLocal(g); renderList();
+            }
+          };
+          pushRow(head, buyFn);
+          const lines = String(m.desc || '').replace(/\\n/g, '\n').split('\n');
+          lines.forEach((ln) => {
+            const line = ln.trim(); if (!line) return;
+            let color = '#cccccc';
+            const lower = line.toLowerCase();
+            const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
+            const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
+            const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+            if (line.startsWith('+')) {
+              const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
+              color = isHarmfulPos ? '#ff6666' : '#66ff66';
+            } else if (line.startsWith('-')) {
+              const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+              color = isBeneficialNeg ? '#66ff66' : '#ff6666';
+            } else if (positiveHints.some((k) => lower.includes(k))) {
+              color = '#66ff66';
+            } else if (negativeHints.some((k) => lower.includes(k))) {
+              color = '#ff6666';
+            }
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+            list.add(t); ly += Math.ceil(t.height) + 6;
+          });
+        });
+      } else if (cat === 'abilities') {
+        header.setText('Abilities');
+        const t = this.add.text(24, ly, 'Abilities coming soon', { fontFamily: 'monospace', fontSize: 12, color: '#aaaaaa', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+        list.add(t); ly += Math.ceil(t.height) + 6;
+      } else if (cat === 'special') {
+        header.setText('Special');
+        const maxCharges = 5;
+        const cur = gs.dashMaxCharges ?? 3;
+        const canBuy = cur < maxCharges;
+        const label = canBuy ? `Dash Slot +1 (100g) [Now: ${cur}]` : `Dash Slots Maxed [${cur}]`;
+        const buyFn = canBuy ? () => {
+          const g = this.registry.get('gameState');
+          if (g.gold >= 100 && g.dashMaxCharges < maxCharges) {
+            g.gold -= 100; g.dashMaxCharges = Math.min(maxCharges, (g.dashMaxCharges || 3) + 1); SaveManager.saveToLocal(g); renderList();
+          }
+        } : null;
+        pushRow(label, buyFn);
+      }
+      // update scroll bounds after building list
+      const contentH = Math.max(view.h, ly + 8);
+      minY = view.y - Math.max(0, contentH - view.h);
+      maxY = view.y;
+      list.y = clamp(list.y, minY, maxY);
+      drawScrollbar(contentH);
+      } catch (e) {
+        const msg = this.add.text(view.x + 8, view.y + 8, `Error: ${e?.message || e}`, { fontFamily: 'monospace', fontSize: 12, color: '#ff6666' }).setOrigin(0, 0);
+        list.add(msg);
       }
     };
-    pushRow(head, buyFn);
-  });
-}
-      else if (cat === 'armour_mods') { header.setText('Armour Mods'); pushRow('Coming soon: armour mods', null); }
-      else if (cat === 'abilities') { header.setText('Abilities'); pushRow('Coming soon: abilities shop', null); }
-      else if (cat === 'special') { header.setText('Special'); pushRow(`Dash Slot +1 (100g) [Now: ${gs.dashMaxCharges}]`, () => { if (gs.dashMaxCharges >= 5) return; const g3 = this.registry.get('gameState'); if (g3.gold >= 100) { g3.gold -= 100; g3.dashMaxCharges = Math.min(5, g3.dashMaxCharges + 1); SaveManager.saveToLocal(g3); renderList(); } }); }
-      const contentH = Math.max(ly, view.h); minY = view.y - (contentH - view.h); maxY = view.y; list.y = maxY; drawScrollbar(contentH);
-    };
-    renderList();
-    const closeTop = makeTextButton(this, left + panelW - 44, top + 14, 'X', () => { this.closeShopOverlay(); }); nodes.push(closeTop);
-    const closeBtn = makeTextButton(this, width / 2, top + panelH - 18, 'Close', () => { this.closeShopOverlay(); }); nodes.push(closeBtn);
-    this.shop.panel = panel; this.shop.nodes = nodes;
-  }
+      // Top-right close button
+      const closeBtn = makeTextButton(this, left + panelW - 12, top + 12, 'Close', () => this.closeShopOverlay()).setOrigin(1, 0.5);
+      nodes.push(closeBtn);
+      // Store references and render initial category
+      this.shop.panel = panel;
+      this.shop.nodes = nodes;
+      renderList();
+    } catch (e) {
+      try { console.error('Shop overlay error:', e); } catch (_) {}
+      // Attempt to clean up any partial UI and leave the game responsive
+      try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
+      try { if (this.shop && this.shop.panel) { this.shop.panel.destroy(); this.shop.panel = null; } } catch (_) {}
+      try { (this.shop.nodes || []).forEach((n) => { try { n?.destroy?.(); } catch (_) {} }); this.shop.nodes = []; } catch (_) {}
+      // Show a brief on-screen error message for debugging
+      try {
+        const { width, height } = this.scale;
+        const msg = this.add.text(width / 2, height / 2, `Shop error: ${e?.message || e}`, { fontFamily: 'monospace', fontSize: 14, color: '#ff6666' }).setOrigin(0.5);
+        this.time.delayedCall(2000, () => { try { msg.destroy(); } catch (_) {} });
+      } catch (_) {}
+    }
+
+    }
 
   closeShopOverlay() {
     try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}

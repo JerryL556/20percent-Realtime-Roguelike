@@ -45,6 +45,7 @@ export class GameState {
     // Ownership collections for shop-gated content
     this.ownedWeaponMods = [];
     this.ownedWeaponCores = [];
+    this.ownedArmourMods = [];
     this.difficulty = Difficulty.Normal;
     this.runSeed = Date.now() >>> 0;
     this.rng = new RNG(this.runSeed);
@@ -84,6 +85,7 @@ export class GameState {
     this.weaponBuilds = {};
     this.ownedWeaponMods = [];
     this.ownedWeaponCores = [];
+    this.ownedArmourMods = [];
     if (seed) this.runSeed = seed >>> 0;
     if (difficulty) this.difficulty = difficulty;
     this.ownedArmours = [];
@@ -190,7 +192,7 @@ export class GameState {
       weaponBuilds: this.weaponBuilds,
       ownedWeaponMods: this.ownedWeaponMods,
       ownedWeaponCores: this.ownedWeaponCores,
-      ownedWeapons: this.ownedWeapons,
+      ownedArmourMods: this.ownedArmourMods,
       difficulty: this.difficulty,
       runSeed: this.runSeed,
       roomsClearedInCycle: this.roomsClearedInCycle,
@@ -220,6 +222,7 @@ export class GameState {
     if (!gs.weaponBuilds) gs.weaponBuilds = {};
     if (!Array.isArray(gs.ownedWeaponMods)) gs.ownedWeaponMods = [];
     if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = [];
+    if (!Array.isArray(gs.ownedArmourMods)) gs.ownedArmourMods = [];
     gs.dashMaxCharges = Math.min(gs.dashMaxCharges || 3, 5);
     gs.dashRegenMs = Math.max(gs.dashRegenMs || 6000, 6000);
     if (!gs.gameMode) gs.gameMode = 'Normal';
