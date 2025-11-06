@@ -315,7 +315,8 @@ export default class UIScene extends Phaser.Scene {
           }
           const magLine = w.isLaser ? `Time Before Overheat: 5s` : `Mag Size: ${w.magSize}`;
           const stats = [dmgLine, rofLine, velLine, magLine].join('\n');
-          const descTop = w.desc ? String(w.desc) + '\n' : '';
+          // Prefix weapon description lines with a marker to force neutral coloring in the popup
+          const descTop = w.desc ? String(w.desc).split('\n').map((s) => `(desc) ${s}`).join('\n') + '\n' : '';
           return ({ id: w.id, name: w.name, desc: descTop + stats });
         });
         if (!list.length) return;
@@ -1144,30 +1145,33 @@ export default class UIScene extends Phaser.Scene {
         const normalized = String(opt.desc).replace(/\\n/g, '\n');
         const lines = normalized.split('\n');
         lines.forEach((ln) => {
-          const t = ln.trim(); if (!t) return;
+          let t = ln.trim(); if (!t) return;
+          let forceNeutral = false;
+          if (t.startsWith('(desc) ')) { t = t.slice(7); forceNeutral = true; }
           let color = '#cccccc';
           const lower = t.toLowerCase();
-          if (lower.startsWith('hp:')) {
-            color = '#66ff66';
-          } else if (lower.startsWith('shield:')) {
-            color = '#66aaff';
-          } else {
-          const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
-          const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
-          const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
-          const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
-          const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
-          if (t.startsWith('+')) {
-            // Treat leading '+' as beneficial (green), even if text mentions cooldown/reload
-            color = '#66ff66';
-          } else if (t.startsWith('-')) {
-            const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
-            color = isBeneficialNeg ? '#66ff66' : '#ff6666';
-          } else if (positiveHints.some((k) => lower.includes(k))) {
-            color = '#66ff66';
-          } else if (negativeHints.some((k) => lower.includes(k))) {
-            color = '#ff6666';
-          }
+          if (!forceNeutral) {
+            if (lower.startsWith('hp:')) {
+              color = '#66ff66';
+            } else if (lower.startsWith('shield:')) {
+              color = '#66aaff';
+            } else {
+              const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
+              const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
+              const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+              const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+              const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+              if (t.startsWith('+')) {
+                color = '#66ff66';
+              } else if (t.startsWith('-')) {
+                const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+                color = isBeneficialNeg ? '#66ff66' : '#ff6666';
+              } else if (positiveHints.some((k) => lower.includes(k))) {
+                color = '#66ff66';
+              } else if (negativeHints.some((k) => lower.includes(k))) {
+                color = '#ff6666';
+              }
+            }
           }
           const style = { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: wrapWidth, useAdvancedWrap: true } };
           const tObj = addText(24, yy, t, style);
