@@ -4,6 +4,9 @@ export const weaponDefs = [
   {
     id: 'pistol',
     name: 'Pistol',
+    desc: [
+      'Standard-issue pistol — accurate and reliable.',
+    ].join('\n'),
     damage: 18,
     fireRateMs: 160,
     bulletSpeed: 450,
@@ -130,6 +133,10 @@ export const weaponDefs = [
   {
     id: 'smg',
     name: 'SMG',
+    desc: [
+      'Close-quarters weapon with an extremely fast rate of fire.',
+      'Sustained fire causes significant spread at longer ranges.',
+    ].join('\n'),
     damage: 6,
     fireRateMs: 65,
     bulletSpeed: 420,
@@ -143,6 +150,9 @@ export const weaponDefs = [
   {
     id: 'rocket',
     name: 'Rocket Launcher',
+    desc: [
+      'Launches a propelled explosive that deals area damage over a large radius.',
+    ].join('\n'),
     damage: 30, // direct hit
     aoeDamage: 50, // AoE splash
     fireRateMs: 700,
@@ -161,6 +171,10 @@ export const weaponDefs = [
   {
     id: 'guided_missiles',
     name: 'L-G Missiles',
+    desc: [
+      'A smart weapon that fires propelled, laser-guided mini missiles.',
+      'Effectively hits targets even without direct line of sight.',
+    ].join('\n'),
     // Micro homing rockets that follow the cursor with limited turn rate
     damage: 10,           // increased direct hit
     aoeDamage: 10,        // reduced splash
@@ -180,6 +194,10 @@ export const weaponDefs = [
   {
     id: 'smart_hmg',
     name: 'Smart HMG',
+    desc: [
+      'Heavy machine gun modified to fire mini smart missiles that auto-lock onto enemies.',
+      'Missile maneuverability is limited, and per-shot damage is modest due to minimal warheads.',
+    ].join('\n'),
     // High-capacity HMG that fires smart bullets with limited turning
     damage: 8,
     fireRateMs: 133,      // reduced ROF (~450 RPM)
