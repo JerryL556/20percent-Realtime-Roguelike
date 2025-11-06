@@ -27,7 +27,7 @@ export const weaponMods = [
     desc: [
       '+10% magazine size',
       '-30% reload time',
-    ].join('\\n'),
+    ].join('\n'),
     allow: (base) => {
       if (!base) return false;
       const id = base.id;
@@ -49,7 +49,7 @@ export const weaponMods = [
     name: 'Extended Magazine',
     desc: [
       '+30% magazine size',
-    ].join('\\n'),
+    ].join('\n'),
     allow: (base) => {
       if (!base) return false;
       const id = base.id;
@@ -70,7 +70,7 @@ export const weaponMods = [
     desc: [
       '+ Bullets apply Stun buildup on hit',
       '-10% bullet speed',
-    ].join('\\n'),
+    ].join('\n'),
     allow: (base) => {
       if (!base) return false;
       return !base.isLaser;
@@ -89,7 +89,7 @@ export const weaponMods = [
     name: 'Quick Swap HeatSink',
     desc: [
       '-30% reload time (overheat cooldown)',
-    ].join('\\n'),
+    ].join('\n'),
     // Laser only
     allow: (base) => !!base && !!base.isLaser,
     apply: (w) => {
@@ -342,7 +342,7 @@ export const weaponCores = [
     desc: [
       '+ Bullets apply Toxin buildup on hit',
       '-2 direct damage',
-    ].join('\\n'),
+    ].join('\n'),
     apply: (w) => {
       if (!w || w.id !== 'smg') return w;
       const newDmg = Math.max(1, (w.damage || 0) - 2);
@@ -393,7 +393,7 @@ export const armourMods = [
     // Mark an effect flag that scenes can honor when applying damage
     applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),
   },
-\n  {\n    id: 'a_no_overflow',\n    name: 'Emergency Pulse',\n    desc: [\n      '+Prevents damage overflow when Energy Shield breaks',\n      '+Automatically releases a Repulsion Pulse on shield break',\n    ].join('\\n'),\n    apply: (a) => a,\n    // Mark an effect flag that scenes can honor when applying damage\n    applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),\n  },\n\n];
+];
 
 // Armour list is intentionally minimal; you can extend later.
 export const armourDefs = [
@@ -433,4 +433,5 @@ export const armourDefs = [
     ].join('\n'),
   },
 ];
+
 
