@@ -303,21 +303,9 @@ export default class UIScene extends Phaser.Scene {
       const btn = makeTextButton(this, col2X + 210, wy + 8, 'Choose', () => {
         const list = (gs.ownedWeapons || []).map((id) => {
           const w = getWeaponById(id) || { id, name: id };
-          const fmtRof = (x) => { if (!x || x.fireRateMs === 0) return 'Continuous'; const perSec = 1000 / (x.fireRateMs || 1); return `${perSec.toFixed(1)}/s`; };
-          let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : (w.id === 'shotgun' ? `Damage per Pellet: ${w.damage}` : `Damage: ${w.damage}`));
-          const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
-          let velLine = w.isLaser ? `Bullet Velocity: Instant` : `Bullet Velocity: ${w.bulletSpeed}`;
-          if (w.id === 'railgun') {
-            const chargedDmg = Math.round((w.damage || 0) * 3);
-            const chargedVel = Math.round((w.bulletSpeed || 0) * 3);
-            dmgLine = `Damage: ${w.damage} (Max Charge: ${chargedDmg})`;
-            velLine = `Bullet Velocity: ${w.bulletSpeed} (Max Charge: ${chargedVel})`;
-          }
-          const magLine = w.isLaser ? `Time Before Overheat: 5s` : `Mag Size: ${w.magSize}`;
-          const stats = [dmgLine, rofLine, velLine, magLine].join('\n');
-          // Prefix weapon description lines with a marker to force neutral coloring in the popup
-          const descTop = w.desc ? String(w.desc).split('\n').map((s) => `(desc) ${s}`).join('\n') + '\n' : '';
-          return ({ id: w.id, name: w.name, desc: descTop + stats });
+          // Loadout menu: show only the verbal description (no stat lines)
+          const descOnly = w.desc ? String(w.desc).split('\n').map((s) => `(desc) ${s}`).join('\n') : '';
+          return ({ id: w.id, name: w.name, desc: descOnly });
         });
         if (!list.length) return;
         const current = gs.equippedWeapons[slotIdx] || null;
@@ -658,7 +646,7 @@ export default class UIScene extends Phaser.Scene {
           return `${perSec.toFixed(1)}/s`;
         };
         (weaponDefs || []).forEach((w) => {
-          if (w.price > 0) {
+          if (w.price > 0 || w.id === 'pistol') {
             const ownedW = Array.isArray(gs.ownedWeapons) && gs.ownedWeapons.includes(w.id);
             const head = ownedW ? `${w.name} (Owned)` : `Buy ${w.name} (${w.price}g)`;
             const buyFn = ownedW ? null : () => {
@@ -1022,7 +1010,7 @@ export default class UIScene extends Phaser.Scene {
   showResourceHint(text) {
     try {
       const { width } = this.scale;
-      // Place below the in-game "Clear enemies" prompt (y ï¿½?40)
+      // Place below the in-game "Clear enemies" prompt (y ï¿?40)
       const baseY = 64;
       const gap = 18;
       const idx = (this._resourceToasts || []).length;
@@ -1252,6 +1240,7 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
+
 
 
 
