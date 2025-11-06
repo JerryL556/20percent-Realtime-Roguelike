@@ -531,6 +531,9 @@ export default class UIScene extends Phaser.Scene {
     const gs = this.registry.get('gameState'); if (!gs || this.shop.panel) return;
     const { width, height } = this.scale; const panelW = 780; const panelH = Math.max(320, Math.min(520, height - 80)); const left = Math.floor(width / 2 - panelW / 2); const top = Math.max(20, Math.floor((height - panelH) / 2));
     const nodes = [];
+    // Full-screen input blocker so clicks don't hit underlying scenes/UI
+    const blocker = this.add.zone(0, 0, width, height).setOrigin(0, 0).setInteractive();
+    nodes.push(blocker);
     const panel = this.add.graphics();
     panel.fillStyle(0x111111, 0.92).fillRect(left, top, panelW, panelH);
     panel.lineStyle(2, 0xffffff, 1).strokeRect(left, top, panelW, panelH);
