@@ -45,8 +45,7 @@ export default class UIScene extends Phaser.Scene {
     // Reload bar graphics (lazy show/hide during reload)
     this.reloadBar = { g: null, tween: null, wasActive: false };
     // Hint to open loadout with Tab (top-left)
-    
-    this.deepDiveText = this.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0).setAlpha(0.95);
+    this.loadoutHint = this.add.text(12, 12, 'Loadout (TAB)', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0).setAlpha(0.9);
     
 
     let x = width - 240;
@@ -1011,7 +1010,7 @@ export default class UIScene extends Phaser.Scene {
   showResourceHint(text) {
     try {
       const { width } = this.scale;
-      // Place below the in-game "Clear enemies" prompt (y ï¿½?40)
+      // Place below the in-game "Clear enemies" prompt (y ï¿?40)
       const baseY = 64;
       const gap = 18;
       const idx = (this._resourceToasts || []).length;

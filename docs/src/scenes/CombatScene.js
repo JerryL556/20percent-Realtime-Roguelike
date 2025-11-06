@@ -449,45 +449,30 @@ export default class CombatScene extends Phaser.Scene {
       return { x: sx, y: sy };
     };
 
-        if (this.gs?.gameMode === 'DeepDive' && !this.gs?.shootingRange) {
-      const lvl = Math.max(1, this.gs.deepDiveLevel || 1);
-      const stg = Math.max(1, Math.min(4, this.gs.deepDiveStage || 1));
-      const baseN = Math.max(1, this.gs.deepDiveNormalBase || 5);
-      const baseE = Math.max(1, this.gs.deepDiveEliteBase || 1);
-      const normalCount = (stg <= 3) ? (baseN + (stg - 1)) : (baseN + 2);
-      const eliteCount = (stg === 4) ? (baseE * 2) : baseE;
-      const spawnNormal = () => {
-        const sp = pickEdgeSpawn();
-        const roll = this.gs.rng.next();
-        let e;
-        if (roll < 0.10) {
-          e = createSniperEnemy(this, sp.x, sp.y, Math.floor(80 * mods.enemyHp), Math.floor(18 * mods.enemyDamage), 40);
-        } else if (roll < 0.30) {
-          e = createShooterEnemy(this, sp.x, sp.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
-        } else if (roll < 0.40) {
-          e = createMachineGunnerEnemy(this, sp.x, sp.y, Math.floor(140 * mods.enemyHp), Math.floor(7 * mods.enemyDamage), 35, 1100, 12, 24);
-        } else if (roll < 0.50) {
-          e = createRocketeerEnemy(this, sp.x, sp.y, Math.floor(80 * mods.enemyHp), Math.floor(12 * mods.enemyDamage), 40, 2000);
-        } else if (roll < 0.70) {
-          const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5);
-          e = createRunnerEnemy(this, sp.x, sp.y, Math.floor(60 * mods.enemyHp), meleeDmg, 120);
-        } else {
-          const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5);
-          e = createEnemy(this, sp.x, sp.y, Math.floor(100 * mods.enemyHp), meleeDmg, 60);
-        }
-        this.enemies.add(e);
-      };
-      const spawnElite = () => {
-        const spE = pickEdgeSpawn();
-        const pick = Math.random();
-        if (pick < (1/4)) this.enemies.add(createGrenadierEnemy(this, spE.x, spE.y, Math.floor(260 * mods.enemyHp), Math.floor(14 * mods.enemyDamage), 48, 2000));
-        else if (pick < (2/4)) this.enemies.add(createPrismEnemy(this, spE.x, spE.y, Math.floor(180 * mods.enemyHp), Math.floor(16 * mods.enemyDamage), 46));
-        else if (pick < (3/4)) this.enemies.add(createSnitchEnemy(this, spE.x, spE.y, Math.floor(100 * mods.enemyHp), Math.floor(6 * mods.enemyDamage), 60));
-        else this.enemies.add(createRookEnemy(this, spE.x, spE.y, Math.floor(300 * mods.enemyHp), Math.floor(25 * mods.enemyDamage), 35));
-      };
-      for (let i = 0; i < normalCount; i += 1) spawnNormal();
-      for (let i = 0; i < eliteCount; i += 1) spawnElite();
-    } else if (!this.gs?.shootingRange) room.spawnPoints.forEach((_) => {
+    if (!this.gs?.shootingRange) room.spawnPoints.forEach((_) => {
+      const sp = pickEdgeSpawn();
+      // Spawn composition (normal level): Sniper 10%, Shooter 20%, MachineGunner 10%, Rocketeer 10%, Runner 20%, Melee 30%
+      const roll = this.gs.rng.next();
+      let e;
+      if (roll < 0.10) {
+        e = createSniperEnemy(this, sp.x, sp.y, Math.floor(80 * mods.enemyHp), Math.floor(18 * mods.enemyDamage), 40);
+      } else if (roll < 0.30) {
+        e = createShooterEnemy(this, sp.x, sp.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
+      } else if (roll < 0.40) {
+        e = createMachineGunnerEnemy(this, sp.x, sp.y, Math.floor(140 * mods.enemyHp), Math.floor(7 * mods.enemyDamage), 35, 1100, 12, 24);
+      } else if (roll < 0.50) {
+        e = createRocketeerEnemy(this, sp.x, sp.y, Math.floor(80 * mods.enemyHp), Math.floor(12 * mods.enemyDamage), 40, 2000);
+      } else if (roll < 0.70) {
+        // Melee runner (fast)
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        e = createRunnerEnemy(this, sp.x, sp.y, Math.floor(60 * mods.enemyHp), meleeDmg, 120);
+      } else {
+        // Melee normal
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        e = createEnemy(this, sp.x, sp.y, Math.floor(100 * mods.enemyHp), meleeDmg, 60);
+      }
+      this.enemies.add(e);
+    });
     // Elite: exactly 1 per room; split between Grenadier, Prism, Snitch, Rook
     if (!this.gs?.shootingRange) {
       const spE = pickEdgeSpawn();
