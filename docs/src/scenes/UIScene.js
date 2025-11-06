@@ -303,14 +303,14 @@ export default class UIScene extends Phaser.Scene {
           const fmtRof = (x) => { if (!x || x.fireRateMs === 0) return 'Continuous'; const perSec = 1000 / (x.fireRateMs || 1); return `${perSec.toFixed(1)}/s`; };
           let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
           const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
-          let velLine = `Bullet Velocity: ${w.bulletSpeed}`;
+          let velLine = w.isLaser ? `Bullet Velocity: Instant` : `Bullet Velocity: ${w.bulletSpeed}`;
           if (w.id === 'railgun') {
             const chargedDmg = Math.round((w.damage || 0) * 3);
             const chargedVel = Math.round((w.bulletSpeed || 0) * 3);
             dmgLine = `Damage: ${w.damage} (Max Charge: ${chargedDmg})`;
             velLine = `Bullet Velocity: ${w.bulletSpeed} (Max Charge: ${chargedVel})`;
           }
-          const magLine = `Mag Size: ${w.magSize}`;
+          const magLine = w.isLaser ? `Time Before Overheat: —` : `Mag Size: ${w.magSize}`;
           const stats = [dmgLine, rofLine, velLine, magLine].join('\n');
           const descTop = w.desc ? String(w.desc) + '\n' : '';
           return ({ id: w.id, name: w.name, desc: descTop + stats });
@@ -654,8 +654,8 @@ export default class UIScene extends Phaser.Scene {
             // Stats lines (white)
             let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
             const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
-            let velLine = `Bullet Velocity: ${w.bulletSpeed}`;
-            const magLine = `Mag Size: ${w.magSize}`;
+            let velLine = w.isLaser ? `Bullet Velocity: Instant` : `Bullet Velocity: ${w.bulletSpeed}`;
+            const magLine = w.isLaser ? `Time Before Overheat: —` : `Mag Size: ${w.magSize}`;
             if (w.id === 'railgun') {
               const chargedDmg = Math.round((w.damage || 0) * 3);
               const chargedVel = Math.round((w.bulletSpeed || 0) * 3);
