@@ -348,7 +348,7 @@ export const armourMods = [
   {
     id: 'a_explosion_resist',
     name: 'FLAK Paddings',
-    desc: '-40% Explosion damage reduced',
+    desc: '+40% Explosion damage reduced',
     apply: (a) => a,
     applyEffect: (e) => ({ ...e, enemyExplosionDmgMul: Math.min((e.enemyExplosionDmgMul || 1), 0.6) }),
   },
@@ -369,6 +369,29 @@ export const armourMods = [
     apply: (a) => a,
     // Mark an effect flag that scenes can honor when applying damage
     applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),
+  },
+  {
+    id: 'core_guided_full',
+    name: 'Full-Size Missiles',
+    onlyFor: 'guided_missiles',
+    desc: [
+      '+Explosion damage +20',
+      '-Mag size set to 3',
+      '-Slower rate of fire',
+      '-Slightly reduced turn rate',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'guided_missiles') return w;
+      const aoe = Math.max(0, (w.aoeDamage ?? (w.damage || 0)) + 20);
+      const rof = Math.max(700, w.fireRateMs || 700);
+      return {
+        ...w,
+        aoeDamage: aoe,
+        magSize: 3,
+        fireRateMs: rof,
+        _guidedTurnMult: 0.7,
+      };
+    },
   },
 ];
 
