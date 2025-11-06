@@ -144,14 +144,14 @@ export const weaponCores = [
     name: 'Full-Size Missiles',
     onlyFor: 'guided_missiles',
     desc: [
-      '+Explosion damage +20',
-      '-Mag size set to 3',
+      '+30 Explosion damage',
+      '-3 Magazine size',
       '-Slower rate of fire',
       '-Slightly reduced turn rate',
     ].join('\n'),
     apply: (w) => {
       if (!w || w.id !== 'guided_missiles') return w;
-      const aoe = Math.max(0, (w.aoeDamage ?? (w.damage || 0)) + 20);
+      const aoe = Math.max(0, (w.aoeDamage ?? (w.damage || 0)) + 30);
       const rof = Math.max(700, w.fireRateMs || 700);
       return {
         ...w,
@@ -159,6 +159,7 @@ export const weaponCores = [
         magSize: 3,
         fireRateMs: rof,
         _guidedTurnMult: 0.7,
+        _guidedFullSize: true,
       };
     },
   },

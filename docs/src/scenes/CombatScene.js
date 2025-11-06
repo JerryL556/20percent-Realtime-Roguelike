@@ -61,7 +61,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150æŽ?cone, 48px range, 10 damage
+  // Player melee implementation: 150ï¿½?cone, 48px range, 10 damage
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -198,7 +198,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180æŽ? safe for lerp)
+          // Linear interpolate angles (range is <= 180ï¿½? safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -1182,9 +1182,9 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2éŽ?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2ï¿½?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
-        // Slightly increase Smart HMG homing: ~0.75¡ã/frame (~45¡ã/s)
+        // Slightly increase Smart HMG homing: ~0.75ï¿½ï¿½/frame (~45ï¿½ï¿½/s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1244,7 +1244,7 @@ export default class CombatScene extends Phaser.Scene {
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0); // low velocity
         // Max turn per frame baseline is increased for no-core missiles (effectively time-scaled later)
-        // Drastically higher base homing for no-core: 8 deg/frame (~480¡ã/s at 60 FPS)
+        // Drastically higher base homing for no-core: 8 deg/frame (~480ï¿½ï¿½/s at 60 FPS)
         b._maxTurn = Phaser.Math.DegToRad(8);
         // Apply optional guided turn-rate multiplier from cores
         if (typeof weapon._guidedTurnMult === 'number') {
@@ -1255,8 +1255,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1éŽ?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90éŽ?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1ï¿½?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90ï¿½?cone total
         }
         // Preserve Smart Core homing equal to old behavior: 2 deg/frame scaled by mult
         if (b._smart) {
@@ -1286,7 +1286,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45éŽ?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45ï¿½?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -1339,11 +1339,18 @@ export default class CombatScene extends Phaser.Scene {
             const tailX = b.x - Math.cos(b._angle) * 8;
             const tailY = b.y - Math.sin(b._angle) * 8;
             // Body (thicker, short)
-            g.lineStyle(3, 0xff8800, 0.95);
-            g.beginPath(); g.moveTo(tailX + Math.cos(b._angle) * 4, tailY + Math.sin(b._angle) * 4); g.lineTo(headX, headY); g.strokePath();
-            // Tracer (thin, longer)
-            g.lineStyle(1, 0xffddaa, 0.9);
-            g.beginPath(); g.moveTo(tailX, tailY); g.lineTo(b.x, b.y); g.strokePath();
+            const headMul = b._fullSize ? 3.5 : 2;
+            const tailMul = b._fullSize ? 14 : 8;
+            const bodyThick = b._fullSize ? 4 : 3;
+            const tracerThick = b._fullSize ? 2 : 1;
+            const headX2 = b.x + Math.cos(b._angle) * headMul;
+            const headY2 = b.y + Math.sin(b._angle) * headMul;
+            const tailX2 = b.x - Math.cos(b._angle) * tailMul;
+            const tailY2 = b.y - Math.sin(b._angle) * tailMul;
+            g.lineStyle(bodyThick, 0xff8800, 0.95);
+            g.beginPath(); g.moveTo(tailX2 + Math.cos(b._angle) * 4, tailY2 + Math.sin(b._angle) * 4); g.lineTo(headX2, headY2); g.strokePath();
+            g.lineStyle(tracerThick, 0xffddaa, 0.9);
+            g.beginPath(); g.moveTo(tailX2, tailY2); g.lineTo(b.x, b.y); g.strokePath();
           } catch (_) {}
         };
         b.on('destroy', () => { try { b._g?.destroy(); } catch (_) {} });
@@ -2849,7 +2856,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150æŽ? 48px, 10 dmg
+    // Player melee: C key, 150ï¿½? 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -3201,7 +3208,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors é–?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors ï¿½?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -4361,6 +4368,7 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
+
 
 
 
