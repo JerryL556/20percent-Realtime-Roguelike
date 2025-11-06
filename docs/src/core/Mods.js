@@ -124,7 +124,6 @@ export const weaponCores = [
     name: 'Smart Missiles',
     onlyFor: 'guided_missiles',
     desc: [
-      'Guided Missiles only',
       '+ Lock-on to nearest enemy within 90掳 cone',
       '+ Tracks enemies instead of cursor',
       '- Reduced turn rate for tighter arcs',
@@ -145,7 +144,6 @@ export const weaponCores = [
     name: 'Burst Fire',
     onlyFor: 'rifle',
     desc: [
-      'Assault Rifle only',
       '+ Fires 3 rounds per click',
       '+ Short gap between bursts',
       '+ Greatly increased bullet speed',
@@ -169,7 +167,6 @@ export const weaponCores = [
     name: '2Tap Trigger',
     onlyFor: 'pistol',
     desc: [
-      'Pistol only',
       '+ Fires two quick, accurate rounds per click',
       '+ Slightly increases time between clicks',
     ].join('\n'),
@@ -184,7 +181,6 @@ export const weaponCores = [
     name: 'Standard Bullets',
     onlyFor: 'smart_hmg',
     desc: [
-      'Smart HMG only',
       '+ Magazine size set to 60',
       '+ 25% bullet speed',
       '+ 50% damage',
@@ -213,7 +209,6 @@ export const weaponCores = [
     name: 'Smart Explosives',
     onlyFor: 'rocket',
     desc: [
-      'Explosive weapons only',
       '+ Proximity-detonates when enemies are near',
       '+ If no target at aim point, becomes a mine',
     ].join('\n'),
@@ -227,7 +222,6 @@ export const weaponCores = [
     name: 'Smart Explosives',
     onlyFor: 'mgl',
     desc: [
-      'Explosive weapons only',
       '+ Proximity-detonates when enemies are near',
       '+ If no target at aim point, becomes a mine',
     ].join('\n'),
@@ -241,7 +235,6 @@ export const weaponCores = [
     name: 'Napalm Rounds',
     onlyFor: 'mgl',
     desc: [
-      'MGL only',
       '+ Leaves fire field on explosion (2s)',
       '+ Fire Field applies Ignition buildup to enemies inside',
       '- Explosion damage reduced to 25%',
@@ -262,7 +255,7 @@ export const weaponCores = [
     id: 'core_rail_hold',
     name: 'Rail Stabilizer',
     onlyFor: 'railgun',
-    desc: 'Railgun only\nHold max charge without auto-fire',
+    desc: 'Hold max charge without auto-fire',
     apply: (w) => {
       if (!w || w.id !== 'railgun') return w;
       return { ...w, railHold: true };
@@ -272,7 +265,7 @@ export const weaponCores = [
     id: 'core_lead_storm',
     name: 'Lead Storm',
     onlyFor: 'shotgun',
-    desc: 'Shotgun only\n+200% fire rate\nPellets: 10\n-50% damage\n+75% spread',
+    desc: '+200% fire rate\nPellets: 10\n-50% damage\n+75% spread',
     apply: (w) => {
       // Apply only when the weapon matches the required id
       if (!w || w.id !== 'shotgun') return w;
@@ -287,7 +280,6 @@ export const weaponCores = [
     name: 'Semi Auto',
     onlyFor: 'battle_rifle',
     desc: [
-      'Battle Rifle only',
       '- Single-fire',
       '-7 magazine size',
       '+12 damage',
@@ -309,7 +301,6 @@ export const weaponCores = [
     name: 'Incendiary Chamber',
     onlyFor: 'rifle',
     desc: [
-      'Assault Rifle only',
       '+ +2 Ignite value per bullet on hit',
       '- Fire rate reduced by 25%',
       '- Direct damage -2',
@@ -326,7 +317,6 @@ export const weaponCores = [
     name: 'Toxic Rounds',
     onlyFor: 'smg',
     desc: [
-      'SMG only',
       '+ Bullets apply Toxin buildup on hit',
       '-2 direct damage',
     ].join('\\n'),
