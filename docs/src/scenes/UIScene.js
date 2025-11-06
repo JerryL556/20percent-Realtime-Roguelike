@@ -388,7 +388,11 @@ export default class UIScene extends Phaser.Scene {
             if (m.id && String(m.id).startsWith('w_mag_') && hasMag) return false;
             return true;
           })
-          .map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
+          .map((m) => {
+            const forName = m.onlyFor ? (getWeaponById(m.onlyFor)?.name || m.onlyFor) : 'Multiple';
+            const desc = (m.desc ? String(m.desc) + '\n' : '') + `Usable: ${forName}`;
+            return ({ id: m.id, name: m.name, desc });
+          });
         this.openChoicePopup('Choose Mod', opts, gs.weaponBuilds[gs.activeWeapon].mods[idx], (chosenId) => {
           gs.weaponBuilds[gs.activeWeapon].mods[idx] = chosenId;
           label.setText(`Mod ${idx + 1}: ${(weaponMods.find((m) => m.id === chosenId) || weaponMods[0]).name}`);
@@ -420,7 +424,11 @@ export default class UIScene extends Phaser.Scene {
         .filter((c) => !c.allow || c.allow(baseW))
         .filter((c) => !String(c.id || '').startsWith('w_'))
         .filter((c) => (c.id === null) || ownedC.has(c.id))
-        .map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
+        .map((c) => {
+          const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
+          const desc = (c.desc ? String(c.desc) + '\n' : '') + `Usable: ${forName}`;
+          return ({ id: c.id, name: c.name, desc });
+        });
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
         gs.weaponBuilds[gs.activeWeapon].core = chosenId;
         const picked = (weaponCores.find((c) => c.id === chosenId) || weaponCores[0]);
@@ -521,14 +529,14 @@ export default class UIScene extends Phaser.Scene {
 
   openShopOverlay() {
     const gs = this.registry.get('gameState'); if (!gs || this.shop.panel) return;
-    const { width } = this.scale; const top = 40; const panelW = 780; const panelH = 520; const left = width / 2 - panelW / 2;
+    const { width, height } = this.scale; const panelW = 780; const panelH = Math.max(320, Math.min(520, height - 80)); const left = Math.floor(width / 2 - panelW / 2); const top = Math.max(20, Math.floor((height - panelH) / 2));
     const nodes = [];
     const panel = this.add.graphics();
     panel.fillStyle(0x111111, 0.92).fillRect(left, top, panelW, panelH);
     panel.lineStyle(2, 0xffffff, 1).strokeRect(left, top, panelW, panelH);
-    nodes.push(this.add.text(width / 2, top + 12, 'Shop (Click Close to exit)', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5));
+    nodes.push(this.add.text(width / 2, top + 12, 'Shop', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5));
     // Left categories
-    const catX = left + 14; const catY = top + 44; const catW = 200; const catH = panelH - 64;
+    const catX = left + 14; const catY = top + 44; const catW = 220; const catH = panelH - 64;
     const catBg = this.add.graphics(); catBg.fillStyle(0x0e0e0e, 0.92).fillRect(catX, catY, catW, catH); nodes.push(catBg);
     const categories = [
       { id: 'weapons', label: 'Weapons' },
@@ -540,10 +548,10 @@ export default class UIScene extends Phaser.Scene {
       { id: 'special', label: 'Special' },
     ];
     let cy = catY + 10; const setCat = (id) => { this.shop.activeCat = id; renderList(); };
-    categories.forEach((c) => { const b = makeTextButton(this, catX + Math.floor(catW / 2), cy, c.label, () => setCat(c.id)); try { b.setScale(0.9); } catch (_) {} nodes.push(b); cy += 28; });
+    categories.forEach((c) => { const b = makeTextButton(this, catX + Math.floor(catW / 2), cy, c.label, () => setCat(c.id)); try { b.setStyle({ fontSize: 18 }); } catch (_) {} nodes.push(b); cy += 34; });
 
     // Right scrollable viewport
-    const view = { x: left + 230, y: top + 44, w: panelW - 244, h: panelH - 64 };
+    const view = { x: left + catW + 26, y: top + 44, w: panelW - (catW + 40), h: panelH - 64 };
     const bg = this.add.graphics(); bg.fillStyle(0x111111, 0.92).fillRect(view.x, view.y, view.w, view.h); nodes.push(bg);
     const maskG = this.add.graphics(); maskG.fillStyle(0xffffff, 1).fillRect(view.x, view.y, view.w, view.h); const mask = maskG.createGeometryMask(); try { maskG.setVisible(false); } catch (_) {}
     const list = this.add.container(view.x, view.y); list.setMask(mask); nodes.push(list);
@@ -582,6 +590,7 @@ export default class UIScene extends Phaser.Scene {
       const contentH = Math.max(ly, view.h); minY = view.y - (contentH - view.h); maxY = view.y; list.y = maxY; drawScrollbar(contentH);
     };
     renderList();
+    const closeTop = makeTextButton(this, left + panelW - 44, top + 14, 'X', () => { this.closeShopOverlay(); }); nodes.push(closeTop);
     const closeBtn = makeTextButton(this, width / 2, top + panelH - 18, 'Close', () => { this.closeShopOverlay(); }); nodes.push(closeBtn);
     this.shop.panel = panel; this.shop.nodes = nodes;
   }
