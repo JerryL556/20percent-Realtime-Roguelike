@@ -371,8 +371,40 @@ export const armourMods = [
 
 // Armour list is intentionally minimal; you can extend later.
 export const armourDefs = [
-  { id: null, name: 'Standard Issue' },
-  { id: 'proto_thrusters', name: 'Prototype Thrusters' },
-  { id: 'exp_shield', name: 'Experimental Shield Generator' },
-  { id: 'wasp_bits', name: 'BIT Carrier' },
+  {
+    id: null,
+    name: 'Standard Issue',
+    desc: [
+      'HP: 85',
+      'Shield: 15',
+      // No special features
+    ].join('\n'),
+  },
+  {
+    id: 'proto_thrusters',
+    name: 'Prototype Thrusters',
+    desc: [
+      'HP: 80',
+      'Shield: 10',
+      '+30% move speed; reduced dash recharge time',
+    ].join('\n'),
+  },
+  {
+    id: 'exp_shield',
+    name: 'Experimental Shield Generator',
+    desc: [
+      'HP: 40',
+      'Shield: 30',
+      'Large energy shield capacity',
+    ].join('\n'),
+  },
+  {
+    id: 'wasp_bits',
+    name: 'BIT Carrier',
+    desc: [
+      'HP: 70',
+      'Shield: 15',
+      'Spawns two WASP BITs that attack and stun nearby enemies',
+    ].join('\n'),
+  },
 ];

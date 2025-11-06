@@ -476,7 +476,7 @@ export default class UIScene extends Phaser.Scene {
     const armourLabel = this.add.text(col3X, y3, `Equipped: ${armourName()}`, { fontFamily: 'monospace', fontSize: 14, color: '#cccccc' }); nodes.push(armourLabel);
     try { this.loadout.armourLabel = armourLabel; armourLabel.setStyle({ color: (gs.armour && gs.armour.id) ? '#ffff33' : '#cccccc' }); } catch (e) {}
     const armourBtn = makeTextButton(this, col3X + 210, y3 + 8, 'Choose', () => {
-      const opts = armourDefs.map((a) => ({ id: a.id, name: a.name }));
+      const opts = armourDefs.map((a) => ({ id: a.id, name: a.name, desc: a.desc || '' }));
       const cur = gs.armour?.id || null;
       this.openChoicePopup('Choose Armour', opts, cur, (chosenId) => {
         gs.armour = gs.armour || { id: null, mods: [null, null] };
@@ -759,6 +759,17 @@ export default class UIScene extends Phaser.Scene {
             }
           };
           pushRow(head, buyFn);
+          // Show armour description lines with specific colors for HP/Shield
+          const descStr = String(a.desc || '').replace(/\\n/g, '\n');
+          const lines = descStr.split('\n');
+          lines.forEach((ln) => {
+            const line = ln.trim(); if (!line) return;
+            let color = '#cccccc';
+            if (line.toLowerCase().startsWith('hp:')) color = '#66ff66';
+            else if (line.toLowerCase().startsWith('shield:')) color = '#66aaff';
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+            list.add(t); ly += Math.ceil(t.height) + 6;
+          });
         });
       } else if (cat === 'armour_mods') {
         header.setText('Armour Mods');
@@ -960,6 +971,11 @@ export default class UIScene extends Phaser.Scene {
           const t = ln.trim(); if (!t) return;
           let color = '#cccccc';
           const lower = t.toLowerCase();
+          if (lower.startsWith('hp:')) {
+            color = '#66ff66';
+          } else if (lower.startsWith('shield:')) {
+            color = '#66aaff';
+          } else {
           const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
           const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
           const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
@@ -975,6 +991,7 @@ export default class UIScene extends Phaser.Scene {
             color = '#66ff66';
           } else if (negativeHints.some((k) => lower.includes(k))) {
             color = '#ff6666';
+          }
           }
           const style = { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: wrapWidth, useAdvancedWrap: true } };
           const tObj = addText(24, yy, t, style);
