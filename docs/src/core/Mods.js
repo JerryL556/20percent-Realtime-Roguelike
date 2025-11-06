@@ -336,27 +336,6 @@ export const weaponCores = [
       return { ...w, damage: newDmg, _toxinOnHit: 2 };
     },
   },
-  // removed mistaken mod entry
-  {
-    id: 'w_stun_ammo',
-    name: 'Stun Ammunition',
-    desc: [
-      '+ Bullets apply Stun buildup on hit',
-      '- Bullet speed -10%',
-    ].join('\n'),
-    allow: (base) => {
-      if (!base) return false;
-      return !base.isLaser; // cannot be used by laser
-    },
-    apply: (w) => {
-      if (!w) return w;
-      if (w.isLaser) return w; // disallowed
-      const heavy = (w.id === 'railgun') || (w.id === 'mgl') || (w.id === 'rocket') || (w.projectile === 'rocket');
-      const stun = heavy ? 10 : 2;
-      const bs = Math.max(0, Math.floor((w.bulletSpeed || 0) * 0.9));
-      return { ...w, bulletSpeed: bs, _stunOnHit: stun };
-    },
-  },
 ];
 
 // Armour mods (2 slots)

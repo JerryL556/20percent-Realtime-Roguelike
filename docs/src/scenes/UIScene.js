@@ -607,10 +607,31 @@ export default class UIScene extends Phaser.Scene {
           };
           pushRow(head, buyFn);
           const forName = m.onlyFor ? (getWeaponById(m.onlyFor)?.name || m.onlyFor) : 'Multiple';
-          const text = ((m.desc ? String(m.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable: ${forName}`).split('\n');
-          text.forEach((line) => {
-            if (!line.trim()) return;
-            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+          const lines = ((m.desc ? String(m.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable on: ${forName}`).split('\n');
+          lines.forEach((ln) => {
+            const line = ln.trim(); if (!line) return;
+            let color = '#cccccc';
+            const lower = line.toLowerCase();
+            const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
+            const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
+            const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+            const isUsableLine = lower.startsWith('usable on:');
+            if (!isUsableLine) {
+              if (line.startsWith('+')) {
+                const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
+                color = isHarmfulPos ? '#ff6666' : '#66ff66';
+              } else if (line.startsWith('-')) {
+                const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+                color = isBeneficialNeg ? '#66ff66' : '#ff6666';
+              } else if (positiveHints.some((k) => lower.includes(k))) {
+                color = '#66ff66';
+              } else if (negativeHints.some((k) => lower.includes(k))) {
+                color = '#ff6666';
+              }
+            }
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
         });
@@ -628,10 +649,31 @@ export default class UIScene extends Phaser.Scene {
           };
           pushRow(head, buyFn);
           const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
-          const text = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable: ${forName}`).split('\n');
-          text.forEach((line) => {
-            if (!line.trim()) return;
-            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
+          const lines = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable on: ${forName}`).split('\n');
+          lines.forEach((ln) => {
+            const line = ln.trim(); if (!line) return;
+            let color = '#cccccc';
+            const lower = line.toLowerCase();
+            const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
+            const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
+            const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+            const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+            const isUsableLine = lower.startsWith('usable on:');
+            if (!isUsableLine) {
+              if (line.startsWith('+')) {
+                const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
+                color = isHarmfulPos ? '#ff6666' : '#66ff66';
+              } else if (line.startsWith('-')) {
+                const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+                color = isBeneficialNeg ? '#66ff66' : '#ff6666';
+              } else if (positiveHints.some((k) => lower.includes(k))) {
+                color = '#66ff66';
+              } else if (negativeHints.some((k) => lower.includes(k))) {
+                color = '#ff6666';
+              }
+            }
+            const t = this.add.text(24, ly, line, { fontFamily: 'monospace', fontSize: 12, color, wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0);
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
         });
