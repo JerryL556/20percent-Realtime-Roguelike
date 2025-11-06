@@ -254,16 +254,22 @@ export default class HubScene extends Phaser.Scene {
       try { this.gs.setGameMode('BossRush'); SaveManager.saveToLocal(this.gs); } catch (_) {}
       this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
     });
-    const rangeBtn = makeTextButton(this, width / 2, 175, 'Shooting Range', () => {
-      try { this.gs.setGameMode('Normal'); this.gs.shootingRange = true; SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+    const deepDiveBtn = makeTextButton(this, width / 2, 175, 'Deep Dive', () => {
+      try { this.gs.setGameMode('DeepDive'); SaveManager.saveToLocal(this.gs); } catch (_) {}
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
       this.gs.nextScene = SceneKeys.Combat;
       this.scene.start(SceneKeys.Combat);
     });
-    const closeBtn = makeTextButton(this, width / 2, 205, 'Close', () => {
-      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+    const rangeBtn = makeTextButton(this, width / 2, 205, 'Shooting Range', () => {
+      try { this.gs.setGameMode('Normal'); this.gs.shootingRange = true; SaveManager.saveToLocal(this.gs); } catch (_) {}
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+      this.gs.nextScene = SceneKeys.Combat;
+      this.scene.start(SceneKeys.Combat);
     });
-    this.panel._extra = [title, normalBtn, bossRushBtn, rangeBtn, closeBtn];
+    const closeBtn = makeTextButton(this, width / 2, 235, 'Close', () => {
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+    });
+    this.panel._extra = [title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn];
   }
 
   closePanel(extra = []) {

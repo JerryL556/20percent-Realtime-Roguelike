@@ -53,8 +53,13 @@ export class GameState {
     this.currentDepth = 1; // increments per combat
     this.achievements = {};
     this.nextScene = 'Hub';
-    // Game mode: 'Normal' or 'BossRush'
+    // Game mode: 'Normal' | 'BossRush' | 'DeepDive'
     this.gameMode = 'Normal';
+    // Deep Dive progression state
+    this.deepDiveLevel = 1;   // 1..∞
+    this.deepDiveStage = 1;   // 1..4 within a level
+    this.deepDiveNormalBase = 5; // baseline normals at Stage 1
+    this.deepDiveEliteBase = 1;  // baseline elites (Stage1..3); Stage4 uses double
     // Boss Rush sequence queue (array of boss type strings)
     this.bossRushQueue = [];
     // Track last spawned boss type in Normal mode to alternate
@@ -102,6 +107,10 @@ export class GameState {
     this.ownedAbilities = ['ads'];
     this.dashMaxCharges = 3;
     this.dashRegenMs = 6000;
+    this.deepDiveLevel = 1;
+    this.deepDiveStage = 1;
+    this.deepDiveNormalBase = 5;
+    this.deepDiveEliteBase = 1;
   }
 
   getDifficultyMods() {
@@ -113,6 +122,22 @@ export class GameState {
     if (this.gameMode === 'BossRush') {
       // Not used in BossRush; keep safe default to Boss
       this.nextScene = 'Boss';
+      return;
+    }
+    if (this.gameMode === 'DeepDive') {
+      // Advance Deep Dive stage/level; always continue to Combat
+      this.deepDiveStage += 1;
+      if (this.deepDiveStage > 4) {
+        this.deepDiveStage = 1;
+        this.deepDiveLevel += 1;
+        // Normal enemies baseline increases each new level
+        this.deepDiveNormalBase = Math.max(1, (this.deepDiveNormalBase || 5) + 1);
+        // Elite increase rule: at the start of a level, if normals/elites > 4 then elites++
+        const baseN = this.deepDiveNormalBase || 5;
+        const baseE = Math.max(1, this.deepDiveEliteBase || 1);
+        if ((baseN / baseE) > 4) this.deepDiveEliteBase = baseE + 1;
+      }
+      this.nextScene = 'Combat';
       return;
     }
     this.roomsClearedInCycle += 1;
@@ -153,7 +178,7 @@ export class GameState {
 
   // Change game mode and initialize any mode-specific state
   setGameMode(mode) {
-    this.gameMode = (mode === 'BossRush') ? 'BossRush' : 'Normal';
+    this.gameMode = (mode === 'BossRush') ? 'BossRush' : (mode === 'DeepDive' ? 'DeepDive' : 'Normal');
     if (this.gameMode === 'BossRush') {
       // Initialize a shuffled list of bosses for this run
       const bosses = ['Shotgunner', 'Dasher'];
@@ -170,7 +195,15 @@ export class GameState {
       this.bossRushQueue = [];
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
-      this.nextScene = 'Hub';
+      if (this.gameMode === 'DeepDive') {
+        this.deepDiveLevel = 1;
+        this.deepDiveStage = 1;
+        this.deepDiveNormalBase = 5;
+        this.deepDiveEliteBase = 1;
+        this.nextScene = 'Combat';
+      } else {
+        this.nextScene = 'Hub';
+      }
     }
   }
 
@@ -207,6 +240,10 @@ export class GameState {
       lastBossType: this.lastBossType,
       abilityId: this.abilityId,
       ownedAbilities: this.ownedAbilities,
+      deepDiveLevel: this.deepDiveLevel,
+      deepDiveStage: this.deepDiveStage,
+      deepDiveNormalBase: this.deepDiveNormalBase,
+      deepDiveEliteBase: this.deepDiveEliteBase,
       dashMaxCharges: this.dashMaxCharges,
       dashRegenMs: this.dashRegenMs,
     };
@@ -233,6 +270,10 @@ export class GameState {
     if (!Array.isArray(gs.bossRushQueue)) gs.bossRushQueue = [];
     if (!('lastBossType' in gs)) gs.lastBossType = null;
     if (!gs.abilityId) gs.abilityId = 'ads';
+    if (typeof gs.deepDiveLevel !== 'number') gs.deepDiveLevel = 1;
+    if (typeof gs.deepDiveStage !== 'number') gs.deepDiveStage = 1;
+    if (typeof gs.deepDiveNormalBase !== 'number') gs.deepDiveNormalBase = 5;
+    if (typeof gs.deepDiveEliteBase !== 'number') gs.deepDiveEliteBase = 1;
     // Ensure ability ownership defaults and consistency
     if (!Array.isArray(gs.ownedAbilities)) gs.ownedAbilities = ['ads'];
     if (!gs.ownedAbilities.includes('ads')) gs.ownedAbilities.push('ads');
