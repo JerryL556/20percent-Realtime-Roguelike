@@ -301,7 +301,7 @@ export default class UIScene extends Phaser.Scene {
         const list = (gs.ownedWeapons || []).map((id) => {
           const w = getWeaponById(id) || { id, name: id };
           const fmtRof = (x) => { if (!x || x.fireRateMs === 0) return 'Continuous'; const perSec = 1000 / (x.fireRateMs || 1); return `${perSec.toFixed(1)}/s`; };
-          let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
+          let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : (w.id === 'shotgun' ? `Damage per Pellet: ${w.damage}` : `Damage: ${w.damage}`));
           const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
           let velLine = w.isLaser ? `Bullet Velocity: Instant` : `Bullet Velocity: ${w.bulletSpeed}`;
           if (w.id === 'railgun') {
@@ -310,7 +310,7 @@ export default class UIScene extends Phaser.Scene {
             dmgLine = `Damage: ${w.damage} (Max Charge: ${chargedDmg})`;
             velLine = `Bullet Velocity: ${w.bulletSpeed} (Max Charge: ${chargedVel})`;
           }
-          const magLine = w.isLaser ? `Time Before Overheat: —` : `Mag Size: ${w.magSize}`;
+          const magLine = w.isLaser ? `Time Before Overheat: 5s` : `Mag Size: ${w.magSize}`;
           const stats = [dmgLine, rofLine, velLine, magLine].join('\n');
           const descTop = w.desc ? String(w.desc) + '\n' : '';
           return ({ id: w.id, name: w.name, desc: descTop + stats });
@@ -652,10 +652,10 @@ export default class UIScene extends Phaser.Scene {
               descLines.forEach((ln) => { const t = this.add.text(24, ly, ln.trim(), { fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: view.w - 40, useAdvancedWrap: true } }).setOrigin(0, 0); list.add(t); ly += Math.ceil(t.height) + 6; });
             }
             // Stats lines (white)
-            let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : `Damage: ${w.damage}`);
+            let dmgLine = (typeof w.aoeDamage === 'number') ? `Damage: ${w.damage} | Explosion: ${w.aoeDamage}` : ((w.isLaser || w.fireRateMs === 0) ? `Damage (DPS): ${w.damage}` : (w.id === 'shotgun' ? `Damage per Pellet: ${w.damage}` : `Damage: ${w.damage}`));
             const rofLine = (w.id === 'railgun') ? `Max Charge Time: 3.0s` : `Rate of Fire: ${fmtRof(w)}`;
             let velLine = w.isLaser ? `Bullet Velocity: Instant` : `Bullet Velocity: ${w.bulletSpeed}`;
-            const magLine = w.isLaser ? `Time Before Overheat: —` : `Mag Size: ${w.magSize}`;
+            const magLine = w.isLaser ? `Time Before Overheat: 5s` : `Mag Size: ${w.magSize}`;
             if (w.id === 'railgun') {
               const chargedDmg = Math.round((w.damage || 0) * 3);
               const chargedVel = Math.round((w.bulletSpeed || 0) * 3);
