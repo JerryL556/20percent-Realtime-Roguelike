@@ -664,18 +664,25 @@ export default class UIScene extends Phaser.Scene {
             }
           };
           pushRow(head, buyFn);
-          // Compute Not usable on: list
-          let notUsable = [];
-          try {
-            notUsable = (weaponDefs || []).filter((wd) => {
-              if (!wd) return false;
-              if (c.onlyFor && c.onlyFor !== wd.id) return true;
-              if (typeof c.allow === 'function') { try { if (!c.allow(wd)) return true; } catch (_) {} }
-              return false;
-            }).map((wd) => wd.name);
-          } catch (_) {}
-          const nuList = notUsable.length ? notUsable.join(', ') : 'None';
-          const lines = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + `Not usable on: ${nuList}`).split('\n');
+          // Footer: only Piercing/Explosive cores show Not usable on:, others show Usable on:
+          let footer;
+          if (c && (c.id === 'core_pierce' || c.id === 'core_blast')) {
+            let notUsable = [];
+            try {
+              notUsable = (weaponDefs || []).filter((wd) => {
+                if (!wd) return false;
+                if (c.onlyFor && c.onlyFor !== wd.id) return true;
+                if (typeof c.allow === 'function') { try { if (!c.allow(wd)) return true; } catch (_) {} }
+                return false;
+              }).map((wd) => wd.name);
+            } catch (_) {}
+            const nuList = notUsable.length ? notUsable.join(', ') : 'None';
+            footer = `Not usable on: ${nuList}`;
+          } else {
+            const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
+            footer = `Usable on: ${forName}`;
+          }
+          const lines = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + footer).split('\n');
           lines.forEach((ln) => {
             const line = ln.trim(); if (!line) return;
             let color = '#cccccc';
@@ -685,7 +692,7 @@ export default class UIScene extends Phaser.Scene {
             const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
             const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
             const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
-            const isUsableLine = lower.startsWith('not usable on:');
+            const isUsableLine = lower.startsWith('not usable on:') || lower.startsWith('usable on:');
             if (!isUsableLine) {
               if (line.startsWith('+')) {
                 const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
