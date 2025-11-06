@@ -425,20 +425,24 @@ export default class UIScene extends Phaser.Scene {
         .filter((c) => !String(c.id || '').startsWith('w_'))
         .filter((c) => (c.id === null) || ownedC.has(c.id))
         .map((c) => {
-          // Build a Not usable on: line by testing core.allow/onlyFor against all weapons
-          let notUsable = [];
-          try {
-            notUsable = (weaponDefs || []).filter((wd) => {
-              if (!wd) return false;
-              if (c.onlyFor && c.onlyFor !== wd.id) return true;
-              if (typeof c.allow === 'function') {
-                try { if (!c.allow(wd)) return true; } catch (_) {}
-              }
-              return false;
-            }).map((wd) => wd.name);
-          } catch (_) {}
-          const listStr = notUsable.length ? notUsable.join(', ') : 'None';
-          const desc = (c.desc ? String(c.desc) + '\n' : '') + `Not usable on: ${listStr}`;
+          // For Piercing/Explosive cores show Not usable on:, others show Usable on:
+          let desc = '';
+          if (c && (c.id === 'core_pierce' || c.id === 'core_blast')) {
+            let notUsable = [];
+            try {
+              notUsable = (weaponDefs || []).filter((wd) => {
+                if (!wd) return false;
+                if (c.onlyFor && c.onlyFor !== wd.id) return true;
+                if (typeof c.allow === 'function') { try { if (!c.allow(wd)) return true; } catch (_) {} }
+                return false;
+              }).map((wd) => wd.name);
+            } catch (_) {}
+            const listStr = notUsable.length ? notUsable.join(', ') : 'None';
+            desc = (c.desc ? String(c.desc) + '\n' : '') + `Not usable on: ${listStr}`;
+          } else {
+            const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
+            desc = (c.desc ? String(c.desc) + '\n' : '') + `Usable on: ${forName}`;
+          }
           return ({ id: c.id, name: c.name, desc });
         });
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
