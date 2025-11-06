@@ -389,8 +389,21 @@ export default class UIScene extends Phaser.Scene {
             return true;
           })
           .map((m) => {
-            const forName = m.onlyFor ? (getWeaponById(m.onlyFor)?.name || m.onlyFor) : 'Multiple';
-            const desc = (m.desc ? String(m.desc) + '\n' : '') + `Usable: ${forName}`;
+            // Build footer: if broadly usable, show Not usable on: <exceptions>; else show Usable on: <allowed>
+            let usable = [], notUsable = [];
+            try {
+              (weaponDefs || []).forEach((wd) => {
+                if (!wd) return;
+                if (m.onlyFor && m.onlyFor !== wd.id) { notUsable.push(wd.name); return; }
+                if (typeof m.allow === 'function') { try { if (!m.allow(wd)) { notUsable.push(wd.name); return; } } catch (_) {} }
+                usable.push(wd.name);
+              });
+            } catch (_) {}
+            const showNot = usable.length >= notUsable.length;
+            const footer = showNot
+              ? `Not usable on: ${notUsable.length ? notUsable.join(', ') : 'None'}`
+              : `Usable on: ${usable.length ? usable.join(', ') : 'None'}`;
+            const desc = (m.desc ? String(m.desc) + '\n' : '') + footer;
             return ({ id: m.id, name: m.name, desc });
           });
         this.openChoicePopup('Choose Mod', opts, gs.weaponBuilds[gs.activeWeapon].mods[idx], (chosenId) => {
@@ -622,8 +635,22 @@ export default class UIScene extends Phaser.Scene {
             }
           };
           pushRow(head, buyFn);
-          const forName = m.onlyFor ? (getWeaponById(m.onlyFor)?.name || m.onlyFor) : 'Multiple';
-          const lines = ((m.desc ? String(m.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable on: ${forName}`).split('\n');
+          const lines = (() => {
+            let usable = [], notUsable = [];
+            try {
+              (weaponDefs || []).forEach((wd) => {
+                if (!wd) return;
+                if (m.onlyFor && m.onlyFor !== wd.id) { notUsable.push(wd.name); return; }
+                if (typeof m.allow === 'function') { try { if (!m.allow(wd)) { notUsable.push(wd.name); return; } } catch (_) {} }
+                usable.push(wd.name);
+              });
+            } catch (_) {}
+            const showNot = usable.length >= notUsable.length;
+            const footer = showNot
+              ? `Not usable on: ${notUsable.length ? notUsable.join(', ') : 'None'}`
+              : `Usable on: ${usable.length ? usable.join(', ') : 'None'}`;
+            return ((m.desc ? String(m.desc).replace(/\\n/g, '\n') + '\n' : '') + footer).split('\n');
+          })();
           lines.forEach((ln) => {
             const line = ln.trim(); if (!line) return;
             let color = '#cccccc';
