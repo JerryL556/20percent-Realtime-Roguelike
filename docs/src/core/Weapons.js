@@ -196,7 +196,7 @@ export const weaponDefs = [
     name: 'Smart HMG',
     desc: [
       'Heavy machine gun modified to fire mini smart missiles that auto-lock onto enemies.',
-      'Missile maneuverability is limited, and per-shot damage is modest due to minimal warheads.',
+      'Missile maneuverability is limited, and per-shot damage is modest due to lack of warheads.',
     ].join('\n'),
     // High-capacity HMG that fires smart bullets with limited turning
     damage: 8,
