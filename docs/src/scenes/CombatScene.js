@@ -58,7 +58,7 @@ export default class CombatScene extends Phaser.Scene {
       ...(this.panel && Array.isArray(this.panel._extra) ? this.panel._extra : []),
     ];
     if (this.panel) { try { this.panel.destroy(); } catch (_) {} this.panel = null; }
-    extras.forEach((o) => { try { o.destroy(); } catch (_) {} });
+    extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
   // Player melee implementation: 150�?cone, 48px range, 10 damage
@@ -75,12 +75,12 @@ export default class CombatScene extends Phaser.Scene {
     // Damage check against enemies (mid-swing ~60ms to match enemy timing)
     try {
       this.time.delayedCall(60, () => {
-        const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+        const enemies = this.enemies?.getChildren?.() || [];
         enemies.forEach((e) => {
-          if (!(e && e.active) || !e.isEnemy || !(caster && caster.active)) return;
+          if (!e?.active || !e.isEnemy || !caster?.active) return;
           const dx = e.x - caster.x; const dy = e.y - caster.y;
           const d = Math.hypot(dx, dy) || 1;
-          const pad = ((e.body && e.body.halfWidth) || 6);
+          const pad = (e.body?.halfWidth || 6);
           if (d > (range + pad)) return;
           const dir = Math.atan2(dy, dx);
           const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
@@ -145,8 +145,8 @@ export default class CombatScene extends Phaser.Scene {
   // Shared melee VFX: simple transparent fan (sector) showing affected area; follows caster position
   spawnMeleeVfx(caster, baseAngle, totalDeg, durationMs, color, range, altStart) {
     try {
-      if ((caster._meleeFan && caster._meleeFan.cleanup)) { caster._meleeFan.cleanup(); }
-      else if ((caster._meleeFan && caster._meleeFan.g)) { caster._meleeFan.g.destroy(); }
+      if (caster._meleeFan?.cleanup) { caster._meleeFan.cleanup(); }
+      else if (caster._meleeFan?.g) { caster._meleeFan.g.destroy(); }
     } catch (_) {}
     const g = this.add.graphics({ x: caster.x, y: caster.y });
     try { g.setDepth(9000); } catch (_) {}
@@ -172,16 +172,16 @@ export default class CombatScene extends Phaser.Scene {
     caster._meleeFan = { g, guard: guardFan, cleanup: cleanupFan };
     // Remove any prior swinging line overlay if present (ensure listener removal)
     try {
-      if ((caster._meleeLine && caster._meleeLine.cleanup)) { caster._meleeLine.cleanup(); }
-      else if ((caster._meleeLine && caster._meleeLine.g)) { caster._meleeLine.g.destroy(); }
+      if (caster._meleeLine?.cleanup) { caster._meleeLine.cleanup(); }
+      else if (caster._meleeLine?.g) { caster._meleeLine.g.destroy(); }
       caster._meleeLine = null;
     } catch (_) {}
 
     // Add a bright additive "beam" line that sweeps across the melee fan during the swing
     try {
       const beam = this.add.graphics({ x: caster.x, y: caster.y });
-      try { beam.setDepth(9500); } catch (_) {}
-      try { beam.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+      try { beam.setDepth?.(9500); } catch (_) {}
+      try { beam.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
       const start = altStart ? (baseAngle + half) : (baseAngle - half);
       const end = altStart ? (baseAngle - half) : (baseAngle + half);
       const startAt = this.time.now;
@@ -193,7 +193,7 @@ export default class CombatScene extends Phaser.Scene {
       let lastAng = start;
       const updateBeam = () => {
         try {
-          if (!(caster && caster.active)) { cleanupBeam(); return; }
+          if (!caster?.active) { cleanupBeam(); return; }
           // Follow caster
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
@@ -311,7 +311,7 @@ export default class CombatScene extends Phaser.Scene {
     this.reload = { active: false, until: 0, duration: 0 };
     const cap0 = this.getActiveMagCapacity();
     this.ensureAmmoFor(this._lastActiveWeapon, cap0);
-    this.registry.set('ammoInMag', (this.ammoByWeapon[this._lastActiveWeapon] != null ? this.ammoByWeapon[this._lastActiveWeapon] : cap0));
+    this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon] ?? cap0);
     this.registry.set('magSize', cap0);
     this.registry.set('reloadActive', false);
     // Persistent WASP BITS (armour)
@@ -329,7 +329,7 @@ export default class CombatScene extends Phaser.Scene {
         updateWeaponSprite(this);
         // Always try to sync texture in case it finished loading after create
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
-        this._lastActiveWeapon = (this.gs && this.gs.activeWeapon) ? this.gs.activeWeapon : this._lastActiveWeapon;
+        this._lastActiveWeapon = this.gs?.activeWeapon;
         // Shield regeneration (regens even from 0 after a delay)
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
         try {
@@ -373,7 +373,7 @@ export default class CombatScene extends Phaser.Scene {
           const now = this.time.now;
           const since = now - (gs.lastDamagedAt || 0);
           if (since >= (gs.shieldRegenDelayMs || 4000) && (gs.shield || 0) < (gs.shieldMax || 0)) {
-            const dt = (((this.game && this.game.loop && this.game.loop.delta) ? this.game.loop.delta : 16)) / 1000;
+            const dt = ((this.game?.loop?.delta) || 16) / 1000;
             const inc = ((gs.shieldRegenPerSec || 0) + ((getPlayerEffects(this.gs)||{}).shieldRegenBonus || 0)) * dt;
             gs.shield = Math.min((gs.shield || 0) + inc, (gs.shieldMax || 0));
           }
@@ -404,7 +404,7 @@ export default class CombatScene extends Phaser.Scene {
     // Barricades: indestructible (hard) and destructible (soft)
     this.barricadesHard = this.physics.add.staticGroup();
     this.barricadesSoft = this.physics.add.staticGroup();
-    if (!(this.gs && this.gs.shootingRange)) {
+    if (!this.gs?.shootingRange) {
       // Choose a barricade variant for normal rooms
       const brRoll = this.gs.rng.next();
       const variant = (brRoll < 0.34) ? 'normal' : (brRoll < 0.67) ? 'soft_many' : 'hard_sparse';
@@ -449,7 +449,7 @@ export default class CombatScene extends Phaser.Scene {
       return { x: sx, y: sy };
     };
 
-        if ((this.gs && this.gs.gameMode === 'DeepDive') && !(this.gs && this.gs.shootingRange)) {
+        if (this.gs?.gameMode === 'DeepDive' && !this.gs?.shootingRange) {
       const lvl = Math.max(1, this.gs.deepDiveLevel || 1);
       const stg = Math.max(1, Math.min(4, this.gs.deepDiveStage || 1));
       const baseN = Math.max(1, this.gs.deepDiveNormalBase || 5);
@@ -487,9 +487,9 @@ export default class CombatScene extends Phaser.Scene {
       };
       for (let i = 0; i < normalCount; i += 1) spawnNormal();
       for (let i = 0; i < eliteCount; i += 1) spawnElite();
-    } else if (!(this.gs && this.gs.shootingRange)) room.spawnPoints.forEach((_) => {
+    } else if (!this.gs?.shootingRange) room.spawnPoints.forEach((_) => {
     // Elite: exactly 1 per room; split between Grenadier, Prism, Snitch, Rook
-    if (!(this.gs && this.gs.shootingRange)) {
+    if (!this.gs?.shootingRange) {
       const spE = pickEdgeSpawn();
       const pick = Math.random(); // unseeded to avoid same choice every room
       if (pick < (1/4)) {
@@ -508,7 +508,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Shooting Range setup: terminal, dummy, and portal to hub
-    if (this.gs && this.gs.shootingRange) {
+    if (this.gs?.shootingRange) {
       // Terminal (left side)
       this.terminalZone = this.add.zone(60, height / 2, 36, 36);
       this.physics.world.enable(this.terminalZone);
@@ -584,9 +584,9 @@ export default class CombatScene extends Phaser.Scene {
     this.rookShieldGroup = this.physics.add.group();
     this.physics.add.overlap(this.bullets, this.rookShieldGroup, (b, z) => {
       try {
-        if (!(b && b.active) || !(z && z.active)) return;
+        if (!b?.active || !z?.active) return;
         if (b._rail) return; // rail pierces shields
-        const e = z._owner; if (!(e && e.active) || !e.isRook) return;
+        const e = z._owner; if (!e?.active || !e.isRook) return;
         const cx = z.x, cy = z.y; const r = (e._shieldRadius || 60);
         const angToBullet = Math.atan2(b.y - cy, b.x - cx);
         const shieldAng = e._shieldAngle || 0; const half = Phaser.Math.DegToRad(45);
@@ -775,7 +775,7 @@ export default class CombatScene extends Phaser.Scene {
             // Napalm: apply immediate ignite buildup (+5) to enemies in radius
             const r2 = radius * radius; const nowT = this.time.now;
             this.enemies.getChildren().forEach((other) => {
-              if (!(other && other.active) || other.isDummy) return;
+              if (!other?.active || other.isDummy) return;
               const dx2 = other.x - b.x; const dy2 = other.y - b.y;
               if ((dx2 * dx2 + dy2 * dy2) <= r2) {
                 other._igniteValue = Math.min(10, (other._igniteValue || 0) + 5);
@@ -804,9 +804,9 @@ export default class CombatScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.player, this.enemies, (p, e) => {
       // Ignore dummy collisions for player damage
-      if ((e && e.isDummy)) return;
+      if (e?.isDummy) return;
       // Melee enemies do not apply touch damage; only their cone hit can damage
-      if ((e && e.isMelee)) return;
+      if (e?.isMelee) return;
       if (this.time.now < this.player.iframesUntil) return;
       this.applyPlayerDamage(e.damage);
       this.player.iframesUntil = this.time.now + 600;
@@ -837,7 +837,7 @@ export default class CombatScene extends Phaser.Scene {
     this.physics.add.collider(this.enemyGrenades, this.barricadesSoft, (b, s) => this.onEnemyGrenadeHitBarricade(b, s));
     this.physics.add.overlap(this.player, this.enemyBullets, (p, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
-      if ((b && b._rocket)) {
+      if (b?._rocket) {
         // Rocket: explode on contact, apply AoE to player
       const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius;
         const pdx = this.player.x - ex; const pdy = this.player.y - ey;
@@ -882,7 +882,25 @@ export default class CombatScene extends Phaser.Scene {
     this.exitG = this.add.graphics();
     // Move in-game prompt down to avoid overlapping UI
     this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // Keybinds hint (bottom-right, small font)
+    const binds = [
+  'W/A/S/D: Move',
+  'Space: Dash',
+  'E: Interact',
+  'C: Melee',
+  'LMB: Shoot',
+  'F: Ability',
+  'Q: Swap Weapon',
+  'Tab: Loadout',
+].join('\n');
+
+    this.add.text(width - 10, height - 10, binds, { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' })
+      .setOrigin(1, 1)
+      .setAlpha(0.9);
+
+    // Init nav state for enemy pathfinding
     this._nav = { grid: null, builtAt: 0 };
+    // Ability system state (cooldown etc.)
     this._gadgets = [];
     this.ability = { onCooldownUntil: 0 };
     
@@ -930,12 +948,12 @@ export default class CombatScene extends Phaser.Scene {
         const isElite = !!(e.isPrism || e.isSnitch || e.isRook || e.isGrenadier);
         const goldGain = isElite ? 20 : 10;
         this.gs.gold = (this.gs.gold || 0) + goldGain;
-        if (ui && ui.showResourceHint) ui.showResourceHint('+' + goldGain + ' Gold');
+        if (ui?.showResourceHint) ui.showResourceHint(`+${goldGain} Gold`);
         const roll = Phaser.Math.Between(1, 100);
         const chance = isElite ? 50 : 10;
         if (roll <= chance) {
           this.gs.droneCores = (this.gs.droneCores || 0) + 1;
-          if (ui && ui.showResourceHint) ui.showResourceHint('+1 Drone Core');
+          if (ui?.showResourceHint) ui.showResourceHint(`+1 Drone Core`);
         }
       }
     } catch (_) {}
@@ -973,7 +991,7 @@ export default class CombatScene extends Phaser.Scene {
       try { impactBurst(this, b.x, b.y, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
       const r2 = radius * radius; const ex = b.x; const ey = b.y;
       this.enemies.getChildren().forEach((other) => {
-        if (!(other && other.active)) return;
+        if (!other?.active) return;
         const dx = other.x - ex; const dy = other.y - ey;
         if (dx * dx + dy * dy <= r2) {
           const splashDmg = b._rocket ? (b._aoeDamage || b.damage || 10) : Math.ceil((b.damage || 10) * 0.5);
@@ -1008,7 +1026,7 @@ export default class CombatScene extends Phaser.Scene {
       if (b._firefield) {
         const nowI = this.time.now;
         this.enemies.getChildren().forEach((other) => {
-          if (!(other && other.active) || other.isDummy) return;
+          if (!other?.active || other.isDummy) return;
           const dxn = other.x - ex; const dyn = other.y - ey;
           if ((dxn * dxn + dyn * dyn) <= r2) {
             other._igniteValue = Math.min(10, (other._igniteValue || 0) + 5);
@@ -1194,12 +1212,12 @@ export default class CombatScene extends Phaser.Scene {
           try {
             let desired = b._angle; const nowG = this.time.now;
             if (nowG >= (b._noTurnUntil || 0)) {
-              const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+              const enemies = this.enemies?.getChildren?.() || [];
               const half = (b._fov || Math.PI / 2) / 2; const norm = (a) => Phaser.Math.Angle.Wrap(a); const ang = norm(b._angle);
               const valid = (t) => { if (!t?.active) return false; const a2 = Phaser.Math.Angle.Between(b.x, b.y, t.x, t.y); return Math.abs(norm(a2 - ang)) <= half; };
               if (!valid(b._target)) {
                 b._target = null; let best=null, bestD2=Infinity;
-                for (let i = 0; i < enemies.length; i += 1) { const e = enemies[i]; if (!(e && e.active)) continue; const a2 = Phaser.Math.Angle.Between(b.x, b.y, e.x, e.y); const dAng = Math.abs(norm(a2 - ang)); if (dAng > half) continue; const dx=e.x-b.x, dy=e.y-b.y; const d2=dx*dx+dy*dy; if (d2 < bestD2) { best=e; bestD2=d2; } }
+                for (let i = 0; i < enemies.length; i += 1) { const e = enemies[i]; if (!e?.active) continue; const a2 = Phaser.Math.Angle.Between(b.x, b.y, e.x, e.y); const dAng = Math.abs(norm(a2 - ang)); if (dAng > half) continue; const dx=e.x-b.x, dy=e.y-b.y; const d2=dx*dx+dy*dy; if (d2 < bestD2) { best=e; bestD2=d2; } }
                 b._target = best;
               }
               if (b._target && b._target.active) { desired = Phaser.Math.Angle.Between(b.x, b.y, b._target.x, b._target.y); }
@@ -1282,7 +1300,7 @@ export default class CombatScene extends Phaser.Scene {
             if (nowG >= (b._noTurnUntil || 0)) {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
-                const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+                const enemies = this.enemies?.getChildren?.() || [];
                 const half = (b._fov || Math.PI / 2) / 2; // 45�?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
@@ -1298,7 +1316,7 @@ export default class CombatScene extends Phaser.Scene {
                   // Find nearest within FOV cone
                   let best = null; let bestD2 = Infinity;
                   for (let i = 0; i < enemies.length; i += 1) {
-                    const e = enemies[i]; if (!(e && e.active)) continue;
+                    const e = enemies[i]; if (!e?.active) continue;
                     const a2 = Phaser.Math.Angle.Between(b.x, b.y, e.x, e.y);
                     const dAng = Math.abs(norm(a2 - ang));
                     if (dAng > half) continue;
@@ -1433,7 +1451,7 @@ export default class CombatScene extends Phaser.Scene {
                   this.spawnFireField(ex, ey, radius);
                   const r2n = radius * radius; const nowI = this.time.now;
                   this.enemies.getChildren().forEach((other) => {
-                    if (!(other && other.active) || other.isDummy) return;
+                    if (!other?.active || other.isDummy) return;
                     const dxn = other.x - ex; const dyn = other.y - ey;
                     if ((dxn * dxn + dyn * dyn) <= r2n) {
                       other._igniteValue = Math.min(10, (other._igniteValue || 0) + 5);
@@ -1448,9 +1466,9 @@ export default class CombatScene extends Phaser.Scene {
                 try { b.destroy(); } catch (_) {}
                 return;
               }
-              const arr = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+              const arr = this.enemies?.getChildren?.() || [];
               for (let i = 0; i < arr.length; i += 1) {
-                const e = arr[i]; if (!(e && e.active)) continue;
+                const e = arr[i]; if (!e?.active) continue;
                 const dx = e.x - b.x; const dy = e.y - b.y;
                 if ((dx * dx + dy * dy) <= detR2) {
                   const ex = b.x; const ey = b.y;
@@ -1469,7 +1487,7 @@ export default class CombatScene extends Phaser.Scene {
                     this.spawnFireField(ex, ey, radius);
                     const r2n = radius * radius; const nowI = this.time.now;
                     this.enemies.getChildren().forEach((other) => {
-                      if (!(other && other.active) || other.isDummy) return;
+                      if (!other?.active || other.isDummy) return;
                       const dxn = other.x - ex; const dyn = other.y - ey;
                       if ((dxn * dxn + dyn * dyn) <= r2n) {
                         other._igniteValue = Math.min(10, (other._igniteValue || 0) + 5);
@@ -1490,9 +1508,9 @@ export default class CombatScene extends Phaser.Scene {
             }
             // While flying: proximity-detonate if any enemy within detect radius
             {
-              const arr = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+              const arr = this.enemies?.getChildren?.() || [];
               for (let i = 0; i < arr.length; i += 1) {
-                const e = arr[i]; if (!(e && e.active)) continue;
+                const e = arr[i]; if (!e?.active) continue;
                 const dx = e.x - b.x; const dy = e.y - b.y;
                 if ((dx * dx + dy * dy) <= detR2) {
                   const ex = b.x; const ey = b.y;
@@ -1511,7 +1529,7 @@ export default class CombatScene extends Phaser.Scene {
                     this.spawnFireField(ex, ey, radius);
                     const r2n = radius * radius; const nowI = this.time.now;
                     this.enemies.getChildren().forEach((other) => {
-                      if (!(other && other.active) || other.isDummy) return;
+                      if (!other?.active || other.isDummy) return;
                       const dxn = other.x - ex; const dyn = other.y - ey;
                       if ((dxn * dxn + dyn * dyn) <= r2n) {
                         other._igniteValue = Math.min(10, (other._igniteValue || 0) + 5);
@@ -1569,7 +1587,7 @@ export default class CombatScene extends Phaser.Scene {
               this.spawnFireField(ex, ey, radius);
               const r2n = radius * radius; const nowI = this.time.now;
               this.enemies.getChildren().forEach((other) => {
-                if (!(other && other.active) || other.isDummy) return;
+                if (!other?.active || other.isDummy) return;
                 const dxn = other.x - ex; const dyn = other.y - ey;
                 if ((dxn * dxn + dyn * dyn) <= r2n) {
                   other._igniteValue = Math.min(10, (other._igniteValue || 0) + 5);
@@ -1945,12 +1963,12 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Shooting Range interactions
-    if (this.gs && this.gs.shootingRange) {
+    if (this.gs?.shootingRange) {
       // Update dummy label position and text
       if (this.dummy && this.dummyLabel) {
         try {
           this.dummyLabel.setPosition(this.dummy.x, this.dummy.y - 16);
-          this.dummyLabel.setText('DMG: ' + (this._dummyDamage | 0));
+          this.dummyLabel.setText(`DMG: ${this._dummyDamage | 0}`);
         } catch (_) {}
       }
       // Context prompts
@@ -2134,12 +2152,12 @@ export default class CombatScene extends Phaser.Scene {
           const arrB = this.enemyBullets?.getChildren?.() || [];
           const arrG = this.enemyGrenades?.getChildren?.() || [];
           for (let i = 0; i < arrB.length; i += 1) {
-            const b = arrB[i]; if (!(b && b.active)) continue;
+            const b = arrB[i]; if (!b?.active) continue;
             const dx = b.x - g.x; const dy = b.y - g.y; const d2 = dx * dx + dy * dy;
             if (d2 <= r2 && d2 < bestD2) { best = b; bestD2 = d2; }
           }
           for (let i = 0; i < arrG.length; i += 1) {
-            const b = arrG[i]; if (!(b && b.active)) continue;
+            const b = arrG[i]; if (!b?.active) continue;
             const dx = b.x - g.x; const dy = b.y - g.y; const d2 = dx * dx + dy * dy;
             if (d2 <= r2 && d2 < bestD2) { best = b; bestD2 = d2; }
           }
@@ -2188,12 +2206,12 @@ export default class CombatScene extends Phaser.Scene {
     if (this._igniteTickAccum >= burnTick) {
       const step = this._igniteTickAccum; // accumulate any leftover
       this._igniteTickAccum = 0;
-      const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+      const enemies = this.enemies?.getChildren?.() || [];
       const burnDps = 30;
       const dmg = Math.max(0, Math.round(burnDps * step));
       const nowT = this.time.now;
       for (let i = 0; i < enemies.length; i += 1) {
-        const e = enemies[i]; if (!(e && e.active)) continue;
+        const e = enemies[i]; if (!e?.active) continue;
         if (e._ignitedUntil && nowT < e._ignitedUntil) {
           if (!e.isDummy) {
             if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
@@ -2220,9 +2238,9 @@ export default class CombatScene extends Phaser.Scene {
       const step = this._toxinTickAccum; this._toxinTickAccum = 0;
       const dps = 3;
       const nowT = this.time.now;
-      const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+      const enemies = this.enemies?.getChildren?.() || [];
       for (let i = 0; i < enemies.length; i += 1) {
-        const e = enemies[i]; if (!(e && e.active)) continue;
+        const e = enemies[i]; if (!e?.active) continue;
         if (e._toxinedUntil && nowT < e._toxinedUntil) {
           // Accumulate fractional toxin damage per-entity to avoid rounding-away low DPS
           const prev = (e._toxinPartial || 0);
@@ -2256,9 +2274,9 @@ export default class CombatScene extends Phaser.Scene {
     if (this._stunTickAccum >= stunTick) {
       this._stunTickAccum = 0;
       const nowT = this.time.now;
-      const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+      const enemies = this.enemies?.getChildren?.() || [];
       for (let i = 0; i < enemies.length; i += 1) {
-        const e = enemies[i]; if (!(e && e.active)) continue;
+        const e = enemies[i]; if (!e?.active) continue;
         if (e._stunnedUntil && nowT < e._stunnedUntil) {
           if (!e._stunIndicator) { e._stunIndicator = this.add.graphics(); try { e._stunIndicator.setDepth(9000); } catch (_) {} e._stunIndicator.fillStyle(0xffff33, 1).fillCircle(0, 0, 2); }
           try { e._stunIndicator.setPosition(e.x, e.y - 22); } catch (_) {}
@@ -2304,9 +2322,9 @@ export default class CombatScene extends Phaser.Scene {
           }
         } catch (_) {}
         // Tick ignite within radius
-        const r2 = f.r * f.r; const arr = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+        const r2 = f.r * f.r; const arr = this.enemies?.getChildren?.() || [];
         for (let i = 0; i < arr.length; i += 1) {
-          const e = arr[i]; if (!(e && e.active)) continue;
+          const e = arr[i]; if (!e?.active) continue;
           const dx = e.x - f.x; const dy = e.y - f.y; if ((dx * dx + dy * dy) <= r2) {
             e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
             if ((e._igniteValue || 0) >= 10) {
@@ -2374,7 +2392,7 @@ export default class CombatScene extends Phaser.Scene {
         try {
           const arrB = this.enemyBullets?.getChildren?.() || [];
           for (let i = 0; i < arrB.length; i += 1) {
-            const b = arrB[i]; if (!(b && b.active)) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy;
+            const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy;
             if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: colImpact, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
           }
         } catch (_) {}
@@ -2382,9 +2400,9 @@ export default class CombatScene extends Phaser.Scene {
         try {
           if (!rp._hitSet) rp._hitSet = new Set();
           if (!rp._pushedSet) rp._pushedSet = new Set();
-          const arrE = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+          const arrE = this.enemies?.getChildren?.() || [];
           for (let i = 0; i < arrE.length; i += 1) {
-            const e = arrE[i]; if (!(e && e.active)) continue;
+            const e = arrE[i]; if (!e?.active) continue;
             // If already pushed by this pulse, skip entirely; also skip while under any active knockback window
             const nowPush = this.time.now;
             if (rp._pushedSet.has(e)) continue;
@@ -2421,7 +2439,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this._bits.length) {
       const dt = (this.game?.loop?.delta || 16.7) / 1000;
       const now = this.time.now;
-      const enemiesArr = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+      const enemiesArr = this.enemies?.getChildren?.() || [];
       this._bits = this._bits.filter((bit) => {
         // Expire: return to player then disappear
         if (now >= (bit.despawnAt || 0)) {
@@ -2490,7 +2508,7 @@ export default class CombatScene extends Phaser.Scene {
           // nearest enemy within lock range only
           let best = null; let bestD2 = Infinity;
           for (let i = 0; i < enemiesArr.length; i += 1) {
-            const e = enemiesArr[i]; if (!(e && e.active)) continue;
+            const e = enemiesArr[i]; if (!e?.active) continue;
             const dx = e.x - bit.x; const dy = e.y - bit.y; const d2 = dx * dx + dy * dy;
             if (d2 <= lockR2 && d2 < bestD2) { best = e; bestD2 = d2; }
           }
@@ -2642,7 +2660,7 @@ export default class CombatScene extends Phaser.Scene {
         const now = this.time.now;
         // Reduced detection radius per request
         const detectR = 200; const detectR2 = detectR * detectR;
-        const enemiesArr = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+        const enemiesArr = this.enemies?.getChildren?.() || [];
         this._wasps = this._wasps.filter((w) => {
           if (!w?.g?.active) { try { w?._thr?.destroy?.(); } catch (_) {} return false; }
           // Acquire/validate target based on player-centric radius
@@ -2650,7 +2668,7 @@ export default class CombatScene extends Phaser.Scene {
             w.target = null; w.didFinalDash = false;
             let best = null; let bestD2 = Infinity;
             for (let i = 0; i < enemiesArr.length; i += 1) {
-              const e = enemiesArr[i]; if (!(e && e.active)) continue; if (e.isBoss) continue;
+              const e = enemiesArr[i]; if (!e?.active) continue; if (e.isBoss) continue;
               const dxp = e.x - this.player.x; const dyp = e.y - this.player.y; const d2p = dxp * dxp + dyp * dyp;
               if (d2p <= detectR2) {
                 const dx = e.x - w.x; const dy = e.y - w.y; const d2 = dx * dx + dy * dy;
@@ -3195,7 +3213,7 @@ export default class CombatScene extends Phaser.Scene {
       }
       // Clamp enemies to screen bounds as a failsafe
       try {
-        const pad = ((e.body && e.body.halfWidth) || 6);
+        const pad = (e.body?.halfWidth || 6);
         const w = this.scale.width, h = this.scale.height;
         e.x = Phaser.Math.Clamp(e.x, pad, w - pad);
         e.y = Phaser.Math.Clamp(e.y, pad, h - pad);
@@ -3969,7 +3987,7 @@ export default class CombatScene extends Phaser.Scene {
       try {
         const line = new Phaser.Geom.Line(b._px ?? b.x, b._py ?? b.y, b.x, b.y);
         if (!b._hitSet) b._hitSet = new Set();
-        const arr = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+        const arr = this.enemies?.getChildren?.() || [];
         for (let i = 0; i < arr.length; i += 1) {
           const e = arr[i];
           if (!e || !e.active) continue;
@@ -4257,9 +4275,9 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
     // Also stop at first enemy before barricade; handle Rook shield as a blocker
-    const enemies = (this.enemies && this.enemies.getChildren) ? this.enemies.getChildren() : [];
+    const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
-      const e = enemies[i]; if (!(e && e.active)) continue;
+      const e = enemies[i]; if (!e?.active) continue;
       // Rook shield: treat 90° arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
@@ -4365,7 +4383,6 @@ export default class CombatScene extends Phaser.Scene {
     return obj;
   }
 }
-
 
 
 
