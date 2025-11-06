@@ -145,7 +145,7 @@ export const weaponCores = [
     onlyFor: 'guided_missiles',
     desc: [
       '+30 Explosion damage',
-      '-3 Magazine size',
+      '-7 magazine size',
       '-Slower rate of fire',
       '-Slightly reduced turn rate',
     ].join('\n'),
