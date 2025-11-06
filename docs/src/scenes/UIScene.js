@@ -425,8 +425,20 @@ export default class UIScene extends Phaser.Scene {
         .filter((c) => !String(c.id || '').startsWith('w_'))
         .filter((c) => (c.id === null) || ownedC.has(c.id))
         .map((c) => {
-          const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
-          const desc = (c.desc ? String(c.desc) + '\n' : '') + `Usable: ${forName}`;
+          // Build a Not usable on: line by testing core.allow/onlyFor against all weapons
+          let notUsable = [];
+          try {
+            notUsable = (weaponDefs || []).filter((wd) => {
+              if (!wd) return false;
+              if (c.onlyFor && c.onlyFor !== wd.id) return true;
+              if (typeof c.allow === 'function') {
+                try { if (!c.allow(wd)) return true; } catch (_) {}
+              }
+              return false;
+            }).map((wd) => wd.name);
+          } catch (_) {}
+          const listStr = notUsable.length ? notUsable.join(', ') : 'None';
+          const desc = (c.desc ? String(c.desc) + '\n' : '') + `Not usable on: ${listStr}`;
           return ({ id: c.id, name: c.name, desc });
         });
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
@@ -648,8 +660,18 @@ export default class UIScene extends Phaser.Scene {
             }
           };
           pushRow(head, buyFn);
-          const forName = c.onlyFor ? (getWeaponById(c.onlyFor)?.name || c.onlyFor) : 'Multiple';
-          const lines = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + `Usable on: ${forName}`).split('\n');
+          // Compute Not usable on: list
+          let notUsable = [];
+          try {
+            notUsable = (weaponDefs || []).filter((wd) => {
+              if (!wd) return false;
+              if (c.onlyFor && c.onlyFor !== wd.id) return true;
+              if (typeof c.allow === 'function') { try { if (!c.allow(wd)) return true; } catch (_) {} }
+              return false;
+            }).map((wd) => wd.name);
+          } catch (_) {}
+          const nuList = notUsable.length ? notUsable.join(', ') : 'None';
+          const lines = ((c.desc ? String(c.desc).replace(/\\n/g, '\n') + '\n' : '') + `Not usable on: ${nuList}`).split('\n');
           lines.forEach((ln) => {
             const line = ln.trim(); if (!line) return;
             let color = '#cccccc';
@@ -659,7 +681,7 @@ export default class UIScene extends Phaser.Scene {
             const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
             const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
             const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
-            const isUsableLine = lower.startsWith('usable on:');
+            const isUsableLine = lower.startsWith('not usable on:');
             if (!isUsableLine) {
               if (line.startsWith('+')) {
                 const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
