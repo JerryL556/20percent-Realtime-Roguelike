@@ -1,4 +1,4 @@
-﻿// Simple, customizable mod/core system. Extend these lists as you add content.
+// Simple, customizable mod/core system. Extend these lists as you add content.
 
 // Weapon normal mods (3 slots)
 export const weaponMods = [
@@ -124,7 +124,7 @@ export const weaponCores = [
     name: 'Smart Missiles',
     onlyFor: 'guided_missiles',
     desc: [
-      '+ Lock-on to nearest enemy within 90掳 cone',
+      '+ Lock-on to nearest enemy within 90° cone',
       '+ Tracks enemies instead of cursor',
       '- Reduced turn rate for tighter arcs',
       'Missiles still collide with walls/barricades',
@@ -132,11 +132,34 @@ export const weaponCores = [
     apply: (w) => {
       if (!w || w.id !== 'guided_missiles') return w;
       // Enable smart seeking and reduce per-frame turn rate
-      // Base guided turn is ~2掳/frame; reduce further
+      // Base guided turn is ~2°/frame; reduce further
       // Make turning significantly harder: reduce per-frame turn to ~25%
       const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 2000;
       const reloadMs = Math.max(200, Math.floor(baseReload * 0.9));
       return { ...w, _smartMissiles: true, _smartTurnMult: 0.4, reloadMs };
+    },
+  },
+  {
+    id: 'core_guided_full',
+    name: 'Full-Size Missiles',
+    onlyFor: 'guided_missiles',
+    desc: [
+      '+Explosion damage +20',
+      '-Mag size set to 3',
+      '-Slower rate of fire',
+      '-Slightly reduced turn rate',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'guided_missiles') return w;
+      const aoe = Math.max(0, (w.aoeDamage ?? (w.damage || 0)) + 20);
+      const rof = Math.max(700, w.fireRateMs || 700);
+      return {
+        ...w,
+        aoeDamage: aoe,
+        magSize: 3,
+        fireRateMs: rof,
+        _guidedTurnMult: 0.7,
+      };
     },
   },
   {
@@ -370,30 +393,7 @@ export const armourMods = [
     // Mark an effect flag that scenes can honor when applying damage
     applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),
   },
-  {
-    id: 'core_guided_full',
-    name: 'Full-Size Missiles',
-    onlyFor: 'guided_missiles',
-    desc: [
-      '+Explosion damage +20',
-      '-Mag size set to 3',
-      '-Slower rate of fire',
-      '-Slightly reduced turn rate',
-    ].join('\n'),
-    apply: (w) => {
-      if (!w || w.id !== 'guided_missiles') return w;
-      const aoe = Math.max(0, (w.aoeDamage ?? (w.damage || 0)) + 20);
-      const rof = Math.max(700, w.fireRateMs || 700);
-      return {
-        ...w,
-        aoeDamage: aoe,
-        magSize: 3,
-        fireRateMs: rof,
-        _guidedTurnMult: 0.7,
-      };
-    },
-  },
-];
+\n  {\n    id: 'a_no_overflow',\n    name: 'Emergency Pulse',\n    desc: [\n      '+Prevents damage overflow when Energy Shield breaks',\n      '+Automatically releases a Repulsion Pulse on shield break',\n    ].join('\\n'),\n    apply: (a) => a,\n    // Mark an effect flag that scenes can honor when applying damage\n    applyEffect: (e) => ({ ...e, preventShieldOverflow: true }),\n  },\n\n];
 
 // Armour list is intentionally minimal; you can extend later.
 export const armourDefs = [
@@ -433,3 +433,4 @@ export const armourDefs = [
     ].join('\n'),
   },
 ];
+
