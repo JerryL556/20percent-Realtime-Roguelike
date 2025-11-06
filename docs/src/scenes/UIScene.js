@@ -770,19 +770,19 @@ export default class UIScene extends Phaser.Scene {
               color = '#66ff66';
             } else if (lower.startsWith('shield:')) {
               color = '#66aaff';
+            } else if (line.startsWith('+')) {
+              // For armour features, treat leading '+' as beneficial (green)
+              color = '#66ff66';
+            } else if (line.startsWith('-')) {
+              // Consider certain '-' terms beneficial (e.g., cooldown/reload reductions)
+              const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
+              const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
+              const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
+              color = isBeneficialNeg ? '#66ff66' : '#ff6666';
             } else {
               const positiveHints = ['increase', 'faster', 'higher', 'improve', 'improved', 'boost', 'bonus', 'gain'];
               const negativeHints = ['decrease', 'slower', 'lower', 'worse', 'penalty'];
-              const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
-              const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
-              const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
-              if (line.startsWith('+')) {
-                const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
-                color = isHarmfulPos ? '#ff6666' : '#66ff66';
-              } else if (line.startsWith('-')) {
-                const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
-                color = isBeneficialNeg ? '#66ff66' : '#ff6666';
-              } else if (positiveHints.some((k) => lower.includes(k))) {
+              if (positiveHints.some((k) => lower.includes(k))) {
                 color = '#66ff66';
               } else if (negativeHints.some((k) => lower.includes(k))) {
                 color = '#ff6666';
@@ -1003,8 +1003,8 @@ export default class UIScene extends Phaser.Scene {
           const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
           const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
           if (t.startsWith('+')) {
-            const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
-            color = isHarmfulPos ? '#ff6666' : '#66ff66';
+            // Treat leading '+' as beneficial (green), even if text mentions cooldown/reload
+            color = '#66ff66';
           } else if (t.startsWith('-')) {
             const isBeneficialNeg = beneficialNegTerms.some((term) => lower.includes(term)) && !harmfulNegTerms.some((term) => lower.includes(term));
             color = isBeneficialNeg ? '#66ff66' : '#ff6666';
