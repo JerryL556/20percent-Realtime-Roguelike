@@ -633,7 +633,7 @@ export default class UIScene extends Phaser.Scene {
             const beneficialNegTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
             const harmfulPosTerms = ['spread', 'recoil', 'cooldown', 'reload', 'heat', 'delay', 'cost', 'consumption'];
             const harmfulNegTerms = ['damage', 'explosion', 'explosive', 'hp', 'health'];
-            const isUsableLine = lower.startsWith('usable on:');
+            const isUsableLine = lower.startsWith('usable on:') || lower.startsWith('not usable on:');
             if (!isUsableLine) {
               if (line.startsWith('+')) {
                 const isHarmfulPos = harmfulPosTerms.some((term) => lower.includes(term));
@@ -926,5 +926,7 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
+
+
 
 
