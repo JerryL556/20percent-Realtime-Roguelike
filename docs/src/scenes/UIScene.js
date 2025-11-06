@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { HpBar } from '../ui/HpBar.js';
 import { ShieldBar } from '../ui/ShieldBar.js';
 import { DashBar } from '../ui/DashBar.js';
@@ -22,7 +22,7 @@ export default class UIScene extends Phaser.Scene {
     // Shield bar sits above HP bar (same width, slightly thicker)
     this.shieldBar = new ShieldBar(this, 16, uiHpY - 8, 180, 8);
     this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
-    this.goldText = this.add.text(210, 8, 'Gold: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
+    this.goldText = this.add.text(210, 8, 'Gold: 0 | Drone Cores: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     this.dashBar = new DashBar(this, dashXStart, uiDashY, 14, 4);
     // Weapon label positioned to the right of the dash bar; will be refined in update()
     const gs0 = this.registry.get('gameState');
@@ -65,6 +65,7 @@ export default class UIScene extends Phaser.Scene {
 
     // Loadout overlay state and keybind
     this.loadout = { panel: null, nodes: [] };
+    this.shop = { panel: null, nodes: [], activeCat: 'weapons' };
     this.choicePopup = null;
     this.keys = this.input.keyboard.addKeys({ tab: 'TAB' });
 
@@ -88,7 +89,8 @@ export default class UIScene extends Phaser.Scene {
       const sCur = Math.max(0, gs.shield || 0);
       const sMax = Math.max(0, Math.floor(gs.shieldMax || 0));
       this.shieldBar.draw(sCur, sMax);
-      this.goldText.setText(`Gold: ${gs.gold}`);
+      const dc = (typeof gs.droneCores === 'number') ? gs.droneCores : 0;
+      this.goldText.setText(`Gold: ${gs.gold} | Drone Cores: ${dc}`);
       const wName = (getWeaponById(gs.activeWeapon)?.name || gs.activeWeapon);
       this.weaponText.setText(`Weapon: ${wName}`);
       const charges = this.registry.get('dashCharges');
@@ -371,10 +373,12 @@ export default class UIScene extends Phaser.Scene {
         ensureBuild();
         const activeId = gs.activeWeapon;
         const baseW = getWeaponById(activeId) || {};
+        const owned = new Set((gs.ownedWeaponMods || []).filter(Boolean));
         const opts = weaponMods
           .filter((m) => !m.onlyFor || m.onlyFor === activeId)
           .filter((m) => !m.allow || m.allow(baseW))
           .filter((m) => m.id !== 'w_smg_toxin' && m.id !== 'w_rifle_incendiary')
+          .filter((m) => (m.id === null) || owned.has(m.id))
           // Prevent choosing duplicates and second magazine mod
           .filter((m) => {
             const others = (gs.weaponBuilds[gs.activeWeapon].mods || []).filter((_, j) => j !== idx);
@@ -409,11 +413,13 @@ export default class UIScene extends Phaser.Scene {
       const activeId = gs.activeWeapon;
       const baseW = getWeaponById(activeId) || {};
       const isExplosive = baseW.projectile === 'rocket';
+      const ownedC = new Set((gs.ownedWeaponCores || []).filter(Boolean));
       const opts = weaponCores
         .filter((c) => !c.onlyFor || c.onlyFor === activeId)
         .filter((c) => !(c.id === 'core_blast' && isExplosive))
         .filter((c) => !c.allow || c.allow(baseW))
         .filter((c) => !String(c.id || '').startsWith('w_'))
+        .filter((c) => (c.id === null) || ownedC.has(c.id))
         .map((c) => ({ id: c.id, name: c.name, desc: c.desc }));
       this.openChoicePopup('Choose Core', opts, gs.weaponBuilds[gs.activeWeapon].core, (chosenId) => {
         gs.weaponBuilds[gs.activeWeapon].core = chosenId;
@@ -511,6 +517,79 @@ export default class UIScene extends Phaser.Scene {
     this.loadout.modLabels = [];
     this.loadout.coreLabel = null;
     this.closeChoicePopup();
+  }
+
+  openShopOverlay() {
+    const gs = this.registry.get('gameState'); if (!gs || this.shop.panel) return;
+    const { width } = this.scale; const top = 40; const panelW = 780; const panelH = 520; const left = width / 2 - panelW / 2;
+    const nodes = [];
+    const panel = this.add.graphics();
+    panel.fillStyle(0x111111, 0.92).fillRect(left, top, panelW, panelH);
+    panel.lineStyle(2, 0xffffff, 1).strokeRect(left, top, panelW, panelH);
+    nodes.push(this.add.text(width / 2, top + 12, 'Shop (Click Close to exit)', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5));
+    // Left categories
+    const catX = left + 14; const catY = top + 44; const catW = 200; const catH = panelH - 64;
+    const catBg = this.add.graphics(); catBg.fillStyle(0x0e0e0e, 0.92).fillRect(catX, catY, catW, catH); nodes.push(catBg);
+    const categories = [
+      { id: 'weapons', label: 'Weapons' },
+      { id: 'armours', label: 'Armours' },
+      { id: 'armour_mods', label: 'Armour Mods' },
+      { id: 'weapon_mods', label: 'Weapon Mods' },
+      { id: 'weapon_cores', label: 'Weapon Cores' },
+      { id: 'abilities', label: 'Abilities' },
+      { id: 'special', label: 'Special' },
+    ];
+    let cy = catY + 10; const setCat = (id) => { this.shop.activeCat = id; renderList(); };
+    categories.forEach((c) => { const b = makeTextButton(this, catX + Math.floor(catW / 2), cy, c.label, () => setCat(c.id)); try { b.setScale(0.9); } catch (_) {} nodes.push(b); cy += 28; });
+
+    // Right scrollable viewport
+    const view = { x: left + 230, y: top + 44, w: panelW - 244, h: panelH - 64 };
+    const bg = this.add.graphics(); bg.fillStyle(0x111111, 0.92).fillRect(view.x, view.y, view.w, view.h); nodes.push(bg);
+    const maskG = this.add.graphics(); maskG.fillStyle(0xffffff, 1).fillRect(view.x, view.y, view.w, view.h); const mask = maskG.createGeometryMask(); try { maskG.setVisible(false); } catch (_) {}
+    const list = this.add.container(view.x, view.y); list.setMask(mask); nodes.push(list);
+    const header = this.add.text(view.x + 8, view.y - 22, '', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0, 0.5); nodes.push(header);
+    const scrollG = this.add.graphics(); nodes.push(scrollG);
+    let minY = view.y, maxY = view.y;
+    const drawScrollbar = (contentH = view.h) => {
+      scrollG.clear(); if (contentH <= view.h) return; const trackX = view.x + view.w - 6; const trackY = view.y + 4; const trackH = view.h - 8;
+      scrollG.fillStyle(0xffffff, 0.14).fillRoundedRect(trackX, trackY, 3, trackH, 2);
+      const total = contentH - view.h; const scrolled = (view.y - list.y); const ratio = Math.max(0, Math.min(1, total > 0 ? (scrolled / total) : 0));
+      const thumbH = Math.max(16, Math.floor((view.h / contentH) * trackH)); const thumbY = trackY + Math.floor((trackH - thumbH) * ratio);
+      scrollG.fillStyle(0xffffff, 0.6).fillRoundedRect(trackX, thumbY, 3, thumbH, 2);
+    };
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const onWheel = (pointer, _objs, _dx, dy) => { const px = pointer.worldX ?? pointer.x; const py = pointer.worldY ?? pointer.y; if (px>=view.x && px<=view.x+view.w && py>=view.y && py<=view.y+view.h) { list.y = clamp(list.y - dy * 0.5, minY, maxY); drawScrollbar(minY === view.y ? view.h : (view.y - minY + view.h)); } };
+    this.input.on('wheel', onWheel); this._shopWheelHandler = onWheel;
+
+    const priceMod = 120; const priceCoreG = 200; const priceCoreDC = 1;
+    const renderList = () => {
+      try { list.removeAll(true); } catch (_) {}
+      const cat = this.shop.activeCat || 'weapons'; let ly = 8; const rows = [];
+      const pushRow = (text, buyFn) => { const row = this.add.container(0, ly); const label = this.add.text(Math.floor(view.w/2), 0, text, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5, 0); const border = this.add.graphics(); const refresh = () => { border.clear(); border.lineStyle(1, 0xffffff, 1); const b = label.getBounds(); const bx = Math.floor(view.w/2 - b.width/2) - 6 + 0.5; const by = Math.floor(label.y) - 4 + 0.5; const bw = Math.ceil(b.width)+12; const bh = Math.ceil(b.height)+8; border.strokeRect(bx, by, bw, bh); }; refresh(); row.add(border); row.add(label); if (buyFn) label.setInteractive({ useHandCursor: true }).on('pointerover', () => { label.setStyle({ color: '#ffff66' }); refresh(); }).on('pointerout', () => { label.setStyle({ color: '#ffffff' }); refresh(); }).on('pointerdown', buyFn); list.add(row); rows.push(row); ly += 34; };
+      if (cat === 'weapons') {
+        header.setText('Weapons');
+        (weaponDefs || []).forEach((w) => { if (!gs.ownedWeapons.includes(w.id) && w.price > 0) { pushRow(`Buy ${w.name} (${w.price}g)`, () => { const g0 = this.registry.get('gameState'); if (g0.gold >= w.price) { g0.gold -= w.price; g0.ownedWeapons.push(w.id); SaveManager.saveToLocal(g0); renderList(); } }); } });
+      } else if (cat === 'weapon_mods') {
+        header.setText('Weapon Mods');
+        (weaponMods || []).forEach((m) => { if (!m.id) return; const owned = (gs.ownedWeaponMods || []).includes(m.id); const label = owned ? `${m.name} (Owned)` : `Buy ${m.name} (${priceMod}g)`; pushRow(label, owned ? null : () => { const g1 = this.registry.get('gameState'); if (g1.gold >= priceMod) { g1.gold -= priceMod; if (!g1.ownedWeaponMods) g1.ownedWeaponMods = []; g1.ownedWeaponMods.push(m.id); SaveManager.saveToLocal(g1); renderList(); } }); });
+      } else if (cat === 'weapon_cores') {
+        header.setText('Weapon Cores');
+        (weaponCores || []).forEach((c) => { if (!c.id) return; const owned = (gs.ownedWeaponCores || []).includes(c.id); const label = owned ? `${c.name} (Owned)` : `Buy ${c.name} (${priceCoreG}g + ${priceCoreDC} DC)`; pushRow(label, owned ? null : () => { const g2 = this.registry.get('gameState'); if ((g2.gold >= priceCoreG) && ((g2.droneCores||0) >= priceCoreDC)) { g2.gold -= priceCoreG; g2.droneCores = (g2.droneCores||0) - priceCoreDC; if (!g2.ownedWeaponCores) g2.ownedWeaponCores = []; g2.ownedWeaponCores.push(c.id); SaveManager.saveToLocal(g2); renderList(); } }); });
+      } else if (cat === 'armours') { header.setText('Armours'); pushRow('Coming soon: armour shop', null); }
+      else if (cat === 'armour_mods') { header.setText('Armour Mods'); pushRow('Coming soon: armour mods', null); }
+      else if (cat === 'abilities') { header.setText('Abilities'); pushRow('Coming soon: abilities shop', null); }
+      else if (cat === 'special') { header.setText('Special'); pushRow(`Dash Slot +1 (100g) [Now: ${gs.dashMaxCharges}]`, () => { if (gs.dashMaxCharges >= 5) return; const g3 = this.registry.get('gameState'); if (g3.gold >= 100) { g3.gold -= 100; g3.dashMaxCharges = Math.min(5, g3.dashMaxCharges + 1); SaveManager.saveToLocal(g3); renderList(); } }); }
+      const contentH = Math.max(ly, view.h); minY = view.y - (contentH - view.h); maxY = view.y; list.y = maxY; drawScrollbar(contentH);
+    };
+    renderList();
+    const closeBtn = makeTextButton(this, width / 2, top + panelH - 18, 'Close', () => { this.closeShopOverlay(); }); nodes.push(closeBtn);
+    this.shop.panel = panel; this.shop.nodes = nodes;
+  }
+
+  closeShopOverlay() {
+    try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
+    if (this.shop.panel) { try { this.shop.panel.destroy(); } catch (_) {} this.shop.panel = null; }
+    (this.shop.nodes || []).forEach((n) => { try { n?.destroy?.(); } catch (_) {} }); this.shop.nodes = []; this.shop.activeCat = 'weapons';
   }
 
   // Helper to refresh the loadout overlay without the user having to toggle Tab
@@ -709,4 +788,3 @@ export default class UIScene extends Phaser.Scene {
     this.choicePopup = null;
   }
 }
-

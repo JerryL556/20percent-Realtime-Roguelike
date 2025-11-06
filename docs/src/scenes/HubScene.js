@@ -100,12 +100,14 @@ export default class HubScene extends Phaser.Scene {
     // Ensure any previous shop wheel handler is removed
     try { if (this._shopWheelHandler) { this.input.off('wheel', this._shopWheelHandler); this._shopWheelHandler = null; } } catch (_) {}
     this.closePanel();
+    // Open a UI overlay version of the shop so it renders above all UI elements
+    try { const ui = this.scene.get(SceneKeys.UI); if (ui && typeof ui.openShopOverlay === 'function') { ui.openShopOverlay(); return; } } catch (_) {}
     const { width } = this.scale;
-    // Larger panel to host a scrollable list
-    const panelX = width / 2 - 260;
-    const panelY = 60;
-    const panelW = 520;
-    const panelH = 420;
+    // Larger panel to host future category menu + scrollable content
+    const panelX = width / 2 - 380;
+    const panelY = 40;
+    const panelW = 760;
+    const panelH = 520;
     this.panel = drawPanel(this, panelX, panelY, panelW, panelH);
     const t = this.add.text(width / 2, panelY + 22, 'Shop', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
     const buy = makeTextButton(this, width / 2, panelY + 60, 'Buy potion for 20g (+30 HP)', () => {

@@ -21,6 +21,7 @@ export function difficultyModifiers(diff) {
 export class GameState {
   constructor() {
     this.gold = 99999; // testing default
+    this.droneCores = 0; // secondary currency for cores
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -40,6 +41,9 @@ export class GameState {
     this.armour = { id: null, mods: [null, null] };
     // Per-weapon build: mods (3) + core (1); keyed by weaponId
     this.weaponBuilds = {}; // weaponId -> { mods: [m1,m2,m3], core: coreId }
+    // Ownership collections for shop-gated content
+    this.ownedWeaponMods = [];
+    this.ownedWeaponCores = [];
     this.difficulty = Difficulty.Normal;
     this.runSeed = Date.now() >>> 0;
     this.rng = new RNG(this.runSeed);
@@ -62,6 +66,7 @@ export class GameState {
 
   startNewRun(seed, difficulty) {
     this.gold = 99999; // testing default
+    this.droneCores = 0;
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -76,6 +81,8 @@ export class GameState {
     this.activeWeapon = 'pistol';
     this.armour = { id: null, mods: [null, null] };
     this.weaponBuilds = {};
+    this.ownedWeaponMods = [];
+    this.ownedWeaponCores = [];
     if (seed) this.runSeed = seed >>> 0;
     if (difficulty) this.difficulty = difficulty;
     this.rng = new RNG(this.runSeed);
@@ -163,6 +170,7 @@ export class GameState {
   serialize() {
     return {
       gold: this.gold,
+      droneCores: this.droneCores,
       xp: this.xp,
       maxHp: this.maxHp,
       hp: this.hp,
@@ -177,6 +185,8 @@ export class GameState {
       activeWeapon: this.activeWeapon,
       armour: this.armour,
       weaponBuilds: this.weaponBuilds,
+      ownedWeaponMods: this.ownedWeaponMods,
+      ownedWeaponCores: this.ownedWeaponCores,
       ownedWeapons: this.ownedWeapons,
       difficulty: this.difficulty,
       runSeed: this.runSeed,
@@ -197,12 +207,15 @@ export class GameState {
     const gs = new GameState();
     Object.assign(gs, obj);
     if (typeof gs.xp !== 'number') gs.xp = 0;
+    if (typeof gs.droneCores !== 'number') gs.droneCores = 0;
     gs.rng = new RNG(gs.runSeed);
     if (!gs.ownedWeapons) gs.ownedWeapons = ['pistol'];
     if (!gs.equippedWeapons || !Array.isArray(gs.equippedWeapons)) gs.equippedWeapons = [gs.ownedWeapons[0] || 'pistol', null];
     if (!gs.activeWeapon) gs.activeWeapon = gs.equippedWeapons[0] || gs.ownedWeapons[0] || 'pistol';
     if (!gs.armour) gs.armour = { id: null, mods: [null, null] };
     if (!gs.weaponBuilds) gs.weaponBuilds = {};
+    if (!Array.isArray(gs.ownedWeaponMods)) gs.ownedWeaponMods = [];
+    if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = [];
     gs.dashMaxCharges = Math.min(gs.dashMaxCharges || 3, 5);
     gs.dashRegenMs = Math.max(gs.dashRegenMs || 6000, 6000);
     if (!gs.gameMode) gs.gameMode = 'Normal';
