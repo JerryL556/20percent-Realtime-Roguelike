@@ -1,68 +1,75 @@
-# 20percent Realtime Roguelike
+# 20percent ¡ª World Down Under
 
-Play in browser: https://jerryl556.github.io/20percent-Realtime-Roguelike/
+Top?down, real?time roguelike built with Phaser 3. Fast movement, tight shooting, readable VFX, and a simple scene/frame model that keeps everything responsive in the browser.
 
-## Overview
-Fast, topâ€‘down, realtime roguelike built with Phaser. Explore combat rooms, fight a boss, return to hub, upgrade, and loop deeper. The game runs entirely in the browser and uses simple ES modules with no build step.
+## How The Game Is Framed
+The game runs as a set of Phaser scenes layered over a single canvas. At 60 FPS (or your display refresh), each frame the engine:
+- Steps input: reads WASD, mouse, dash/ability/interaction.
+- Simulates physics: player, enemies, bullets, grenades, and barricade collisions.
+- Advances AI: pathfinding, state machines (idle, windup, sweep, recover, kite), and targeting.
+- Resolves combat: bullet/laser/melee hits, damage, shield regen/delay.
+- Renders: sprites, additive VFX, particles, UI overlay.
 
-## Project Layout
-- `docs/` hosts the playable site (GitHub Pages): `index.html`, `assets/`, and `src/`.
-- Scenes: Boot, Start, Menu, Hub, Combat, Boss; `UIScene` overlays HUD.
+The primary scenes are:
+- Hub (safe zone): shop, choose mode, enter portal.
+- Combat (rooms): procedural arenas with enemies, cover, and pickups.
+- Boss (encounters): focused arenas with choreographed bosses.
+- UI (overlay): HP/shield/dash/ammo/ability; persists on top of gameplay scenes.
 
-## Gameplay & Core Systems
-- Game state & saving
-  - `src/core/GameState.js`: run seed, difficulty, gold/HP, dash charges, weapon/armour builds, and scene routing (3 rooms â†’ Boss â†’ Hub). BossRush alternates boss types.
-  - `src/core/SaveManager.js`: localStorage save/load and JSON import/export.
-- Input
-  - `src/core/Input.js`: WASD move, Space dash, E interact, LMB shoot, Q swap, Tab loadout editor.
-- Weapons, Mods, Loadout
-  - `src/core/Weapons.js`: base stats; `src/core/Mods.js`: three mod slots + one core; `src/core/Loadout.js`: applies modifiers and aggregates armour effects.
-- Procedural generation
-  - `src/systems/ProceduralGen.js`: seeded arenas with destructible/indestructible barricades and spawn points; path grid built per room.
-- Pathfinding
-  - `src/systems/Pathfinding.js`: lightweight A* on a tile grid. Enemies repath when LOS is blocked or on a timer.
+## Game Modes
+- Campaign: Progress through combat rooms, periodic bosses, return to hub, upgrade, and repeat.
+- Boss Rush: Face bosses consecutively with minimal downtime.
+- Deep Dive: Endless sequence of escalating rooms with staged intensity per level.
+- Shooting Range: Safe test arena with a terminal to spawn enemies and toggle invincibility.
 
-## Rendering, Assets, and Hitboxes
-- Weapon art
-  - `src/systems/WeaponVisuals.js` preloads weapon PNGs, sizes them by desired onâ€‘screen height, and tracks muzzle positions for effects.
-- Enemy art overlays
-  - Enemies render with PNG overlays that flip left/right toward the player. Base physics sprites are hidden.
-  - Movement body: unified 12Ã—12 for consistent navigation & barricade collision.
-  - Bullet hitboxes: separate invisible Arcade bodies follow each overlay and match its display size so bullets collide on visual width/height.
-  - Assets are preloaded in `BootScene`; missing textures are lazyâ€‘loaded as a fallback.
-- VFX lifecycle
-  - Sniper aim lines, prism beams, melee lines, indicators, and boss dash hints are purged on death.
+## Controls
+- Move: WASD
+- Shoot: Left Mouse Button
+- Dash: Space
+- Interact: E (shop, mode select, portal, terminal)
+- Swap Weapon: Q (when two are equipped)
+- Ability: F
+- Melee: C
+- Loadout: Tab (open weapon/armour/build editor)
 
-## Combat Model
-- Bullets
-  - Player bullets: pierce and explosive cores, particle tracers, barricade damage on splash.
-  - Sniper enemy bullets: red tracer tail, +15% velocity, manual lineâ€‘toâ€‘rect collision to avoid tunneling.
-- Lasers
-  - Player laser heat/overheat; prism aimâ€‘thenâ€‘beam and sweeping beam use beamâ€‘toâ€‘rect intersection.
-- Melee
-  - Player melee: windup â†’ sweep â†’ recover with bright sweep line; melee enemies use similar cone checks.
-- Rook shield
-  - 90Â° frontal arc blocks nonâ€‘rail bullets via angular sector + outer arc radius test.
+## Core Gameplay Loop
+1. Prepare in the Hub (restore shield/HP, edit loadout, buy gear, choose a mode).
+2. Enter the portal to fight enemies in procedural rooms with destructible/indestructible cover.
+3. Clear waves, collect resources, and either advance to the next room/level or fight a boss.
+4. Return to the Hub to re?equip, upgrade, and push further.
 
-## Enemies (selection)
-- Shredder (melee), Charger (runner), Shooter, MachineGunner, Rocketeer, Sniper.
-- Elites: Prism (laser), Snitch (kite/call), Rook (shield), Bombardier (grenades + charge).
-- Visual scaling (overlay only)
-  - Charger slightly smaller; Shooter +15%; Snitch +30%; Prism +30%; Rook +15%; Bombardier +20%.
-- Bombardier charge
-  - Autoâ€‘swaps art to BombardierSpecial while charging (preloaded swap; no blanking).
+## Weapons, Loadout, and Builds
+- Two weapon slots; swap with Q. Each weapon supports 3 mods + 1 core.
+- Armour slot affects survivability and unique interactions (e.g., reflect, regen, utility).
+- Laser weapons have heat/overheat; ballistics use mags/reload; explosives splash and chip cover.
+- The Loadout overlay (Tab) edits your build without pausing the game.
 
-## Bosses
-- Dasher and Shotgunner variants. Dash hint and other VFX are purged on death.
+## Enemies & AI
+- Mass?Produced Drones: Melee, Runner, Shooter, Machine Gunner, Rocketeer, Sniper.
+- Elite Drones: Grenadier (grenades), Prism (aim?then?beam and sweep), Snitch (kite/call), Rook (front shield).
+- State machines drive windups, sweeps, kiting, strafing, or charges; pathfinding reroutes around cover.
 
-## Barricades & Cover
-- Destructible (soft) and indestructible (hard) walls block movement and bullets. Explosions and some enemies/boss can break soft walls.
+## Combat Systems
+- Bullets: hitscan lines + pooled physics images; pierce/rail/explosive cores with muzzle flashes and sparks.
+- Lasers: beam clipped against cover, continuous damage ticks, overheat/cooldown dynamics.
+- Melee: wide acuity cone with synchronized VFX and hit timing.
+- Barricades: soft (destructible) and hard (indestructible) tiles block shots and movement; splash damages soft.
+- Shield: delayed regen and break effects; optional on?break responses from armour or builds.
 
-## GitHub Pages
-- Source: `main` branch, folder `docs` (Settings â†’ Pages â†’ Deploy from a branch â†’ `main` / `/docs`).
-- Local dev: serve repo root (e.g., `npx http-server .`) and open `index.html`, or open `docs/index.html` to mirror Pages.
+## Highlights
+- Responsive feel: low?latency input, generous animation timing, additive VFX for clarity.
+- Readable battlefields: thin hitscan overlays on bullets and lasers ensure what you see is what you hit.
+- Light but robust AI: simple state machines + grid pathfinding keep behavior dynamic without being opaque.
+- Browser?native: ES modules, no build step; runs on desktop browsers via a single index.html.
 
-## Contributing
-- Issues and PRs welcome. Please keep PRs focused; open an issue first for larger changes.
+## Running & Building
+- Play via GitHub Pages or any static server. Locally: 
+px http-server . and open the root index.html.
+- The playable app lives under docs/ for GitHub Pages (Settings ¡ú Pages ¡ú Deploy from branch: main /docs).
 
-
+## Repository Layout
+- docs/index.html ¡ª entry point used by Pages and local dev.
+- docs/src/scenes ¡ª Hub, Combat, Boss, UI, Start, Menu, Boot.
+- docs/src/core ¡ª GameState, SaveManager, weapons, mods, abilities, config, RNG, input.
+- docs/src/systems ¡ª ProceduralGen, Pathfinding, Effects, WeaponVisuals, EnemyFactory.
+- docs/src/ui ¡ª Bars, buttons, panels.
