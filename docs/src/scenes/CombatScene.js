@@ -29,49 +29,65 @@ export default class CombatScene extends Phaser.Scene {
     const title = this.add.text(width / 2, 80, 'Terminal - Spawn', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
     const y0 = 105; const line = 26; const cx = width / 2;
     const addBtn = (ix, label, fn) => makeTextButton(this, cx, y0 + ix * line, label, fn);
+    const addBtnAt = (x, y, label, fn) => makeTextButton(this, x, y, label, fn);
     const sp = (fn) => {
       const px = this.player.x + Phaser.Math.Between(-40, 40);
       const py = this.player.y + Phaser.Math.Between(-40, 40);
       return fn(this, px, py);
     };
-    const b1 = addBtn(0, 'Spawn Melee', () => { this.enemies.add(sp(createEnemy)); });
-    const b2 = addBtn(1, 'Spawn Runner', () => { this.enemies.add(sp(createRunnerEnemy)); });
-    const b3 = addBtn(2, 'Spawn Shooter', () => { this.enemies.add(sp(createShooterEnemy)); });
-    const b4 = addBtn(3, 'Spawn MachineGunner', () => { this.enemies.add(sp(createMachineGunnerEnemy)); });
-    const b5 = addBtn(4, 'Spawn Rocketeer', () => { this.enemies.add(sp(createRocketeerEnemy)); });
-    const b6 = addBtn(5, 'Spawn Sniper', () => { this.enemies.add(sp(createSniperEnemy)); });
-    const b7 = addBtn(6, 'Spawn Grenadier', () => { this.enemies.add(sp(createGrenadierEnemy)); });
-    const b8 = addBtn(7, 'Spawn Prism', () => { this.enemies.add(sp(createPrismEnemy)); });
-    const b9 = addBtn(8, 'Spawn Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); });
-    const b10 = addBtn(9, 'Spawn Rook', () => { this.enemies.add(sp(createRookEnemy)); });
-    // In Shooting Range, hide the Spawn Boss option
-    const nodes = [title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10];
-    let row = 11;
+    // EXPANDED TERMINAL: wider layout with three categories
+    const colGap = 160;
+    const col1X = width / 2 - colGap;  // Mass-Produced Drones
+    const col2X = width / 2;           // Elite Drones
+    const col3X = width / 2 + colGap;  // Misc
+    const r0 = y0 - 4;
+    const rLine = 24;
+
+    const headerStyle = { fontFamily: 'monospace', fontSize: 14, color: '#ffff66' };
+    const h1 = this.add.text(col1X, r0, 'Mass-Produced Drones', headerStyle).setOrigin(0.5, 0);
+    const h2 = this.add.text(col2X, r0, 'Elite Drones', headerStyle).setOrigin(0.5, 0);
+    const h3 = this.add.text(col3X, r0, 'Misc', headerStyle).setOrigin(0.5, 0);
+
+    const nodes = [title, h1, h2, h3];
+    let r = 1;
+    // Mass-Produced (normal)
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Spawn Melee', () => { this.enemies.add(sp(createEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Spawn Runner', () => { this.enemies.add(sp(createRunnerEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Spawn Shooter', () => { this.enemies.add(sp(createShooterEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'Spawn MachineGunner', () => { this.enemies.add(sp(createMachineGunnerEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 4), 'Spawn Rocketeer', () => { this.enemies.add(sp(createRocketeerEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 5), 'Spawn Sniper', () => { this.enemies.add(sp(createSniperEnemy)); }));
+
+    // Elite
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Spawn Grenadier', () => { this.enemies.add(sp(createGrenadierEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 1), 'Spawn Prism', () => { this.enemies.add(sp(createPrismEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Spawn Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 3), 'Spawn Rook', () => { this.enemies.add(sp(createRookEnemy)); }));
+    // Boss only when not in Range
     if (!this.gs?.shootingRange) {
-      const b11 = addBtn(row, 'Spawn Boss', () => { this.enemies.add(sp((sc, x, y) => { const e = createBoss(sc, x, y, 600, 20, 50); e.isEnemy = true; return e; })); });
-      nodes.push(b11);
-      row += 2;
+      nodes.push(addBtnAt(col2X, r0 + rLine * (r + 5), 'Spawn Boss', () => {
+        this.enemies.add(sp((sc, x, y) => { const e = createBoss(sc, x, y, 600, 20, 50); e.isEnemy = true; return e; }));
+      }));
     }
-    // Shooting Range tools
+
+    // Misc
+    let miscRow = 0;
     if (this.gs?.shootingRange) {
       if (typeof this._rangeInvincible !== 'boolean') this._rangeInvincible = false;
       const label = () => (this._rangeInvincible ? 'Toggle Damage: Invincible (On)' : 'Toggle Damage: Invincible (Off)');
-      const bInv = addBtn(row, label(), () => {
+      const bInv = addBtnAt(col3X, r0 + rLine * (miscRow++ + r), label(), () => {
         this._rangeInvincible = !this._rangeInvincible;
         try { bInv.setText(label()); } catch (_) {}
       });
       nodes.push(bInv);
-      row += 1;
     }
-    // Clear Enemies: remove all non-dummy enemies only (keep dummy and projectiles intact)
-    const bClear = addBtn(row, 'Clear Enemies', () => {
-      try {
-        const list = (this.enemies?.getChildren?.() || []).slice();
-        list.forEach((e) => { try { if (e && e.active && !e.isDummy) e.destroy(); } catch (_) {} });
-      } catch (_) {}
+    const bClear = addBtnAt(col3X, r0 + rLine * (miscRow++ + r), 'Clear Enemies', () => {
+      try { const list = (this.enemies?.getChildren?.() || []).slice(); list.forEach((e) => { try { if (e && e.active && !e.isDummy) e.destroy(); } catch (_) {} }); } catch (_) {}
     });
     nodes.push(bClear);
-    const close = makeTextButton(this, cx, y0 + (row + 2) * line, 'Close', () => this.closePanel([...nodes, close]));
+
+    // Close button at the very bottom
+    const close = makeTextButton(this, width / 2, panelY + panelH - 20, 'Close', () => this.closePanel([...nodes, close]));
     this.panel._extra = [...nodes, close];
   }
 
