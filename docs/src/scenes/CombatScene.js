@@ -23,7 +23,8 @@ export default class CombatScene extends Phaser.Scene {
   openTerminalPanel() {
     if (this.panel) return;
     const { width } = this.scale;
-    const panelW = 360; const panelH = 300; const panelY = 60;
+    // Larger terminal to avoid cramped layout
+    const panelW = 560; const panelH = 460; const panelY = 60;
     this.panel = drawPanel(this, width / 2 - panelW / 2, panelY, panelW, panelH);
     this.panel._type = 'terminal';
     const title = this.add.text(width / 2, 80, 'Terminal - Spawn', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
@@ -36,12 +37,12 @@ export default class CombatScene extends Phaser.Scene {
       return fn(this, px, py);
     };
     // EXPANDED TERMINAL: wider layout with three categories
-    const colGap = 160;
+    const colGap = 180; // widen columns spacing
     const col1X = width / 2 - colGap;  // Mass-Produced Drones
     const col2X = width / 2;           // Elite Drones
     const col3X = width / 2 + colGap;  // Misc
-    const r0 = y0 - 4;
-    const rLine = 24;
+    const r0 = y0 - 2;
+    const rLine = 28; // taller line spacing to prevent overlap
 
     const headerStyle = { fontFamily: 'monospace', fontSize: 14, color: '#ffff66' };
     const h1 = this.add.text(col1X, r0, 'Mass-Produced Drones', headerStyle).setOrigin(0.5, 0);
