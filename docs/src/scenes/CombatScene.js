@@ -4274,6 +4274,13 @@ export default class CombatScene extends Phaser.Scene {
             try { e._igniteIndicator.setPosition(e.x, e.y - 14); } catch (_) {}
           }
         }
+        // Barricade hit VFX at the beam endpoint (both hard and soft)
+        try {
+          if (hit.hitKind === 'soft' || hit.hitKind === 'hard') {
+            const col = (hit.hitKind === 'soft') ? 0xC8A165 : 0xaaaaaa;
+            impactBurst(this, ex, ey, { color: col, size: 'small' });
+          }
+        } catch (_) {}
         // Damage soft barricades intersecting the beam
         try {
           const arr = this.barricadesSoft?.getChildren?.() || [];
@@ -4305,7 +4312,7 @@ export default class CombatScene extends Phaser.Scene {
     const ex0 = sx + Math.cos(angle) * maxLen;
     const ey0 = sy + Math.sin(angle) * maxLen;
     const ray = new Phaser.Geom.Line(sx, sy, ex0, ey0);
-    let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null;
+    let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null; let hitKind = null; let hitBarricade = null;
     const testGroups = [this.barricadesHard, this.barricadesSoft];
     for (let gi = 0; gi < testGroups.length; gi += 1) {
       const g = testGroups[gi]; if (!g) continue;
@@ -4316,7 +4323,7 @@ export default class CombatScene extends Phaser.Scene {
         const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
         if (pts && pts.length) {
           const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
-          if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; }
+          if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitKind = (gi === 0) ? 'hard' : 'soft'; hitBarricade = s; hitEnemy = null; }
         }
       }
     }
@@ -4353,7 +4360,7 @@ export default class CombatScene extends Phaser.Scene {
                 const bx = sx + dxr * t; const by = sy + dyr * t;
                 const ddx = bx - sx; const ddy = by - sy; const d2 = ddx * ddx + ddy * ddy;
                 if (d2 < bestD2) {
-                  bestD2 = d2; ex = bx; ey = by; hitEnemy = null;
+                  bestD2 = d2; ex = bx; ey = by; hitEnemy = null; hitKind = 'rook'; hitBarricade = null;
                   this._lastLaserBlockedAt = { x: ex, y: ey, t: this.time.now };
                 }
               }
@@ -4366,10 +4373,10 @@ export default class CombatScene extends Phaser.Scene {
       const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
       if (pts && pts.length) {
         const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; }
+        if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; hitKind = null; hitBarricade = null; }
       }
     }
-    return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy };
+    return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy, hitKind, hitBarricade };
   }
 
   // Spawn a temporary fire field that applies ignite to enemies inside
