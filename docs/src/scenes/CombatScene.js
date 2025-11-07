@@ -643,7 +643,8 @@ export default class CombatScene extends Phaser.Scene {
       this.bullets,
       this.barricadesHard,
       (b, s) => this.onBulletHitBarricade(b, s),
-      (b, s) => !(b && b._rail),
+      // Skip generic handler for rail and caustic grenades (primary/cluster)
+      (b, s) => !(b && (b._rail || b._cc || b._ccCluster)),
       this,
     );
     this.physics.add.collider(
@@ -652,7 +653,8 @@ export default class CombatScene extends Phaser.Scene {
       (b, s) => this.onBulletHitBarricade(b, s),
       (b, s) => {
         if (!b || !s) return false;
-        if (b._rail) return false; // rail pierces
+        // rail pierces; caustic handled by specialized handler
+        if (b._rail || b._cc || b._ccCluster) return false;
         if (b._core === 'pierce') {
           try {
             const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
@@ -718,7 +720,7 @@ export default class CombatScene extends Phaser.Scene {
           const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
           for (let i = 0; i < count; i += 1) {
             const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-            const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
             const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
             c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
             c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
@@ -926,6 +928,32 @@ export default class CombatScene extends Phaser.Scene {
         });
         // Splash to barricades now 100%
         this.damageSoftBarricadesInRadius(b.x, b.y, radius, (b.damage || 10));
+        // Cluster Bomb: emit 8 bomblets on enemy impact
+        if (b._rocket && b._clusterBomb) {
+          const ex = b.x; const ey = b.y;
+          const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+          for (let i = 0; i < count; i += 1) {
+            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
+            const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+            const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+            c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+            c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+            c.update = () => {
+              try {
+                const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                try { const enemies2 = this.enemies?.getChildren?.() || []; for (let k = 0; k < enemies2.length; k += 1) { const e2 = enemies2[k]; if (!e2?.active) continue; const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; } } } catch (_) {}
+                try { const scanBarr = (grp) => { const arr2 = grp?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } }; scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft); } catch (_) {}
+                if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                  const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                  try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                  try { const list = this.enemies?.getChildren?.() || []; for (let m = 0; m < list.length; m += 1) { const t = list[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                  try { c.destroy(); } catch (_) {}
+                }
+              } catch (_) { try { c.destroy(); } catch (__ ) {} }
+            };
+          }
+        }
         // Drop fire field on any explosive detonation, not just when reaching target
         try {
           if (b._firefield) {
@@ -1167,6 +1195,30 @@ export default class CombatScene extends Phaser.Scene {
       });
       // Also damage nearby destructible barricades
       this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10));
+      // Cluster Bomb: spawn 8 bomblets (orange) on barricade impact
+      if (b._rocket && b._clusterBomb) {
+        const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+        for (let i = 0; i < count; i += 1) {
+          const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+          const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+          const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+          c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+          c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+          c.update = () => {
+            try {
+              const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+              try { const enemies2 = this.enemies?.getChildren?.() || []; for (let k = 0; k < enemies2.length; k += 1) { const e2 = enemies2[k]; if (!e2?.active) continue; const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; } } } catch (_) {}
+              try { const scanBarr = (grp) => { const arr2 = grp?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } }; scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft); } catch (_) {}
+              if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                try { const list = this.enemies?.getChildren?.() || []; for (let m = 0; m < list.length; m += 1) { const t = list[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                try { c.destroy(); } catch (_) {}
+              }
+            } catch (_) { try { c.destroy(); } catch (__ ) {} }
+          };
+        }
+      }
       // Ensure fire field spawns on barricade detonation as well
       try { if (b._firefield) this.spawnFireField(ex, ey, radius); } catch (_) {}
     }
@@ -1560,6 +1612,8 @@ export default class CombatScene extends Phaser.Scene {
         // Smart Explosives core flags
         b._smartExplosives = !!weapon._smartExplosives;
         b._firefield = !!weapon._firefield;
+        // Cluster Bomb core
+        b._clusterBomb = !!weapon._clusterBomb;
         if (b._smartExplosives) {
           const scale = (typeof weapon._detectScale === 'number') ? weapon._detectScale : 0.65;
           b._detectR = Math.max(8, Math.floor((b._blastRadius || 70) * scale));
@@ -1608,6 +1662,30 @@ export default class CombatScene extends Phaser.Scene {
                   }
                 });
                 this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                // Cluster Bomb: spawn 8 orange bomblets (no toxin)
+                if (b._clusterBomb) {
+                  const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+                  for (let i = 0; i < count; i += 1) {
+                    const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+                    const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                    const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+                    c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+                    c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+                    c.update = () => {
+                      try {
+                        const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                        try { const enemies2 = this.enemies?.getChildren?.() || []; for (let k = 0; k < enemies2.length; k += 1) { const e2 = enemies2[k]; if (!e2?.active) continue; const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; } } } catch (_) {}
+                        try { const scanBarr = (grp) => { const arr2 = grp?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } }; scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft); } catch (_) {}
+                        if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                          const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                          try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                          try { const list = this.enemies?.getChildren?.() || []; for (let m = 0; m < list.length; m += 1) { const t = list[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                          try { c.destroy(); } catch (_) {}
+                        }
+                      } catch (_) { try { c.destroy(); } catch (__ ) {} }
+                    };
+                  }
+                }
                 if (b._firefield) {
                   this.spawnFireField(ex, ey, radius);
                   const r2n = radius * radius; const nowI = this.time.now;
@@ -1644,6 +1722,29 @@ export default class CombatScene extends Phaser.Scene {
                     }
                   });
                   this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                  if (b._clusterBomb) {
+                    const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+                    for (let i = 0; i < count; i += 1) {
+                      const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+                      const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                      const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+                      c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+                      c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+                      c.update = () => {
+                        try {
+                          const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                          try { const enemies2 = this.enemies?.getChildren?.() || []; for (let k = 0; k < enemies2.length; k += 1) { const e2 = enemies2[k]; if (!e2?.active) continue; const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; } } } catch (_) {}
+                          try { const scanBarr = (grp) => { const arr2 = grp?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } }; scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft); } catch (_) {}
+                          if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                            const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                            try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                            try { const arr2 = this.enemies?.getChildren?.() || []; for (let m = 0; m < arr2.length; m += 1) { const t = arr2[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                            try { c.destroy(); } catch (_) {}
+                          }
+                        } catch (_) { try { c.destroy(); } catch (__ ) {} }
+                      };
+                    }
+                  }
                   if (b._firefield) {
                     this.spawnFireField(ex, ey, radius);
                     const r2n = radius * radius; const nowI = this.time.now;
@@ -1686,6 +1787,29 @@ export default class CombatScene extends Phaser.Scene {
                     }
                   });
                   this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+                  if (b._clusterBomb) {
+                    const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+                    for (let i = 0; i < count; i += 1) {
+                      const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+                      const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                      const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+                      c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+                      c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+                      c.update = () => {
+                        try {
+                          const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                          try { const enemies2 = this.enemies?.getChildren?.() || []; for (let k = 0; k < enemies2.length; k += 1) { const e2 = enemies2[k]; if (!e2?.active) continue; const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; } } } catch (_) {}
+                          try { const scanBarr = (grp) => { const arr2 = grp?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } }; scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft); } catch (_) {}
+                          if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                            const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                            try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                            try { const arr2 = this.enemies?.getChildren?.() || []; for (let m = 0; m < arr2.length; m += 1) { const t = arr2[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                            try { c.destroy(); } catch (_) {}
+                          }
+                        } catch (_) { try { c.destroy(); } catch (__ ) {} }
+                      };
+                    }
+                  }
                   if (b._firefield) {
                     this.spawnFireField(ex, ey, radius);
                     const r2n = radius * radius; const nowI = this.time.now;
@@ -1744,6 +1868,31 @@ export default class CombatScene extends Phaser.Scene {
             });
             // Also damage nearby destructible barricades
             this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
+            // Cluster Bomb: emit 8 child bomblets
+            if (b._clusterBomb) {
+              const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+              for (let i = 0; i < count; i += 1) {
+                const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
+                const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+                const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+                c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+                c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+                c.update = () => {
+                  try {
+                    const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                    try { const enemies2 = this.enemies?.getChildren?.() || []; for (let k = 0; k < enemies2.length; k += 1) { const e2 = enemies2[k]; if (!e2?.active) continue; const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; } } } catch (_) {}
+                    try { const scanBarr = (grp) => { const arr2 = grp?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } }; scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft); } catch (_) {}
+                    if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                      const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                      try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                      try { const list = this.enemies?.getChildren?.() || []; for (let m = 0; m < list.length; m += 1) { const t = list[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                      try { c.destroy(); } catch (_) {}
+                    }
+                  } catch (_) { try { c.destroy(); } catch (__ ) {} }
+                };
+              }
+            }
             if (b._firefield) {
               this.spawnFireField(ex, ey, radius);
               const r2n = radius * radius; const nowI = this.time.now;
@@ -4665,7 +4814,7 @@ export default class CombatScene extends Phaser.Scene {
         const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
         for (let i = 0; i < count; i += 1) {
           const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-          const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
           c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;

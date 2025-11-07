@@ -242,6 +242,29 @@ export const weaponCores = [
     },
   },
   {
+    id: 'core_cluster_bomb',
+    name: 'Cluster Bomb',
+    onlyFor: 'rocket',
+    desc: [
+      '+ Spawns 8 cluster bomblets on detonation',
+      '- Direct hit damage set to 5',
+      '- Explosion damage set to 20',
+      'Reload time penalty +30%'
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.projectile !== 'rocket') return w;
+      const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 1800;
+      const reloadMs = Math.max(200, Math.floor(baseReload * 1.3));
+      return {
+        ...w,
+        damage: 5,
+        aoeDamage: 20,
+        reloadMs,
+        _clusterBomb: true,
+      };
+    },
+  },
+  {
     id: 'core_smart_explosives_mgl',
     name: 'Smart Explosives',
     onlyFor: 'mgl',
