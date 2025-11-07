@@ -278,8 +278,7 @@ export default class UIScene extends Phaser.Scene {
     const panel = this.add.graphics();
 
     // 3-column layout panel
-    const panelW = 780; const panelH = 520; const top = 40;
-    const left = width / 2 - panelW / 2;
+    const desiredW = 780; const desiredH = 520; const margin = 16;`n    const panelW = Math.min(desiredW, Math.max(520, width - margin * 2));`n    const panelH = Math.min(desiredH, Math.max(320, height - margin * 2));`n    const top = Math.max(margin, Math.floor((height - panelH) / 2));`n    const left = Math.floor((width - panelW) / 2);
     panel.fillStyle(0x111111, 0.92).fillRect(left, top, panelW, panelH);
     panel.lineStyle(2, 0xffffff, 1).strokeRect(left, top, panelW, panelH);
     nodes.push(this.add.text(width / 2, top + 12, 'Loadout & Stats (Tab to close)', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5));

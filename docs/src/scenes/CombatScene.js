@@ -23,8 +23,12 @@ export default class CombatScene extends Phaser.Scene {
   openTerminalPanel() {
     if (this.panel) return;
     const { width } = this.scale;
-    // Larger terminal to avoid cramped layout
-    const panelW = 720; const panelH = 520; const panelY = 60;
+    // Larger terminal; clamp to viewport height so it doesn't run off-screen
+    const desiredW = 720; const desiredH = 520; const margin = 20;
+    const panelW = Math.min(desiredW, Math.max(360, width - margin * 2));
+    const maxH = Math.max(260, this.scale.height - margin * 2);
+    const panelH = Math.min(desiredH, maxH);
+    const panelY = Math.max(margin, Math.floor((this.scale.height - panelH) / 2));
     this.panel = drawPanel(this, width / 2 - panelW / 2, panelY, panelW, panelH);
     this.panel._type = 'terminal';
     const title = this.add.text(width / 2, 80, 'Terminal - Spawn', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
