@@ -15,6 +15,15 @@ export const abilityDefs = [
     name: 'Repulsion Pulse',
     desc: 'Release an expanding orange ring that blocks enemy projectiles and pushes enemies away.',
   },
+  {
+    id: 'caustic_cluster',
+    name: 'Caustic Cluster Grenade',
+    desc: [
+      'Throw a caustic grenade to the cursor that explodes,',
+      'spawning 5 cluster bomblets that spread out and explode.',
+      'Each detonation leaves a green toxin field (6s). Enemies inside become disoriented and less accurate.',
+    ].join('\n'),
+  },
 ];
 
 export function getAbilityById(id) {

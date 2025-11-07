@@ -289,14 +289,14 @@ export const weaponCores = [
     id: 'core_lead_storm',
     name: 'Lead Storm',
     onlyFor: 'shotgun',
-    desc: '+200% fire rate\nPellets: 10\n-50% damage\n+75% spread',
+    desc: '+150% fire rate\n+ Pellets per shot set to 10\n-65% damage\n+85% spread\n+ Mag size set to 16',
     apply: (w) => {
       // Apply only when the weapon matches the required id
       if (!w || w.id !== 'shotgun') return w;
-      const faster = Math.max(60, Math.floor((w.fireRateMs || 300) / 3));
-      const newDmg = Math.max(1, Math.floor((w.damage || 1) * 0.5));
-      const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 1.75));
-      return { ...w, fireRateMs: faster, pelletCount: 10, damage: newDmg, spreadDeg: newSpread };
+      const faster = Math.max(60, Math.floor((w.fireRateMs || 300) / 2.5));
+      const newDmg = Math.max(1, Math.floor((w.damage || 1) * 0.35));
+      const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 1.85));
+      return { ...w, fireRateMs: faster, pelletCount: 10, damage: newDmg, spreadDeg: newSpread, magSize: 16 };
     },
   },
   {
@@ -324,8 +324,8 @@ export const weaponCores = [
     id: 'core_rifle_incendiary',
     name: 'Incendiary Chamber',
     onlyFor: 'rifle',
-    desc: [
-      '+ +2 Ignite value per bullet on hit',
+  desc: [
+      '+ Bullets apply Ignition buildup on hit',
       '- Fire rate reduced by 25%',
       '- Direct damage -2',
     ].join('\n'),
@@ -333,7 +333,7 @@ export const weaponCores = [
       if (!w || w.id !== 'rifle') return w;
       const slower = Math.floor((w.fireRateMs || 111) * 1.25);
       const newDmg = Math.max(1, (w.damage || 0) - 2);
-      return { ...w, fireRateMs: slower, damage: newDmg, _igniteOnHit: 2 };
+      return { ...w, fireRateMs: slower, damage: newDmg, _igniteOnHit: 5 };
     },
   },
   {

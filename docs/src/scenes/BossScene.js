@@ -357,7 +357,9 @@ export default class BossScene extends Phaser.Scene {
       try { b.destroy(); } catch (_) {}
     });
   // Boss bullets also collide with destructible barricades
-  this.physics.add.collider(this.bossBullets, this.barricadesSoft, (b, s) => this.onBossBulletHitBarricade(b, s));
+    this.physics.add.collider(this.bossBullets, this.barricadesSoft, (b, s) => this.onBossBulletHitBarricade(b, s));
+    // Player bullets (rockets, caustic) collide with barricades in boss arena
+    this.physics.add.collider(this.bullets, this.barricadesSoft, (b, s) => this.onPlayerBulletHitBarricade(b, s));
 
     // Boss HP bar at top (shorter to avoid UI overlap)
     const barW = Math.min(420, Math.max(200, width - 220));
@@ -1293,6 +1295,10 @@ export default class BossScene extends Phaser.Scene {
           this.deployRepulsionPulse();
           this.ability.cooldownMs = 5000; // 5s universal for Repulsion Pulse
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
+        } else if (abilityId === 'caustic_cluster') {
+          this.deployCausticCluster();
+          this.ability.cooldownMs = 1000; // 1s for testing
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
     }
@@ -1580,6 +1586,54 @@ export default class BossScene extends Phaser.Scene {
     }
 
     // Update BIT units ??replicate CombatScene behavior with boss as the only target
+
+    // Update toxin fields (apply toxin buildup to boss)
+    if (!this._toxTickAccum) this._toxTickAccum = 0;
+    this._toxTickAccum += dt;
+    const txTick = 0.1;
+    if (this._toxTickAccum >= txTick) {
+      const step = this._toxTickAccum; this._toxTickAccum = 0;
+      const nowT = this.time.now;
+      this._toxfields = (this._toxfields || []).filter((f) => {
+        if (nowT >= f.until) { try { f.g?.destroy(); } catch (_) {} try { f.pm?.destroy(); } catch (_) {} return false; }
+        try {
+          f._pulse = (f._pulse || 0) + step;
+          const pulse = 0.9 + 0.2 * Math.sin(f._pulse * 5.5);
+          const jitter = Phaser.Math.Between(-2, 2);
+          const r0 = Math.max(4, Math.floor(f.r * 0.50 * pulse));
+          const r1 = Math.max(6, Math.floor(f.r * 0.85 + jitter));
+          f.g.clear();
+          f.g.fillStyle(0x22aa66, 0.22).fillCircle(f.x, f.y, r0);
+          f.g.fillStyle(0x33ff66, 0.14).fillCircle(f.x, f.y, r1);
+          f.g.lineStyle(2, 0x33ff66, 0.45).strokeCircle(f.x, f.y, f.r + jitter);
+        } catch (_) {}
+        // Green pixel sparks rising from the field (animated like fire field)
+        try {
+          if (!f._sparkAt || nowT >= f._sparkAt) {
+            f._sparkAt = nowT + Phaser.Math.Between(40, 80);
+            for (let i = 0; i < 2; i += 1) {
+              const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              const rr = Phaser.Math.FloatBetween(0, f.r * 0.7);
+              const px = f.x + Math.cos(a) * rr;
+              const py = f.y + Math.sin(a) * rr;
+              pixelSparks(this, px, py, { angleRad: -Math.PI / 2, count: 1, spreadDeg: 24, speedMin: 50, speedMax: 110, lifeMs: 200, color: 0x66ff99, size: 2, alpha: 0.95 });
+            }
+          }
+        } catch (_) {}
+        // Tick toxin on boss
+        const e = this.boss; if (e?.active) {
+          const dx = e.x - f.x; const dy = e.y - f.y; if ((dx * dx + dy * dy) <= (f.r * f.r)) {
+            e._toxinValue = Math.min(10, (e._toxinValue || 0) + (f.toxPerSec || 20) * step);
+            if ((e._toxinValue || 0) >= 10) {
+              e._toxinedUntil = nowT + 2000; e._toxinValue = 0;
+              if (!e._toxinIndicator) { e._toxinIndicator = this.add.graphics(); try { e._toxinIndicator.setDepth(9000); } catch (_) {} e._toxinIndicator.fillStyle(0x33ff33, 1).fillCircle(0, 0, 2); }
+              try { e._toxinIndicator.setPosition(e.x, e.y - 20); } catch (_) {}
+            }
+          }
+        }
+        return true;
+      });
+    }
     if (!this._bits) this._bits = [];
     if (this._bits.length) {
       const dt2 = (this.game?.loop?.delta || 16.7) / 1000;
@@ -1988,6 +2042,39 @@ export default class BossScene extends Phaser.Scene {
   // Player bullet hits a barricade (all barricades here are destructible)
   onBulletHitBarricade(b, s) {
     if (!b || !b.active || !s) return;
+    // Caustic Cluster: detonate and spawn clusters/toxin field
+    if (b._cc || b._ccCluster) {
+      const ex = b.x; const ey = b.y; const r = b._blastRadius || 60; const r2 = r * r;
+      try { impactBurst(this, ex, ey, { color: 0x33ff66, size: 'large', radius: r }); } catch (_) {}
+      try { const boss = this.boss; if (boss?.active) { const dx = boss.x - ex; const dy = boss.y - ey; if ((dx * dx + dy * dy) <= r2) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b._aoeDamage || 5); if (boss.hp <= 0) this.killBoss(boss); } } } catch (_) {}
+      try { this.spawnToxinField(ex, ey, r, 6000, 20); } catch (_) {}
+      if (b._cc) {
+        const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
+        for (let i = 0; i < count; i += 1) {
+          const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+          const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+          const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+          c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+          c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
+          c.update = () => {
+            try {
+              const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+              // Barricade proximity (soft in boss room)
+              try { const arr2 = this.barricadesSoft?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } } catch (_) {}
+              if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                try { impactBurst(this, cx, cy, { color: 0x33ff66, size: 'large', radius: rr }); } catch (_) {}
+                try { this.spawnToxinField(cx, cy, rr, 6000, 20); } catch (_) {}
+                try { const boss2 = this.boss; if (boss2?.active) { const ddx = boss2.x - cx; const ddy = boss2.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { if (typeof boss2.hp !== 'number') boss2.hp = boss2.maxHp || 300; boss2.hp -= (c._aoeDamage || 5); if (boss2.hp <= 0) this.killBoss(boss2); } } } catch (_) {}
+                try { c.destroy(); } catch (_) {}
+              }
+            } catch (_) { try { c.destroy(); } catch (__ ) {} }
+          };
+        }
+      }
+      try { b.destroy(); } catch (_) {}
+      return;
+    }
     const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 50;
     const hp1 = hp0 - dmg;
@@ -2535,6 +2622,106 @@ export default class BossScene extends Phaser.Scene {
     const obj = { x, y, r: radius, until: this.time.now + durationMs, g, pm, em, _pulse: 0 };
     this._firefields.push(obj);
     return obj;
+  }
+
+  // Spawn a toxin field (green) that applies toxin buildup to the boss while inside
+  spawnToxinField(x, y, radius, durationMs = 5000, toxinPerSec = 20) {
+    if (!this._toxfields) this._toxfields = [];
+    const g = this.add.graphics();
+    try { g.setDepth(7000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    // Basic green particles
+    let pm = null; let em = null;
+    try {
+      const texKey = 'toxin_particle';
+      if (!this.textures || !this.textures.exists(texKey)) {
+        const tg = this.make.graphics({ x: 0, y: 0, add: false });
+        tg.clear(); tg.fillStyle(0x99ffcc, 1).fillCircle(6, 6, 3); tg.fillStyle(0x55ff99, 0.9).fillCircle(6, 6, 5); tg.fillStyle(0x22aa66, 0.5).fillCircle(6, 6, 6);
+        tg.generateTexture(texKey, 12, 12); tg.destroy();
+      }
+      pm = this.add.particles(texKey); try { pm.setDepth(7050); } catch (_) {}
+      const zone = new Phaser.Geom.Circle(x, y, Math.max(6, Math.floor(radius * 0.85)));
+      em = pm.createEmitter({ emitZone: { type: 'random', source: zone }, frequency: 40, quantity: 2, lifespan: { min: 500, max: 1000 }, speedY: { min: -30, max: -10 }, speedX: { min: -20, max: 20 }, alpha: { start: 0.9, end: 0 }, scale: { start: 0.8, end: 0 }, gravityY: -20, tint: [0x99ffcc, 0x66ff99, 0x33ff66, 0x22aa66], blendMode: Phaser.BlendModes.ADD });
+    } catch (_) {}
+    try { g.clear(); const inner = Math.max(4, Math.floor(radius * 0.55)); g.fillStyle(0x22aa66, 0.22).fillCircle(x, y, inner); g.fillStyle(0x33ff66, 0.14).fillCircle(x, y, Math.floor(radius * 0.85)); g.lineStyle(2, 0x33ff66, 0.5).strokeCircle(x, y, radius); } catch (_) {}
+    // Initial green pixel spark burst
+    try {
+      const bases = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+      for (let i = 0; i < bases.length; i += 1) {
+        const base = bases[i] + Phaser.Math.FloatBetween(-0.2, 0.2);
+        pixelSparks(this, x, y, { angleRad: base, count: 6, spreadDeg: 38, speedMin: 80, speedMax: 160, lifeMs: 220, color: 0x66ff99, size: 2, alpha: 0.95 });
+      }
+    } catch (_) {}
+    const obj = { x, y, r: radius, until: this.time.now + 6000, g, pm, em, toxPerSec: toxinPerSec, _pulse: 0 };
+    if (!this._toxTickAccum) this._toxTickAccum = 0;
+    this._toxfields.push(obj);
+    return obj;
+  }
+
+  // Ability: Caustic Cluster Grenade (BossScene)
+  deployCausticCluster() {
+    const startX = this.player.x; const startY = this.player.y;
+    const targetX = this.inputMgr.pointer.worldX; const targetY = this.inputMgr.pointer.worldY;
+    const angle = Phaser.Math.Angle.Between(startX, startY, targetX, targetY);
+    const speed = 360; const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
+    const b = this.bullets.get(startX, startY, 'bullet'); if (!b) return;
+    b.setActive(true).setVisible(true); b.setCircle(5).setOffset(-5, -5); try { b.setScale(1.3); } catch (_) {}
+    b.setVelocity(vx, vy); b.setTint(0x33ff66); b._cc = true; b._startX = startX; b._startY = startY; b._targetX = targetX; b._targetY = targetY; b._blastRadius = 60; b._aoeDamage = 5;
+    b.update = () => {
+      try {
+        const dx = b.x - b._startX; const dy = b.y - b._startY; const tx = b._targetX - b._startX; const ty = b._targetY - b._startY;
+        const reached = (dx * dx + dy * dy) >= (tx * tx + ty * ty);
+        let collide = false;
+        // Boss collision
+        try { const boss = this.boss; if (boss?.active) { const rect = boss.getBounds?.() || new Phaser.Geom.Rectangle(boss.x - 10, boss.y - 10, 20, 20); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(b.x, b.y, 6), rect)) collide = true; } } catch (_) {}
+        // Barricades collision
+        try {
+          const scanBarr = (grp) => {
+            const arr = grp?.getChildren?.() || [];
+            for (let i = 0; i < arr.length && !collide; i += 1) {
+              const s = arr[i]; if (!s?.active) continue;
+              const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+              if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(b.x, b.y, 6), rect)) { collide = true; break; }
+            }
+          };
+          scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft);
+        } catch (_) {}
+        if (reached || collide) {
+          const ex = b.x; const ey = b.y; const r = b._blastRadius || 60; const r2 = r * r;
+          try { impactBurst(this, ex, ey, { color: 0x33ff66, size: 'large', radius: r }); } catch (_) {}
+          // Damage boss if in radius
+          try { const boss = this.boss; if (boss?.active) { const ddx = boss.x - ex; const ddy = boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b._aoeDamage || 5); if (boss.hp <= 0) this.killBoss(boss); } } } catch (_) {}
+          // Spawn toxin field
+          try { this.spawnToxinField(ex, ey, r, 6000, 20); } catch (_) {}
+          // Spawn clusters
+          const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
+          for (let i = 0; i < count; i += 1) {
+            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+            const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+            c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+            c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
+            c.update = () => {
+              try {
+                const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                // Boss collide
+                try { const boss2 = this.boss; if (boss2?.active) { const rect2 = boss2.getBounds?.() || new Phaser.Geom.Rectangle(boss2.x - 10, boss2.y - 10, 20, 20); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) collide2 = true; } } catch (_) {}
+                // Barricades collide
+                try { const arr2 = this.barricades?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } } catch (_) {}
+                if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                  const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                  try { impactBurst(this, cx, cy, { color: 0x33ff66, size: 'large', radius: rr }); } catch (_) {}
+                  try { this.spawnToxinField(cx, cy, rr, 6000, 20); } catch (_) {}
+                  try { const boss3 = this.boss; if (boss3?.active) { const ddx2 = boss3.x - cx; const ddy2 = boss3.y - cy; if ((ddx2 * ddx2 + ddy2 * ddy2) <= r2c) { if (typeof boss3.hp !== 'number') boss3.hp = boss3.maxHp || 300; boss3.hp -= (c._aoeDamage || 5); if (boss3.hp <= 0) this.killBoss(boss3); } } } catch (_) {}
+                  try { c.destroy(); } catch (_) {}
+                }
+              } catch (_) { try { c.destroy(); } catch (__ ) {} }
+            };
+          }
+          try { b.destroy(); } catch (_) {}
+        }
+      } catch (_) { try { b.destroy(); } catch (__ ) {} }
+      const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
+    };
   }
 }
 

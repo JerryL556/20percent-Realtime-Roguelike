@@ -75,6 +75,8 @@ export default class CombatScene extends Phaser.Scene {
       }));
     }
 
+    //
+
     // Misc
     let miscRow = 0;
     if (this.gs?.shootingRange) {
@@ -694,6 +696,76 @@ export default class CombatScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
       if (!b.active || !e.active) return;
+      // Caustic Cluster grenades: on contact, detonate instead of default bullet removal
+      if (b._cc || b._ccCluster) {
+        const ex = b.x; const ey = b.y; const r = b._blastRadius || 60; const r2 = r * r;
+        try { impactBurst(this, ex, ey, { color: 0x33ff66, size: 'large', radius: r }); } catch (_) {}
+        // Apply small explosive damage in radius
+        try {
+          const arr = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const t = arr[i]; if (!t?.active) continue; const dx = t.x - ex; const dy = t.y - ey;
+            if ((dx * dx + dy * dy) <= r2) {
+              const dmg = b._aoeDamage || 5; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg; }
+              else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg; if (t.hp <= 0) { this.killEnemy(t); } }
+            }
+          }
+        } catch (_) {}
+        // Spawn toxin field (6s)
+        try { this.spawnToxinField(ex, ey, r, 6000, 20); } catch (_) {}
+        // If primary, spawn 5 clusters
+        if (b._cc) {
+          const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
+          for (let i = 0; i < count; i += 1) {
+            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+            const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+            c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+            c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
+            c.update = () => {
+              try {
+                const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                // Early detonation on enemy or barricade contact
+                try {
+                  const enemies2 = this.enemies?.getChildren?.() || [];
+                  for (let k = 0; k < enemies2.length; k += 1) {
+                    const e2 = enemies2[k]; if (!e2?.active) continue;
+                    const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12);
+                    if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; }
+                  }
+                } catch (_) {}
+                try {
+                  const scanBarr = (grp) => {
+                    const arr2 = grp?.getChildren?.() || [];
+                    for (let k = 0; k < arr2.length && !collide2; k += 1) {
+                      const s2 = arr2[k]; if (!s2?.active) continue;
+                      const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16);
+                      if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; }
+                    }
+                  };
+                  scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft);
+                } catch (_) {}
+                if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                  const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                  try { impactBurst(this, cx, cy, { color: 0x33ff66, size: 'large', radius: rr }); } catch (_) {}
+                  try { this.spawnToxinField(cx, cy, rr, 6000, 20); } catch (_) {}
+                  try {
+                    const arr3 = this.enemies?.getChildren?.() || [];
+                    for (let m = 0; m < arr3.length; m += 1) {
+                      const t2 = arr3[m]; if (!t2?.active) continue; const ddx = t2.x - cx; const ddy = t2.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) {
+                        const dmg2 = c._aoeDamage || 5; if (t2.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t2.hp !== 'number') t2.hp = t2.maxHp || 20; t2.hp -= dmg2; if (t2.hp <= 0) { this.killEnemy(t2); } }
+                      }
+                    }
+                  } catch (_) {}
+                  try { c.destroy(); } catch (_) {}
+                }
+              } catch (_) { try { c.destroy(); } catch (__ ) {} }
+            };
+          }
+        }
+        try { b.destroy(); } catch (_) {}
+        return;
+      }
       // Rook shield: block non-rail bullets (including rockets) within 90° front arc
       if (e.isRook && !b._rail) {
         try {
@@ -962,6 +1034,9 @@ export default class CombatScene extends Phaser.Scene {
     // Enemy bullets blocked by barricades as well
     this.physics.add.collider(this.enemyBullets, this.barricadesHard, (b, s) => this.onEnemyBulletHitBarricade(b, s));
     this.physics.add.collider(this.enemyBullets, this.barricadesSoft, (b, s) => this.onEnemyBulletHitBarricade(b, s));
+    // Player bullets (rockets, caustic) collide with barricades
+    this.physics.add.collider(this.bullets, this.barricadesHard, (b, s) => this.onPlayerBulletHitBarricade(b, s));
+    this.physics.add.collider(this.bullets, this.barricadesSoft, (b, s) => this.onPlayerBulletHitBarricade(b, s));
 
     // Exit appears when all enemies dead
     this.exitActive = false;
@@ -2214,6 +2289,10 @@ export default class CombatScene extends Phaser.Scene {
           this.deployRepulsionPulse();
           this.ability.cooldownMs = 5000; // 5s for Repulsion Pulse
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
+        } else if (abilityId === 'caustic_cluster') {
+          this.deployCausticCluster();
+          this.ability.cooldownMs = 1000; // 1s for testing
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
     }
@@ -2410,6 +2489,56 @@ export default class CombatScene extends Phaser.Scene {
               e._igniteValue = 0; // reset on trigger
               if (!e._igniteIndicator) { e._igniteIndicator = this.add.graphics(); try { e._igniteIndicator.setDepth(9000); } catch (_) {} e._igniteIndicator.fillStyle(0xff3333, 1).fillCircle(0, 0, 2); }
               try { e._igniteIndicator.setPosition(e.x, e.y - 14); } catch (_) {}
+            }
+          }
+        }
+        return true;
+      });
+    }
+
+    // Update toxin fields (toxin zones)
+    if (!this._txfTickAccum) this._txfTickAccum = 0;
+    this._txfTickAccum += dt;
+    const txfTick = 0.1;
+    if (this._txfTickAccum >= txfTick) {
+      const step = this._txfTickAccum; this._txfTickAccum = 0;
+      const nowT = this.time.now;
+      this._toxfields = (this._toxfields || []).filter((f) => {
+        if (nowT >= f.until) { try { f.g?.destroy(); } catch (_) {} try { f.pm?.destroy(); } catch (_) {} return false; }
+        try {
+          f._pulse = (f._pulse || 0) + step;
+          const pulse = 0.9 + 0.2 * Math.sin(f._pulse * 5.5);
+          const jitter = Phaser.Math.Between(-2, 2);
+          const r0 = Math.max(4, Math.floor(f.r * 0.50 * pulse));
+          const r1 = Math.max(6, Math.floor(f.r * 0.85 + jitter));
+          f.g.clear();
+          f.g.fillStyle(0x22aa66, 0.22).fillCircle(f.x, f.y, r0);
+          f.g.fillStyle(0x33ff66, 0.14).fillCircle(f.x, f.y, r1);
+          f.g.lineStyle(2, 0x33ff66, 0.45).strokeCircle(f.x, f.y, f.r + jitter);
+        } catch (_) {}
+        // Periodic green pixel sparks like fire field
+        try {
+          if (!f._sparkAt || nowT >= f._sparkAt) {
+            f._sparkAt = nowT + Phaser.Math.Between(40, 80);
+            for (let i = 0; i < 2; i += 1) {
+              const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              const rr = Phaser.Math.FloatBetween(0, f.r * 0.7);
+              const px = f.x + Math.cos(a) * rr;
+              const py = f.y + Math.sin(a) * rr;
+              pixelSparks(this, px, py, { angleRad: -Math.PI / 2, count: 1, spreadDeg: 24, speedMin: 50, speedMax: 110, lifeMs: 200, color: 0x66ff99, size: 2, alpha: 0.95 });
+            }
+          }
+        } catch (_) {}
+        // Apply toxin buildup while inside
+        const add = (f.toxPerSec || 20) * step; const r2 = f.r * f.r; const arr = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const e = arr[i]; if (!e?.active) continue;
+          const dx = e.x - f.x; const dy = e.y - f.y; if ((dx * dx + dy * dy) <= r2) {
+            e._toxinValue = Math.min(10, (e._toxinValue || 0) + add);
+            if ((e._toxinValue || 0) >= 10) {
+              e._toxinedUntil = nowT + 2000; e._toxinValue = 0;
+              if (!e._toxinIndicator) { e._toxinIndicator = this.add.graphics(); try { e._toxinIndicator.setDepth(9000); } catch (_) {} e._toxinIndicator.fillStyle(0x33ff33, 1).fillCircle(0, 0, 2); }
+              try { e._toxinIndicator.setPosition(e.x, e.y - 18); } catch (_) {}
             }
           }
         }
@@ -4509,6 +4638,238 @@ export default class CombatScene extends Phaser.Scene {
     const obj = { x, y, r: radius, until: this.time.now + durationMs, g, pm, em, _pulse: 0 };
     this._firefields.push(obj);
     return obj;
+  }
+
+  // Player bullet hits a barricade
+  onPlayerBulletHitBarricade(b, s) {
+    if (!b || !s || !b.active) return;
+    // Caustic Cluster: detonate on contact and spawn clusters if primary
+    if (b._cc || b._ccCluster) {
+      const ex = b.x; const ey = b.y; const r = b._blastRadius || 60; const r2 = r * r;
+      try { impactBurst(this, ex, ey, { color: 0x33ff66, size: 'large', radius: r }); } catch (_) {}
+      // AoE damage to enemies in radius
+      try {
+        const arr = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const e = arr[i]; if (!e?.active) continue; const dx = e.x - ex; const dy = e.y - ey;
+          if ((dx * dx + dy * dy) <= r2) {
+            const dmg = b._aoeDamage || 5; if (e.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg; }
+            else { if (typeof e.hp !== 'number') e.hp = e.maxHp || 20; e.hp -= dmg; if (e.hp <= 0) { this.killEnemy(e); } }
+          }
+        }
+      } catch (_) {}
+      // Toxin field (6s)
+      try { this.spawnToxinField(ex, ey, r, 6000, 20); } catch (_) {}
+      // Spawn clusters if primary
+      if (b._cc) {
+        const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
+        for (let i = 0; i < count; i += 1) {
+          const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+          const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+          const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+          c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+          c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
+          c.update = () => {
+            try {
+              const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+              // Early detonation on barricade contact
+              try {
+                const scanBarr = (grp) => {
+                  const arr2 = grp?.getChildren?.() || [];
+                  for (let k = 0; k < arr2.length && !collide2; k += 1) {
+                    const s2 = arr2[k]; if (!s2?.active) continue;
+                    const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16);
+                    if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; }
+                  }
+                };
+                scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft);
+              } catch (_) {}
+              if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                try { impactBurst(this, cx, cy, { color: 0x33ff66, size: 'large', radius: rr }); } catch (_) {}
+                try { this.spawnToxinField(cx, cy, rr, 6000, 20); } catch (_) {}
+                try { const list = this.enemies?.getChildren?.() || []; for (let m = 0; m < list.length; m += 1) { const t = list[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 5; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                try { c.destroy(); } catch (_) {}
+              }
+            } catch (_) { try { c.destroy(); } catch (__ ) {} }
+          };
+        }
+      }
+      try { b.destroy(); } catch (_) {}
+      return;
+    }
+    // Default player bullet behavior on barricade: explosive rockets already handled at overlap, others simply destroy
+    try { b.destroy(); } catch (_) {}
+  }
+
+  // Spawn a temporary toxin field that applies toxin buildup to enemies inside
+  spawnToxinField(x, y, radius, durationMs = 5000, toxinPerSec = 20) {
+    if (!this._toxfields) this._toxfields = [];
+    const g = this.add.graphics();
+    try { g.setDepth(7000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    // Green mist particles
+    let pm = null; let em = null;
+    try {
+      const texKey = 'toxin_particle';
+      if (!this.textures || !this.textures.exists(texKey)) {
+        const tg = this.make.graphics({ x: 0, y: 0, add: false });
+        tg.clear();
+        tg.fillStyle(0x99ffcc, 1).fillCircle(6, 6, 3);
+        tg.fillStyle(0x55ff99, 0.9).fillCircle(6, 6, 5);
+        tg.fillStyle(0x22aa66, 0.5).fillCircle(6, 6, 6);
+        tg.generateTexture(texKey, 12, 12);
+        tg.destroy();
+      }
+      pm = this.add.particles(texKey);
+      try { pm.setDepth(7050); } catch (_) {}
+      const zone = new Phaser.Geom.Circle(x, y, Math.max(6, Math.floor(radius * 0.85)));
+      em = pm.createEmitter({
+        emitZone: { type: 'random', source: zone },
+        frequency: 40,
+        quantity: 2,
+        lifespan: { min: 500, max: 1000 },
+        speedY: { min: -30, max: -10 },
+        speedX: { min: -20, max: 20 },
+        alpha: { start: 0.9, end: 0 },
+        scale: { start: 0.8, end: 0 },
+        gravityY: -20,
+        tint: [0x99ffcc, 0x66ff99, 0x33ff66, 0x22aa66],
+        blendMode: Phaser.BlendModes.ADD,
+      });
+    } catch (_) {}
+    try {
+      g.clear();
+      const inner = Math.max(4, Math.floor(radius * 0.55));
+      g.fillStyle(0x22aa66, 0.22).fillCircle(x, y, inner);
+      g.fillStyle(0x33ff66, 0.14).fillCircle(x, y, Math.floor(radius * 0.85));
+      g.lineStyle(2, 0x33ff66, 0.5).strokeCircle(x, y, radius);
+    } catch (_) {}
+    // Initial green pixel spark burst (match fire field, tinted green)
+    try {
+      const bases = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+      for (let i = 0; i < bases.length; i += 1) {
+        const base = bases[i] + Phaser.Math.FloatBetween(-0.2, 0.2);
+        pixelSparks(this, x, y, { angleRad: base, count: 6, spreadDeg: 38, speedMin: 80, speedMax: 160, lifeMs: 220, color: 0x66ff99, size: 2, alpha: 0.95 });
+      }
+    } catch (_) {}
+    const obj = { x, y, r: radius, until: this.time.now + 6000, g, pm, em, toxPerSec: toxinPerSec, _pulse: 0 };
+    if (!this._toxTickAccum) this._toxTickAccum = 0;
+    this._toxfields.push(obj);
+    return obj;
+  }
+
+  // Ability: Caustic Cluster Grenade
+  deployCausticCluster() {
+    const startX = this.player.x; const startY = this.player.y;
+    const targetX = this.inputMgr.pointer.worldX; const targetY = this.inputMgr.pointer.worldY;
+    const angle = Phaser.Math.Angle.Between(startX, startY, targetX, targetY);
+    const speed = 360; // mid-flight speed similar to rockets
+    const vx = Math.cos(angle) * speed; const vy = Math.sin(angle) * speed;
+    const b = this.bullets.get(startX, startY, 'bullet');
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.setCircle(5).setOffset(-5, -5);
+    try { b.setScale(1.3); } catch (_) {}
+    b.setVelocity(vx, vy);
+    b.setTint(0x33ff66);
+    b._cc = true; b._startX = startX; b._startY = startY; b._targetX = targetX; b._targetY = targetY;
+    b._blastRadius = 60; // > MGL (52) and < Rocket (70)
+    b._aoeDamage = 5;
+    b.update = () => {
+      try {
+        const dx = b.x - b._startX; const dy = b.y - b._startY;
+        const tx = b._targetX - b._startX; const ty = b._targetY - b._startY;
+        const reached = (dx * dx + dy * dy) >= (tx * tx + ty * ty);
+        // Collision with enemies or barricades triggers detonation
+        let collide = false;
+        try {
+          const enemies = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < enemies.length; i += 1) {
+            const e = enemies[i]; if (!e?.active) continue;
+            const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 6, e.y - 6, 12, 12);
+            if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(b.x, b.y, 6), rect)) { collide = true; break; }
+          }
+        } catch (_) {}
+        try {
+          const scanBarr = (grp) => {
+            const arr = grp?.getChildren?.() || [];
+            for (let i = 0; i < arr.length && !collide; i += 1) {
+              const s = arr[i]; if (!s?.active) continue;
+              const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+              if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(b.x, b.y, 6), rect)) { collide = true; break; }
+            }
+          };
+          scanBarr(this.barricadesHard); scanBarr(this.barricadesSoft);
+        } catch (_) {}
+        if (reached || collide) {
+          const ex = b.x; const ey = b.y; const r = b._blastRadius || 60;
+          try { impactBurst(this, ex, ey, { color: 0x33ff66, size: 'large', radius: r }); } catch (_) {}
+          // AoE damage
+          try {
+            const r2 = r * r; const arr = this.enemies?.getChildren?.() || [];
+            for (let i = 0; i < arr.length; i += 1) {
+              const e = arr[i]; if (!e?.active) continue;
+              const ddx = e.x - ex; const ddy = e.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) {
+                const dmg = b._aoeDamage || 5;
+                if (e.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg; }
+                else { if (typeof e.hp !== 'number') e.hp = e.maxHp || 20; e.hp -= dmg; if (e.hp <= 0) { this.killEnemy(e); } }
+              }
+            }
+          } catch (_) {}
+          // Toxin field spawn
+          try { this.spawnToxinField(ex, ey, r, 6000, 20); } catch (_) {}
+          // Spawn 5 cluster bomblets
+          const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
+          for (let i = 0; i < count; i += 1) {
+            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
+            const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+            const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+            c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+            c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
+            c.update = () => {
+              try {
+                const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                // Collision early with enemies/barricades
+                try {
+                  const enemies2 = this.enemies?.getChildren?.() || [];
+                  for (let k = 0; k < enemies2.length; k += 1) {
+                    const e2 = enemies2[k]; if (!e2?.active) continue;
+                    const rect2 = e2.getBounds?.() || new Phaser.Geom.Rectangle(e2.x - 6, e2.y - 6, 12, 12);
+                    if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) { collide2 = true; break; }
+                  }
+                } catch (_) {}
+                try {
+                  const barricades2 = this.barricades?.getChildren?.() || [];
+                  for (let k = 0; k < barricades2.length && !collide2; k += 1) {
+                    const s2 = barricades2[k]; if (!s2?.active) continue;
+                    const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16);
+                    if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; }
+                  }
+                } catch (_) {}
+                if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                  const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                  try { impactBurst(this, cx, cy, { color: 0x33ff66, size: 'large', radius: rr }); } catch (_) {}
+                  try { this.spawnToxinField(cx, cy, rr, 6000, 20); } catch (_) {}
+                  try {
+                    const arr2 = this.enemies?.getChildren?.() || [];
+                    for (let m = 0; m < arr2.length; m += 1) {
+                      const t = arr2[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) {
+                        const dmg2 = c._aoeDamage || 5; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } }
+                      }
+                    }
+                  } catch (_) {}
+                  try { c.destroy(); } catch (_) {}
+                }
+              } catch (_) { try { c.destroy(); } catch (__ ) {} }
+            };
+          }
+          try { b.destroy(); } catch (_) {}
+        }
+      } catch (_) { try { b.destroy(); } catch (__ ) {} }
+      // Cull if off-screen
+      const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
+    };
   }
 }
 
