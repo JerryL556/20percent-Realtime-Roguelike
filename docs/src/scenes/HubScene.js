@@ -73,8 +73,17 @@ export default class HubScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.modeNpcZone);
     this.physics.add.overlap(this.player, this.portalZone);
 
-    // UI prompt (top, consistent with Combat "Clear enemies")
-    this.prompt = this.add.text(width / 2, 40, 'WASD move, E interact', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // UI prompt (top): show selected mode instead of generic WASD hint
+    const modeLabel = () => {
+      try {
+        if (this.gs?.shootingRange) return 'Mode: Shooting Range';
+        const m = this.gs?.gameMode || 'Normal';
+        if (m === 'BossRush') return 'Mode: Boss Rush';
+        if (m === 'DeepDive') return 'Mode: Deep Dive';
+        return 'Mode: Campaign';
+      } catch (_) { return 'Mode: Campaign'; }
+    };
+    this.prompt = this.add.text(width / 2, 40, modeLabel(), { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
     // Keybinds hint (bottom-right, small font)
     const binds = [
       'W/A/S/D: Move',
@@ -249,7 +258,7 @@ export default class HubScene extends Phaser.Scene {
     this.panel = drawPanel(this, width / 2 - 160, 80, 320, 260);
     this.panel._type = 'modeSelect';
     const title = this.add.text(width / 2, 105, 'Select Mode', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
-    const normalBtn = makeTextButton(this, width / 2 - 70, 145, 'Normal', () => {
+    const normalBtn = makeTextButton(this, width / 2 - 70, 145, 'Campaign', () => {
       try { this.gs.setGameMode('Normal'); SaveManager.saveToLocal(this.gs); } catch (_) {}
       this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
     });
@@ -355,7 +364,14 @@ export default class HubScene extends Phaser.Scene {
     if (nearNpc) this.prompt.setText('E: Shop');
     else if (nearModeNpc) this.prompt.setText('E: Select Mode');
     else if (nearPortal) this.prompt.setText(this.gs?.gameMode === 'BossRush' ? 'E: Enter Boss' : 'E: Enter Combat');
-    else this.prompt.setText('WASD move, E interact');
+    else {
+      try {
+        if (this.gs?.shootingRange) this.prompt.setText('Mode: Shooting Range');
+        else if (this.gs?.gameMode === 'BossRush') this.prompt.setText('Mode: Boss Rush');
+        else if (this.gs?.gameMode === 'DeepDive') this.prompt.setText('Mode: Deep Dive');
+        else this.prompt.setText('Mode: Campaign');
+      } catch (_) { this.prompt.setText('Mode: Campaign'); }
+    }
 
     // Auto-close the conversation box if player moves away from NPC
     if (this.panel && this.panel._type === 'npcPrompt') {
