@@ -4274,6 +4274,21 @@ export default class CombatScene extends Phaser.Scene {
             try { e._igniteIndicator.setPosition(e.x, e.y - 14); } catch (_) {}
           }
         }
+        // Damage soft barricades intersecting the beam
+        try {
+          const arr = this.barricadesSoft?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const s = arr[i]; if (!s?.active) continue;
+            if (!s.getData('destructible')) continue;
+            const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+            if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
+              const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+              const bhp = hp0 - dmg;
+              if (bhp <= 0) { try { s.destroy(); } catch (_) {} }
+              else s.setData('hp', bhp);
+            }
+          }
+        } catch (_) {}
       }
     } else {
       // not firing: clear beam and muzzle twitch
