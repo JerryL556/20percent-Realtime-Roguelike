@@ -720,7 +720,7 @@ export default class CombatScene extends Phaser.Scene {
           const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
           for (let i = 0; i < count; i += 1) {
             const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-            const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
             const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
             c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
             c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
@@ -4814,7 +4814,7 @@ export default class CombatScene extends Phaser.Scene {
         const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
         for (let i = 0; i < count; i += 1) {
           const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
           c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
