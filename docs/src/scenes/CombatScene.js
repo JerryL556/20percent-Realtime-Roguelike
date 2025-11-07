@@ -3026,8 +3026,6 @@ export default class CombatScene extends Phaser.Scene {
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
           let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 170, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 500 };
           if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 }; }
-          // Expose current melee range so movement can use a standoff band when idle
-          e._meleeRange = cfg.range;
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
@@ -3160,40 +3158,6 @@ export default class CombatScene extends Phaser.Scene {
           if (far) { vx += nx * speed * 0.75; vy += ny * speed * 0.75; }
           else if (tooClose) { vx -= nx * speed * 0.65; vy -= ny * speed * 0.65; }
         } else if (!usingPath) {
-          // Maintain a standoff band for melee enemies to avoid overlapping the player
-          if (e.isMelee && (!e._mState || e._mState === 'idle')) {
-            const baseRange = e._meleeRange || (e.isRunner ? 64 : (e.isRook ? 90 : 56));
-            const desired = Math.max(12, baseRange - 6);
-            const minD = desired - 6;
-            const maxD = desired + 8;
-            if (dist < minD) {
-              // Too close: back off (prefer path if LOS blocked)
-              if (this.isLineBlocked(e.x, e.y, this.player.x, this.player.y) && this._nav?.grid) {
-                try {
-                  const [sgx, sgy] = worldToGrid(this._nav.grid, e.x, e.y);
-                  const backX = Phaser.Math.Clamp(e.x - nx * 140, 16, this.scale.width - 16);
-                  const backY = Phaser.Math.Clamp(e.y - ny * 140, 16, this.scale.height - 16);
-                  const [ggx, ggy] = worldToGrid(this._nav.grid, backX, backY);
-                  const path = findPath(this._nav.grid, sgx, sgy, ggx, ggy) || null;
-                  if (path && path.length) {
-                    const wp = path[0];
-                    const pdx = wp[0] - e.x; const pdy = wp[1] - e.y; const pd = Math.hypot(pdx, pdy) || 1;
-                    const px = pdx / pd; const py = pdy / pd;
-                    vx = px * speed; vy = py * speed; usingPath = true;
-                  }
-                } catch (_) {}
-              }
-              if (!usingPath) { vx = -nx * speed; vy = -ny * speed; }
-            } else if (dist > maxD) {
-              // Too far: approach
-              vx = nx * speed * 0.9; vy = ny * speed * 0.9;
-            } else {
-              // In band: orbit/strafe around player to avoid overlap and present flanks
-              const px = -ny, py = nx; const dir = (e._strafeDir === -1) ? -1 : 1; e._strafeDir = dir;
-              vx = px * speed * 0.75 * dir; vy = py * speed * 0.75 * dir;
-              if (!e._nextStrafeFlip || now >= e._nextStrafeFlip) { e._strafeDir = (Math.random() < 0.5) ? -1 : 1; e._nextStrafeFlip = now + Phaser.Math.Between(1200, 2200); }
-            }
-          } else {
           // Melee: zig-zag sometimes; otherwise straight chase, with occasional wander/flee
           if (!e._zigPhase) e._zigPhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
           if (!e._mode || now >= (e._modeUntil || 0)) {
@@ -3234,7 +3198,6 @@ export default class CombatScene extends Phaser.Scene {
             vx = nx * speed; vy = ny * speed;
           } else { // flee
             vx = -nx * speed * 0.9; vy = -ny * speed * 0.9;
-          }
           }
         }
         // If disoriented by toxin, override with wander velocity but still allow firing logic later
