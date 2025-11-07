@@ -24,7 +24,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this.panel) return;
     const { width } = this.scale;
     // Larger terminal to avoid cramped layout
-    const panelW = 560; const panelH = 460; const panelY = 60;
+    const panelW = 720; const panelH = 520; const panelY = 60;
     this.panel = drawPanel(this, width / 2 - panelW / 2, panelY, panelW, panelH);
     this.panel._type = 'terminal';
     const title = this.add.text(width / 2, 80, 'Terminal - Spawn', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
@@ -37,14 +37,14 @@ export default class CombatScene extends Phaser.Scene {
       return fn(this, px, py);
     };
     // EXPANDED TERMINAL: wider layout with three categories
-    const colGap = 180; // widen columns spacing
+    const colGap = 220; // widen columns spacing
     const col1X = width / 2 - colGap;  // Mass-Produced Drones
     const col2X = width / 2;           // Elite Drones
     const col3X = width / 2 + colGap;  // Misc
-    const r0 = y0 - 2;
-    const rLine = 28; // taller line spacing to prevent overlap
+    const r0 = y0 + 2;
+    const rLine = 32; // taller line spacing to prevent overlap
 
-    const headerStyle = { fontFamily: 'monospace', fontSize: 14, color: '#ffff66' };
+    const headerStyle = { fontFamily: 'monospace', fontSize: 16, color: '#ffff66' };
     const h1 = this.add.text(col1X, r0, 'Mass-Produced Drones', headerStyle).setOrigin(0.5, 0);
     const h2 = this.add.text(col2X, r0, 'Elite Drones', headerStyle).setOrigin(0.5, 0);
     const h3 = this.add.text(col3X, r0, 'Misc', headerStyle).setOrigin(0.5, 0);
@@ -52,18 +52,18 @@ export default class CombatScene extends Phaser.Scene {
     const nodes = [title, h1, h2, h3];
     let r = 1;
     // Mass-Produced (normal)
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Spawn Melee', () => { this.enemies.add(sp(createEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Spawn Runner', () => { this.enemies.add(sp(createRunnerEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Spawn Shooter', () => { this.enemies.add(sp(createShooterEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'Spawn MachineGunner', () => { this.enemies.add(sp(createMachineGunnerEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 4), 'Spawn Rocketeer', () => { this.enemies.add(sp(createRocketeerEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 5), 'Spawn Sniper', () => { this.enemies.add(sp(createSniperEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Melee', () => { this.enemies.add(sp(createEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Runner', () => { this.enemies.add(sp(createRunnerEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Shooter', () => { this.enemies.add(sp(createShooterEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'Machine Gunner', () => { this.enemies.add(sp(createMachineGunnerEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 4), 'Rocketeer', () => { this.enemies.add(sp(createRocketeerEnemy)); }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 5), 'Sniper', () => { this.enemies.add(sp(createSniperEnemy)); }));
 
     // Elite
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Spawn Grenadier', () => { this.enemies.add(sp(createGrenadierEnemy)); }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 1), 'Spawn Prism', () => { this.enemies.add(sp(createPrismEnemy)); }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Spawn Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 3), 'Spawn Rook', () => { this.enemies.add(sp(createRookEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Grenadier', () => { this.enemies.add(sp(createGrenadierEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 1), 'Prism', () => { this.enemies.add(sp(createPrismEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 3), 'Rook', () => { this.enemies.add(sp(createRookEnemy)); }));
     // Boss only when not in Range
     if (!this.gs?.shootingRange) {
       nodes.push(addBtnAt(col2X, r0 + rLine * (r + 5), 'Spawn Boss', () => {
@@ -75,7 +75,7 @@ export default class CombatScene extends Phaser.Scene {
     let miscRow = 0;
     if (this.gs?.shootingRange) {
       if (typeof this._rangeInvincible !== 'boolean') this._rangeInvincible = false;
-      const label = () => (this._rangeInvincible ? 'Toggle Damage: Invincible (On)' : 'Toggle Damage: Invincible (Off)');
+      const label = () => (this._rangeInvincible ? 'Invincibility: On' : 'Invincibility: Off');
       const bInv = addBtnAt(col3X, r0 + rLine * (miscRow++ + r), label(), () => {
         this._rangeInvincible = !this._rangeInvincible;
         try { bInv.setText(label()); } catch (_) {}
