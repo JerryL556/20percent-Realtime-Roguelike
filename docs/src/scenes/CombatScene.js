@@ -71,10 +71,11 @@ export default class CombatScene extends Phaser.Scene {
     const range = 48;
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
-    try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
+    // Faster swing VFX to match earlier damage tick
+    try { this.spawnMeleeVfx(caster, ang, totalDeg, 90, 0xffffff, range, this._meleeAlt); } catch (_) {}
     // Damage check against enemies (earlier ~30ms for snappier feedback)
     try {
-      this.time.delayedCall(30, () => {
+      this.time.delayedCall(15, () => {
         const enemies = this.enemies?.getChildren?.() || [];
         enemies.forEach((e) => {
           if (!e?.active || !e.isEnemy || !caster?.active) return;
@@ -3037,9 +3038,10 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) {
               // Start sweep (VFX matches player's 150° cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
-              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
-              // Schedule mid-sweep damage check earlier (~30ms) to match player
-              this.time.delayedCall(30, () => {
+              // Play slash VFX a bit faster than the full sweep
+              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, Math.min(90, Math.floor(cfg.sweep * 0.75)), 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
+              // Schedule mid-sweep damage check earlier (~15ms) to match player
+              this.time.delayedCall(15, () => {
                 if (!e.active || e._mState !== 'sweep') return;
                 const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
                 const dd = Math.hypot(pdx, pdy) || 1;
