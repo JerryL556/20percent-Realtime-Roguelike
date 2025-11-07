@@ -3023,8 +3023,9 @@ export default class CombatScene extends Phaser.Scene {
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
           // Align enemy melee FOV with player melee (150° total => 75° half-angle)
-          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 350, sweep: 120, recover: 500 };
-          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 380, sweep: 120, recover: 640 }; }
+          // Shorter timings for snappier combat: reduced windup, sweep, and recovery
+          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 160, sweep: 90, recover: 260 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 260, sweep: 90, recover: 340 };
+          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 300, sweep: 90, recover: 480 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
