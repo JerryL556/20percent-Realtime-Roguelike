@@ -438,6 +438,12 @@ export default class BossScene extends Phaser.Scene {
         }
       } catch (_) {}
       gs.lastDamagedAt = this.time.now;
+      // Reset Deep Dive progression on death before returning to hub
+      try {
+        if ((gs.hp | 0) <= 0 && gs.gameMode === 'DeepDive') {
+          gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -1239,28 +1245,21 @@ export default class BossScene extends Phaser.Scene {
     }
     this._lmbWasDown = !!ptr.isDown;
 
-    // Swap weapons with Q (mirror CombatScene behavior)
+    // Swap weapons with Q (only when two are equipped)
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
       const slots = this.gs.equippedWeapons || [];
       const a = this.gs.activeWeapon;
       if (slots[0] && slots[1]) {
         this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
-      } else {
-        const owned = this.gs.ownedWeapons;
-        if (owned && owned.length) {
-          const idx = Math.max(0, owned.indexOf(a));
-          const next = owned[(idx + 1) % owned.length];
-          this.gs.activeWeapon = next;
-        }
+        // Cancel any in-progress reload on weapon swap
+        this.reload.active = false;
+        this.reload.duration = 0;
+        this.registry.set('reloadActive', false);
+        try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
+        this.endRailAim?.();
+        // Clear laser beam if swapping away
+        try { this.laser?.g?.clear?.(); } catch (_) {}
       }
-      // Cancel any in-progress reload on weapon swap
-      this.reload.active = false;
-      this.reload.duration = 0;
-      this.registry.set('reloadActive', false);
-      try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
-      this.endRailAim?.();
-      // Clear laser beam if swapping away
-      try { this.laser?.g?.clear?.(); } catch (_) {}
     }
 
     // Manual reload (R)

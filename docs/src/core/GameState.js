@@ -55,6 +55,8 @@ export class GameState {
     this.nextScene = 'Hub';
     // Game mode: 'Normal' or 'BossRush'
     this.gameMode = 'Normal';
+    // Deep Dive state
+    this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
     // Boss Rush sequence queue (array of boss type strings)
     this.bossRushQueue = [];
     // Track last spawned boss type in Normal mode to alternate
@@ -96,6 +98,7 @@ export class GameState {
     this.currentDepth = 1;
     this.nextScene = 'Hub';
     this.gameMode = 'Normal';
+    this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
     this.bossRushQueue = [];
     this.lastBossType = null;
     this.abilityId = 'ads';
@@ -109,12 +112,31 @@ export class GameState {
   }
 
   progressAfterCombat() {
-    // In Normal mode: 3 rooms then a boss
+    // Mode-specific progression
     if (this.gameMode === 'BossRush') {
       // Not used in BossRush; keep safe default to Boss
       this.nextScene = 'Boss';
       return;
     }
+    if (this.gameMode === 'DeepDive') {
+      const dd = this.deepDive || { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
+      if (dd.stage < 4) {
+        dd.stage += 1;
+      } else {
+        // Next level
+        dd.level += 1;
+        dd.stage = 1;
+        // Increase baseline normal by 1
+        dd.baseNormal += 1;
+        // Increase baseline elites if new normal per last elite > 4 (strictly greater)
+        const ratio = dd.baseNormal / Math.max(1, dd.baseElite);
+        if (ratio > 4) dd.baseElite += 1;
+      }
+      this.deepDive = dd;
+      this.nextScene = 'Combat';
+      return;
+    }
+    // Normal mode: 3 rooms then a boss
     this.roomsClearedInCycle += 1;
     this.currentDepth += 1;
     if (this.roomsClearedInCycle >= 3) { this.roomsClearedInCycle = 0; this.nextScene = 'Boss'; }
@@ -153,8 +175,8 @@ export class GameState {
 
   // Change game mode and initialize any mode-specific state
   setGameMode(mode) {
-    this.gameMode = (mode === 'BossRush') ? 'BossRush' : 'Normal';
-    if (this.gameMode === 'BossRush') {
+    if (mode === 'BossRush') {
+      this.gameMode = 'BossRush';
       // Initialize a shuffled list of bosses for this run
       const bosses = ['Shotgunner', 'Dasher'];
       // Fisher–Yates using run RNG
@@ -166,7 +188,14 @@ export class GameState {
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
       this.nextScene = 'Boss';
+    } else if (mode === 'DeepDive') {
+      this.gameMode = 'DeepDive';
+      this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
+      this.roomsClearedInCycle = 0;
+      this.currentDepth = 1;
+      this.nextScene = 'Combat';
     } else {
+      this.gameMode = 'Normal';
       this.bossRushQueue = [];
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
@@ -203,6 +232,7 @@ export class GameState {
       achievements: this.achievements,
       nextScene: this.nextScene,
       gameMode: this.gameMode,
+      deepDive: this.deepDive,
       bossRushQueue: this.bossRushQueue,
       lastBossType: this.lastBossType,
       abilityId: this.abilityId,
@@ -231,6 +261,12 @@ export class GameState {
     gs.dashRegenMs = Math.max(gs.dashRegenMs || 6000, 6000);
     if (!gs.gameMode) gs.gameMode = 'Normal';
     if (!Array.isArray(gs.bossRushQueue)) gs.bossRushQueue = [];
+    if (!gs.deepDive || typeof gs.deepDive !== 'object') gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
+    // Clamp Deep Dive fields
+    if (typeof gs.deepDive.level !== 'number' || gs.deepDive.level < 1) gs.deepDive.level = 1;
+    if (typeof gs.deepDive.stage !== 'number' || gs.deepDive.stage < 1 || gs.deepDive.stage > 4) gs.deepDive.stage = 1;
+    if (typeof gs.deepDive.baseNormal !== 'number' || gs.deepDive.baseNormal < 1) gs.deepDive.baseNormal = 5;
+    if (typeof gs.deepDive.baseElite !== 'number' || gs.deepDive.baseElite < 1) gs.deepDive.baseElite = 1;
     if (!('lastBossType' in gs)) gs.lastBossType = null;
     if (!gs.abilityId) gs.abilityId = 'ads';
     // Ensure ability ownership defaults and consistency

@@ -15,6 +15,9 @@ export default class HubScene extends Phaser.Scene {
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
+    // Ensure deep dive tracker is hidden in Hub if it exists
+    try { const ui = this.scene.get(SceneKeys.UI); if (ui && ui.deepDiveText) ui.deepDiveText.setVisible(false); } catch (_) {}
+
 
     // Fully restore player HP and Shield upon entering Hub
     try {
@@ -243,27 +246,31 @@ export default class HubScene extends Phaser.Scene {
   openModePanel() {
     if (this.panel) return;
     const { width } = this.scale;
-    this.panel = drawPanel(this, width / 2 - 160, 80, 320, 230);
+    this.panel = drawPanel(this, width / 2 - 160, 80, 320, 260);
     this.panel._type = 'modeSelect';
     const title = this.add.text(width / 2, 105, 'Select Mode', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
     const normalBtn = makeTextButton(this, width / 2 - 70, 145, 'Normal', () => {
       try { this.gs.setGameMode('Normal'); SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
     });
     const bossRushBtn = makeTextButton(this, width / 2 + 70, 145, 'Boss Rush', () => {
       try { this.gs.setGameMode('BossRush'); SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
     });
-    const rangeBtn = makeTextButton(this, width / 2, 175, 'Shooting Range', () => {
+    const deepDiveBtn = makeTextButton(this, width / 2, 175, 'Deep Dive', () => {
+      try { this.gs.setGameMode('DeepDive'); SaveManager.saveToLocal(this.gs); } catch (_) {}
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+    });
+    const rangeBtn = makeTextButton(this, width / 2, 205, 'Shooting Range', () => {
       try { this.gs.setGameMode('Normal'); this.gs.shootingRange = true; SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
       this.gs.nextScene = SceneKeys.Combat;
       this.scene.start(SceneKeys.Combat);
     });
-    const closeBtn = makeTextButton(this, width / 2, 205, 'Close', () => {
-      this.closePanel([title, normalBtn, bossRushBtn, rangeBtn, closeBtn]);
+    const closeBtn = makeTextButton(this, width / 2, 235, 'Close', () => {
+      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
     });
-    this.panel._extra = [title, normalBtn, bossRushBtn, rangeBtn, closeBtn];
+    this.panel._extra = [title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn];
   }
 
   closePanel(extra = []) {
@@ -378,20 +385,15 @@ export default class HubScene extends Phaser.Scene {
       }
     }
 
+    // No deep dive tracker in Hub; handled by CombatScene only.
+
     // Allow swapping weapons in the Hub with Q
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
       const slots = this.gs.equippedWeapons || [];
       const a = this.gs.activeWeapon;
       if (slots[0] && slots[1]) {
         this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
-      } else {
-        const owned = this.gs.ownedWeapons;
-        if (owned && owned.length) {
-          const idx = Math.max(0, owned.indexOf(a));
-          const next = owned[(idx + 1) % owned.length];
-          this.gs.activeWeapon = next;
-        }
-      }
+      } // else: do nothing when fewer than two equipped
     }
   }
 }

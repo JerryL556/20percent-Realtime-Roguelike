@@ -139,6 +139,12 @@ export default class CombatScene extends Phaser.Scene {
         }
       } catch (_) {}
       gs.lastDamagedAt = this.time.now;
+      // Reset Deep Dive run on death so level/stage restart when returning to hub
+      try {
+        if ((gs.hp | 0) <= 0 && gs.gameMode === 'DeepDive') {
+          gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -281,8 +287,31 @@ export default class CombatScene extends Phaser.Scene {
     try { this.physics.world.setBoundsCollision(true, true, true, true); } catch (_) {}
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
+    try { this.scene.bringToTop(SceneKeys.UI); } catch (_) {}
     this.gs = this.registry.get('gameState');
     this.gs = this.registry.get('gameState');
+    // Ensure Deep Dive tracker text exists in UI scene (create deterministically)
+    try {
+      const ensureDeepDiveLabel = () => {
+        const ui = this.scene.get(SceneKeys.UI);
+        if (!ui) return;
+        if (!ui.deepDiveText || !ui.deepDiveText.active) {
+          ui.deepDiveText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'DeepDive' && this.gs.deepDive) {
+          const L = Math.max(1, this.gs.deepDive.level || 1);
+          const S = Math.max(1, Math.min(4, this.gs.deepDive.stage || 1));
+          ui.deepDiveText.setText(`Deep Dive ${L}-${S}`);
+          ui.deepDiveText.setVisible(true);
+        } else {
+          ui.deepDiveText.setVisible(false);
+        }
+      };
+      // Attempt immediately and after a short delay in case UI is still booting
+      ensureDeepDiveLabel();
+      this.time.delayedCall(50, ensureDeepDiveLabel);
+      this.time.delayedCall(150, ensureDeepDiveLabel);
+    } catch (_) {}
     // Ensure shield is full on scene start
     try {
       if (typeof this.gs.shieldMax !== "number") this.gs.shieldMax = 20;
@@ -378,6 +407,20 @@ export default class CombatScene extends Phaser.Scene {
             gs.shield = Math.min((gs.shield || 0) + inc, (gs.shieldMax || 0));
           }
         } catch (_) {}
+        // Deep Dive tracker update in UI scene
+        try {
+          const ui = this.scene.get(SceneKeys.UI);
+          if (ui && ui.deepDiveText) {
+            if (this.gs?.gameMode === 'DeepDive' && this.gs.deepDive) {
+              const L = Math.max(1, this.gs.deepDive.level || 1);
+              const S = Math.max(1, Math.min(4, this.gs.deepDive.stage || 1));
+              ui.deepDiveText.setText(`Deep Dive ${L}-${S}`);
+              ui.deepDiveText.setVisible(true);
+            } else {
+              ui.deepDiveText.setVisible(false);
+            }
+          }
+        } catch (_) {}
       });
     } catch (_) {}
 
@@ -449,9 +492,9 @@ export default class CombatScene extends Phaser.Scene {
       return { x: sx, y: sy };
     };
 
-    if (!this.gs?.shootingRange) room.spawnPoints.forEach((_) => {
+    // Helpers for spawns
+    const spawnOneNormal = () => {
       const sp = pickEdgeSpawn();
-      // Spawn composition (normal level): Sniper 10%, Shooter 20%, MachineGunner 10%, Rocketeer 10%, Runner 20%, Melee 30%
       const roll = this.gs.rng.next();
       let e;
       if (roll < 0.10) {
@@ -463,32 +506,43 @@ export default class CombatScene extends Phaser.Scene {
       } else if (roll < 0.50) {
         e = createRocketeerEnemy(this, sp.x, sp.y, Math.floor(80 * mods.enemyHp), Math.floor(12 * mods.enemyDamage), 40, 2000);
       } else if (roll < 0.70) {
-        // Melee runner (fast)
-        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5);
         e = createRunnerEnemy(this, sp.x, sp.y, Math.floor(60 * mods.enemyHp), meleeDmg, 120);
       } else {
-        // Melee normal
-        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); // +50% melee damage
+        const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5);
         e = createEnemy(this, sp.x, sp.y, Math.floor(100 * mods.enemyHp), meleeDmg, 60);
       }
       this.enemies.add(e);
-    });
-    // Elite: exactly 1 per room; split between Grenadier, Prism, Snitch, Rook
-    if (!this.gs?.shootingRange) {
+    };
+    const spawnOneElite = () => {
       const spE = pickEdgeSpawn();
-      const pick = Math.random(); // unseeded to avoid same choice every room
+      const pick = Math.random();
       if (pick < (1/4)) {
-        const eG = createGrenadierEnemy(this, spE.x, spE.y, Math.floor(260 * mods.enemyHp), Math.floor(14 * mods.enemyDamage), 48, 2000);
-        this.enemies.add(eG);
+        this.enemies.add(createGrenadierEnemy(this, spE.x, spE.y, Math.floor(260 * mods.enemyHp), Math.floor(14 * mods.enemyDamage), 48, 2000));
       } else if (pick < (2/4)) {
-        const eP = createPrismEnemy(this, spE.x, spE.y, Math.floor(180 * mods.enemyHp), Math.floor(16 * mods.enemyDamage), 46);
-        this.enemies.add(eP);
+        this.enemies.add(createPrismEnemy(this, spE.x, spE.y, Math.floor(180 * mods.enemyHp), Math.floor(16 * mods.enemyDamage), 46));
       } else if (pick < (3/4)) {
-        const eS = createSnitchEnemy(this, spE.x, spE.y, Math.floor(100 * mods.enemyHp), Math.floor(6 * mods.enemyDamage), 60);
-        this.enemies.add(eS);
+        this.enemies.add(createSnitchEnemy(this, spE.x, spE.y, Math.floor(100 * mods.enemyHp), Math.floor(6 * mods.enemyDamage), 60));
       } else {
-        const eR = createRookEnemy(this, spE.x, spE.y, Math.floor(300 * mods.enemyHp), Math.floor(25 * mods.enemyDamage), 35);
-        this.enemies.add(eR);
+        this.enemies.add(createRookEnemy(this, spE.x, spE.y, Math.floor(300 * mods.enemyHp), Math.floor(25 * mods.enemyDamage), 35));
+      }
+    };
+
+    if (!this.gs?.shootingRange) {
+      if (this.gs?.gameMode === 'DeepDive') {
+        const dd = this.gs.deepDive || {};
+        const baseN = Math.max(1, dd.baseNormal || 5);
+        const baseE = Math.max(1, dd.baseElite || 1);
+        const stage = Math.max(1, Math.min(4, dd.stage || 1));
+        const stageNormal = baseN + Math.min(stage - 1, 2);
+        const stageElite = (stage === 4) ? (baseE * 2) : baseE;
+        for (let i = 0; i < stageNormal; i += 1) spawnOneNormal();
+        for (let i = 0; i < stageElite; i += 1) spawnOneElite();
+      } else {
+        // Normal game: existing composition
+        room.spawnPoints.forEach(() => spawnOneNormal());
+        // Exactly 1 elite
+        spawnOneElite();
       }
     }
 
@@ -2060,29 +2114,21 @@ export default class CombatScene extends Phaser.Scene {
     }
     this._lmbWasDown = !!ptr.isDown;
 
-    // Swap weapons with Q
+    // Swap weapons with Q (only when two are equipped)
     if (Phaser.Input.Keyboard.JustDown(this.inputMgr.keys.q)) {
-      // Prefer swapping between equipped weapon slots
       const slots = this.gs.equippedWeapons || [];
       const a = this.gs.activeWeapon;
       if (slots[0] && slots[1]) {
         this.gs.activeWeapon = a === slots[0] ? slots[1] : slots[0];
-      } else {
-        const owned = this.gs.ownedWeapons;
-        if (owned && owned.length) {
-          const idx = Math.max(0, owned.indexOf(a));
-          const next = owned[(idx + 1) % owned.length];
-          this.gs.activeWeapon = next;
-        }
-      // Cancel any in-progress reload on weapon swap
-      this.reload.active = false;
-      this.reload.duration = 0;
-      this.registry.set('reloadActive', false);
-      // Cancel rail charging/aim if any
-      try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
-      this.endRailAim?.();
-      // Clear laser beam if present
-      try { this.laser?.g?.clear?.(); } catch (_) {}
+        // Cancel any in-progress reload on weapon swap
+        this.reload.active = false;
+        this.reload.duration = 0;
+        this.registry.set('reloadActive', false);
+        // Cancel rail charging/aim if any
+        try { if (this.rail?.charging) this.rail.charging = false; } catch (_) {}
+        this.endRailAim?.();
+        // Clear laser beam if present
+        try { this.laser?.g?.clear?.(); } catch (_) {}
       }
     }
 
