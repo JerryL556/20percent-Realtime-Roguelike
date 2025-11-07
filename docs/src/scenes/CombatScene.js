@@ -61,14 +61,14 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150° cone, 56px range, 10 damage (faster registration)
+  // Player melee implementation: 150° cone, 48px range, 10 damage (faster registration)
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
     const ptr = this.inputMgr.pointer;
     const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2);
-    const range = 56; // increased for easier hits
+    const range = 48;
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
@@ -80,7 +80,7 @@ export default class CombatScene extends Phaser.Scene {
           if (!e?.active || !e.isEnemy || !caster?.active) return;
           const dx = e.x - caster.x; const dy = e.y - caster.y;
           const d = Math.hypot(dx, dy) || 1;
-          const pad = (e.body?.halfWidth || 6) + 4; // small forgiveness
+          const pad = (e.body?.halfWidth || 6);
           if (d > (range + pad)) return;
           const dir = Math.atan2(dy, dx);
           const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
@@ -3038,8 +3038,8 @@ export default class CombatScene extends Phaser.Scene {
               // Start sweep (VFX matches player's 150° cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
               try { this.spawnMeleeVfx(e, e._meleeFacing, 150, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
-              // Schedule mid-sweep damage check at ~60ms
-              this.time.delayedCall(60, () => {
+              // Schedule mid-sweep damage check earlier (~30ms) to match player
+              this.time.delayedCall(30, () => {
                 if (!e.active || e._mState !== 'sweep') return;
                 const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
                 const dd = Math.hypot(pdx, pdy) || 1;

@@ -380,7 +380,7 @@ export default class BossScene extends Phaser.Scene {
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
-    const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 56; this._meleeAlt = !this._meleeAlt;
+    const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
     // Damage boss earlier mid-swing (~30ms), snappier
@@ -388,7 +388,7 @@ export default class BossScene extends Phaser.Scene {
       const e = this.boss;
       if (e && e.active && caster?.active) {
         const dx = e.x - caster.x; const dy = e.y - caster.y; const d = Math.hypot(dx, dy) || 1;
-        const pad = (e.body?.halfWidth || 12) + 4;
+        const pad = (e.body?.halfWidth || 12);
         if (d <= (range + pad)) {
           const dir = Math.atan2(dy, dx); const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
           if (diff <= half) {
