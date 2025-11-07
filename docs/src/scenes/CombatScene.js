@@ -3021,8 +3021,9 @@ export default class CombatScene extends Phaser.Scene {
         }
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
-          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(45), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(45), wind: 350, sweep: 120, recover: 500 };
-          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(45), wind: 380, sweep: 120, recover: 640 }; }
+          // Align enemy melee FOV with player melee (150° total => 75° half-angle)
+          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 220, sweep: 120, recover: 380 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 350, sweep: 120, recover: 500 };
+          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 380, sweep: 120, recover: 640 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
@@ -3034,9 +3035,9 @@ export default class CombatScene extends Phaser.Scene {
           if (e._mState === 'windup') {
             vx = 0; vy = 0;
             if (now >= (e._meleeUntil || 0)) {
-              // Start sweep
+              // Start sweep (VFX matches player's 150° cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
-              try { this.spawnMeleeVfx(e, e._meleeFacing, 90, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
+              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, cfg.sweep, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
               // Schedule mid-sweep damage check at ~60ms
               this.time.delayedCall(60, () => {
                 if (!e.active || e._mState !== 'sweep') return;
