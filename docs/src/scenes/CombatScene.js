@@ -3024,8 +3024,8 @@ export default class CombatScene extends Phaser.Scene {
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
           // Align enemy melee FOV with player melee (150° total => 75° half-angle)
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
-          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 140, sweep: 90, recover: 300 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 240, sweep: 90, recover: 380 };
-          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 280, sweep: 90, recover: 520 }; }
+          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 130, sweep: 90, recover: 360 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 230, sweep: 90, recover: 440 };
+          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 270, sweep: 90, recover: 580 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
@@ -3041,8 +3041,8 @@ export default class CombatScene extends Phaser.Scene {
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
               // Play slash VFX slightly longer for readability (about sweep + 20ms, capped)
               try { this.spawnMeleeVfx(e, e._meleeFacing, 150, Math.min(120, Math.floor((cfg.sweep || 90) + 20)), 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
-              // Damage tick shortly after sweep begins (~10ms)
-              this.time.delayedCall(10, () => {
+              // Damage tick shortly after sweep begins (~30ms)
+              this.time.delayedCall(30, () => {
                 if (!e.active || e._mState !== 'sweep') return;
                 const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
                 const dd = Math.hypot(pdx, pdy) || 1;
