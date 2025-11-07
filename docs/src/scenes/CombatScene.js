@@ -3024,7 +3024,7 @@ export default class CombatScene extends Phaser.Scene {
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
           // Align enemy melee FOV with player melee (150° total => 75° half-angle)
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
-          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 210, sweep: 90, recover: 500 };
+          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 170, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 500 };
           if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
