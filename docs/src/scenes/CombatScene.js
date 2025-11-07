@@ -52,14 +52,12 @@ export default class CombatScene extends Phaser.Scene {
       nodes.push(b11);
       row += 2;
     }
-    // Clear Enemies: in Shooting Range, clear truly all enemies (including dummy), bullets, and grenades
+    // Clear Enemies: remove all non-dummy enemies only (keep dummy and projectiles intact)
     const bClear = addBtn(row, 'Clear Enemies', () => {
       try {
-        const all = this.enemies?.getChildren?.() || [];
-        all.forEach((e) => { if (e && e.active) e.destroy(); });
+        const list = (this.enemies?.getChildren?.() || []).slice();
+        list.forEach((e) => { try { if (e && e.active && !e.isDummy) e.destroy(); } catch (_) {} });
       } catch (_) {}
-      try { (this.enemyBullets?.getChildren?.() || []).forEach((b) => b?.destroy?.()); } catch (_) {}
-      try { (this.enemyGrenades?.getChildren?.() || []).forEach((g) => g?.destroy?.()); } catch (_) {}
     });
     nodes.push(bClear);
     const close = makeTextButton(this, cx, y0 + (row + 2) * line, 'Close', () => this.closePanel([...nodes, close]));
