@@ -588,6 +588,8 @@ export default class CombatScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.barricadesSoft);
     this.physics.add.collider(this.enemies, this.barricadesHard);
     this.physics.add.collider(this.enemies, this.barricadesSoft);
+    // Prevent enemy bodies from overlapping the player; use physics separation
+    this.physics.add.collider(this.player, this.enemies);
     // Enemies can break destructible barricades by pushing into them
     this.physics.add.collider(this.enemies, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
     // For rail bullets, skip physics separation so they don't get stuck
@@ -3161,11 +3163,11 @@ export default class CombatScene extends Phaser.Scene {
           else if (tooClose) { vx -= nx * speed * 0.65; vy -= ny * speed * 0.65; }
         } else if (!usingPath) {
           // Maintain a standoff band for melee enemies to avoid overlapping the player
-          if (e.isMelee && (!e._mState || e._mState === 'idle')) {
+          if (e.isMelee && (e._mState !== 'sweep')) {
             const baseRange = e._meleeRange || (e.isRunner ? 64 : (e.isRook ? 90 : 56));
-            const desired = Math.max(12, baseRange - 6);
+            const desired = Math.max(14, baseRange - 6);
             const minD = desired - 6;
-            const maxD = desired + 8;
+            const maxD = desired + 10;
             if (dist < minD) {
               // Too close: back off (prefer path if LOS blocked)
               if (this.isLineBlocked(e.x, e.y, this.player.x, this.player.y) && this._nav?.grid) {
@@ -3183,15 +3185,21 @@ export default class CombatScene extends Phaser.Scene {
                   }
                 } catch (_) {}
               }
-              if (!usingPath) { vx = -nx * speed; vy = -ny * speed; }
+              if (!usingPath) { vx = -nx * speed * 1.1; vy = -ny * speed * 1.1; }
             } else if (dist > maxD) {
               // Too far: approach
-              vx = nx * speed * 0.9; vy = ny * speed * 0.9;
+              vx = nx * speed * 0.85; vy = ny * speed * 0.85;
             } else {
               // In band: orbit/strafe around player to avoid overlap and present flanks
-              const px = -ny, py = nx; const dir = (e._strafeDir === -1) ? -1 : 1; e._strafeDir = dir;
-              vx = px * speed * 0.75 * dir; vy = py * speed * 0.75 * dir;
-              if (!e._nextStrafeFlip || now >= e._nextStrafeFlip) { e._strafeDir = (Math.random() < 0.5) ? -1 : 1; e._nextStrafeFlip = now + Phaser.Math.Between(1200, 2200); }
+              const px = -ny, py = nx;
+              const dir = (e._strafeDir === -1) ? -1 : 1; e._strafeDir = dir;
+              // Decompose into radial correction (toward desired band) and tangential orbit
+              const err = dist - desired;
+              const corr = Phaser.Math.Clamp(err * 2.0, -speed * 0.6, speed * 0.6);
+              const vRadX = nx * corr, vRadY = ny * corr;
+              const vTanX = px * speed * 0.7 * dir, vTanY = py * speed * 0.7 * dir;
+              vx = vRadX + vTanX; vy = vRadY + vTanY;
+              if (!e._nextStrafeFlip || now >= e._nextStrafeFlip) { e._strafeDir = (Math.random() < 0.5) ? -1 : 1; e._nextStrafeFlip = now + Phaser.Math.Between(1400, 2600); }
             }
           } else {
           // Melee: zig-zag sometimes; otherwise straight chase, with occasional wander/flee
