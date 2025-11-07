@@ -52,6 +52,17 @@ export default class CombatScene extends Phaser.Scene {
       nodes.push(b11);
       row += 2;
     }
+    // Shooting Range tools
+    if (this.gs?.shootingRange) {
+      if (typeof this._rangeInvincible !== 'boolean') this._rangeInvincible = false;
+      const label = () => (this._rangeInvincible ? 'Toggle Damage: Invincible (On)' : 'Toggle Damage: Invincible (Off)');
+      const bInv = addBtn(row, label(), () => {
+        this._rangeInvincible = !this._rangeInvincible;
+        try { bInv.setText(label()); } catch (_) {}
+      });
+      nodes.push(bInv);
+      row += 1;
+    }
     // Clear Enemies: remove all non-dummy enemies only (keep dummy and projectiles intact)
     const bClear = addBtn(row, 'Clear Enemies', () => {
       try {
@@ -119,6 +130,8 @@ export default class CombatScene extends Phaser.Scene {
   // Centralized damage application that respects Energy Shield and overrun
   applyPlayerDamage(amount) {
     try {
+      // Shooting Range invincibility toggle: ignore all incoming damage when enabled
+      try { if (this.gs?.shootingRange && this._rangeInvincible) return; } catch (_) {}
       const gs = this.gs; if (!gs) return;
       const dmg = Math.max(0, Math.floor(amount || 0)); if (dmg <= 0) return;
       let remaining = dmg;
