@@ -381,10 +381,10 @@ export default class BossScene extends Phaser.Scene {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2); const range = 48; this._meleeAlt = !this._meleeAlt;
-    // Faster swing VFX to match earlier damage tick
+    // Swing VFX length 90ms to match Combat
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 90, 0xffffff, range, this._meleeAlt); } catch (_) {}
-    // Damage boss earlier mid-swing (~15ms)
-    this.time.delayedCall(15, () => {
+    // Damage ~45ms after swing start
+    this.time.delayedCall(45, () => {
       const e = this.boss;
       if (e && e.active && caster?.active) {
         const dx = e.x - caster.x; const dy = e.y - caster.y; const d = Math.hypot(dx, dy) || 1;

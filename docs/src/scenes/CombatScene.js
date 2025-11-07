@@ -61,7 +61,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150° cone, 48px range, 10 damage (faster registration)
+  // Player melee implementation: 150° cone, 48px range, 10 damage (90ms swing, 45ms hit)
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -71,11 +71,11 @@ export default class CombatScene extends Phaser.Scene {
     const range = 48;
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
-    // Faster swing VFX to match earlier damage tick
+    // Swing VFX length 90ms to match enemy
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 90, 0xffffff, range, this._meleeAlt); } catch (_) {}
-    // Damage check against enemies (earlier ~30ms for snappier feedback)
+    // Damage check against enemies (~45ms after start)
     try {
-      this.time.delayedCall(15, () => {
+      this.time.delayedCall(45, () => {
         const enemies = this.enemies?.getChildren?.() || [];
         enemies.forEach((e) => {
           if (!e?.active || !e.isEnemy || !caster?.active) return;
@@ -3024,8 +3024,8 @@ export default class CombatScene extends Phaser.Scene {
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
           // Align enemy melee FOV with player melee (150° total => 75° half-angle)
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
-          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 130, sweep: 90, recover: 360 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 230, sweep: 90, recover: 440 };
-          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 270, sweep: 90, recover: 580 }; }
+          let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 210, sweep: 90, recover: 500 };
+          if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 }; }
           if (!e._mState) e._mState = 'idle';
           // Enter windup if player close
           if (e._mState === 'idle') {
@@ -3039,10 +3039,10 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) {
               // Start sweep (VFX matches player's 150° cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
-              // Play slash VFX slightly longer for readability (about sweep + 20ms, capped)
-              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, Math.min(120, Math.floor((cfg.sweep || 90) + 20)), 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
-              // Damage tick shortly after sweep begins (~30ms)
-              this.time.delayedCall(30, () => {
+              // Enemy slash VFX fixed at 90ms to match player
+              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, 90, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
+              // Damage tick ~45ms after sweep begins
+              this.time.delayedCall(45, () => {
                 if (!e.active || e._mState !== 'sweep') return;
                 const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
                 const dd = Math.hypot(pdx, pdy) || 1;
