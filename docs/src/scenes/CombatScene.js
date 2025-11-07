@@ -3039,10 +3039,10 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) {
               // Start sweep (VFX matches player's 150° cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
-              // Play slash VFX a bit faster than the full sweep
-              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, Math.min(90, Math.floor(cfg.sweep * 0.75)), 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
-              // Damage tick at sweep start (0ms)
-              this.time.delayedCall(0, () => {
+              // Play slash VFX slightly longer for readability (about sweep + 20ms, capped)
+              try { this.spawnMeleeVfx(e, e._meleeFacing, 150, Math.min(120, Math.floor((cfg.sweep || 90) + 20)), 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
+              // Damage tick shortly after sweep begins (~10ms)
+              this.time.delayedCall(10, () => {
                 if (!e.active || e._mState !== 'sweep') return;
                 const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
                 const dd = Math.hypot(pdx, pdy) || 1;
