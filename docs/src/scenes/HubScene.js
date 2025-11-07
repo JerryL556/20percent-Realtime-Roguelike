@@ -255,30 +255,50 @@ export default class HubScene extends Phaser.Scene {
   openModePanel() {
     if (this.panel) return;
     const { width } = this.scale;
-    this.panel = drawPanel(this, width / 2 - 160, 80, 320, 260);
+    // Taller panel to support vertical list + description area
+    const panelW = 320; const panelH = 340; const panelX = width / 2 - panelW / 2; const panelY = 80;
+    this.panel = drawPanel(this, panelX, panelY, panelW, panelH);
     this.panel._type = 'modeSelect';
     const title = this.add.text(width / 2, 105, 'Select Mode', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
-    const normalBtn = makeTextButton(this, width / 2 - 70, 145, 'Campaign', () => {
+
+    // Vertical choices
+    const y0 = 140; const line = 30; const cx = width / 2;
+    const campaignBtn = makeTextButton(this, cx, y0 + 0 * line, 'Campaign', () => {
       try { this.gs.setGameMode('Normal'); SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
-    const bossRushBtn = makeTextButton(this, width / 2 + 70, 145, 'Boss Rush', () => {
+    const bossRushBtn = makeTextButton(this, cx, y0 + 1 * line, 'Boss Rush', () => {
       try { this.gs.setGameMode('BossRush'); SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
-    const deepDiveBtn = makeTextButton(this, width / 2, 175, 'Deep Dive', () => {
+    const deepDiveBtn = makeTextButton(this, cx, y0 + 2 * line, 'Deep Dive', () => {
       try { this.gs.setGameMode('DeepDive'); SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
-    const rangeBtn = makeTextButton(this, width / 2, 205, 'Shooting Range', () => {
+    const rangeBtn = makeTextButton(this, cx, y0 + 3 * line, 'Shooting Range', () => {
       try { this.gs.setGameMode('Normal'); this.gs.shootingRange = true; SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+      this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
       // Do not auto-enter; use the portal (E) like other modes
     });
-    const closeBtn = makeTextButton(this, width / 2, 235, 'Close', () => {
-      this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
+
+    // Description area (placeholder; ready to populate detailed text)
+    const desc = this.add.text(cx, y0 + 4 * line + 20, 'Select a mode to view its description', {
+      fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: panelW - 40 }, align: 'center', lineSpacing: 2,
+    }).setOrigin(0.5, 0);
+
+    // Optional: preview description on hover (basic hooks; can refine text later)
+    const setDesc = (s) => { try { desc.setText(s); } catch (_) {} };
+    try {
+      campaignBtn.on('pointerover', () => setDesc('Campaign: Progress rooms, bosses, loot and upgrades.'));
+      bossRushBtn.on('pointerover', () => setDesc('Boss Rush: Fight bosses back-to-back for glory.'));
+      deepDiveBtn.on('pointerover', () => setDesc('Deep Dive: Endless escalating rooms with stage cycles.'));
+      rangeBtn.on('pointerover', () => setDesc('Shooting Range: Test weapons and builds in a safe arena.'));
+    } catch (_) {}
+
+    const closeBtn = makeTextButton(this, cx, panelY + panelH - 22, 'Close', () => {
+      this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
-    this.panel._extra = [title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn];
+    this.panel._extra = [title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn];
   }
 
   closePanel(extra = []) {
