@@ -273,8 +273,7 @@ export default class HubScene extends Phaser.Scene {
     const rangeBtn = makeTextButton(this, width / 2, 205, 'Shooting Range', () => {
       try { this.gs.setGameMode('Normal'); this.gs.shootingRange = true; SaveManager.saveToLocal(this.gs); } catch (_) {}
       this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
-      this.gs.nextScene = SceneKeys.Combat;
-      this.scene.start(SceneKeys.Combat);
+      // Do not auto-enter; use the portal (E) like other modes
     });
     const closeBtn = makeTextButton(this, width / 2, 235, 'Close', () => {
       this.closePanel([title, normalBtn, bossRushBtn, deepDiveBtn, rangeBtn, closeBtn]);
@@ -363,7 +362,11 @@ export default class HubScene extends Phaser.Scene {
     const nearPortal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.portalZone.getBounds());
     if (nearNpc) this.prompt.setText('E: Shop');
     else if (nearModeNpc) this.prompt.setText('E: Select Mode');
-    else if (nearPortal) this.prompt.setText(this.gs?.gameMode === 'BossRush' ? 'E: Enter Boss' : 'E: Enter Combat');
+    else if (nearPortal) {
+      if (this.gs?.gameMode === 'BossRush') this.prompt.setText('E: Enter Boss');
+      else if (this.gs?.shootingRange) this.prompt.setText('E: Enter Range');
+      else this.prompt.setText('E: Enter Combat');
+    }
     else {
       try {
         if (this.gs?.shootingRange) this.prompt.setText('Mode: Shooting Range');
