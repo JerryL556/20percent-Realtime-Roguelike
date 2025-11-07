@@ -1,3 +1,5 @@
+Play in browser: https://jerryl556.github.io/20percent-World-Down-Under/ ¡ª Mouse highly recommended
+
 # 20percent ¡ª World Down Under
 
 Top?down, real?time roguelike built with Phaser 3. Fast movement, tight shooting, readable VFX, and a simple scene/frame model that keeps everything responsive in the browser.
