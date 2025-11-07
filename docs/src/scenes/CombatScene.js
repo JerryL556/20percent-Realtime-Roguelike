@@ -4322,8 +4322,11 @@ export default class CombatScene extends Phaser.Scene {
         const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
         const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
         if (pts && pts.length) {
-          const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
-          if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitKind = (gi === 0) ? 'hard' : 'soft'; hitBarricade = s; hitEnemy = null; }
+          // Choose nearest intersection point to player
+          for (let k = 0; k < pts.length; k += 1) {
+            const p = pts[k]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitKind = (gi === 0) ? 'hard' : 'soft'; hitBarricade = s; hitEnemy = null; }
+          }
         }
       }
     }
@@ -4372,8 +4375,10 @@ export default class CombatScene extends Phaser.Scene {
       const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 6, e.y - 6, 12, 12);
       const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
       if (pts && pts.length) {
-        const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; hitKind = null; hitBarricade = null; }
+        for (let k = 0; k < pts.length; k += 1) {
+          const p = pts[k]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; hitKind = null; hitBarricade = null; }
+        }
       }
     }
     return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy, hitKind, hitBarricade };

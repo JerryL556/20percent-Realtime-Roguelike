@@ -2413,6 +2413,29 @@ export default class BossScene extends Phaser.Scene {
             try { e._igniteIndicator.setPosition(e.x, e.y - 20); } catch (_) {}
           }
         }
+        // Barricade hit VFX at endpoint (both hard and soft)
+        try {
+          if (hit.hitKind === 'soft' || hit.hitKind === 'hard') {
+            const col = (hit.hitKind === 'soft') ? 0xC8A165 : 0xaaaaaa;
+            impactBurst(this, ex, ey, { color: col, size: 'small' });
+          }
+        } catch (_) {}
+        // Damage soft barricades intersecting the beam
+        try {
+          const arr = this.barricadesSoft?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const s = arr[i]; if (!s?.active) continue;
+            if (!s.getData('destructible')) continue;
+            const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+            const line = hit.line || new Phaser.Geom.Line(sx, sy, ex, ey);
+            if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
+              const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+              const bhp = hp0 - dmg;
+              if (bhp <= 0) { try { s.destroy(); } catch (_) {} }
+              else s.setData('hp', bhp);
+            }
+          }
+        } catch (_) {}
       }
     }
   }
@@ -2421,21 +2444,37 @@ export default class BossScene extends Phaser.Scene {
     const sx = (typeof sxOverride === 'number') ? sxOverride : this.player.x;
     const sy = (typeof syOverride === 'number') ? syOverride : this.player.y;
     const maxLen = 1000; const ex0 = sx + Math.cos(angle) * maxLen; const ey0 = sy + Math.sin(angle) * maxLen; const ray = new Phaser.Geom.Line(sx, sy, ex0, ey0);
-    let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null;
-    // Barricades (soft only here)
-    const arr = this.barricadesSoft?.getChildren?.() || [];
-    for (let i = 0; i < arr.length; i += 1) {
-      const s = arr[i]; if (!s?.active) continue; const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
-      const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
-      if (pts && pts.length) { const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy; if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; } }
+    let ex = ex0; let ey = ey0; let bestD2 = Infinity; let hitEnemy = null; let hitKind = null;
+    // Barricades: check hard then soft, pick nearest intersection
+    const groups = [this.barricadesHard, this.barricadesSoft];
+    for (let gi = 0; gi < groups.length; gi += 1) {
+      const g = groups[gi]; if (!g) continue;
+      const arr = g.getChildren?.() || [];
+      for (let i = 0; i < arr.length; i += 1) {
+        const s = arr[i]; if (!s?.active) continue;
+        const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+        const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
+        if (pts && pts.length) {
+          for (let k = 0; k < pts.length; k += 1) {
+            const p = pts[k];
+            const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitKind = (gi === 0) ? 'hard' : 'soft'; hitEnemy = null; }
+          }
+        }
+      }
     }
     // Boss hit
     const e = this.boss; if (e?.active) {
       const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 10, e.y - 10, 20, 20);
       const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
-      if (pts && pts.length) { const p = pts[0]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy; if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; } }
+      if (pts && pts.length) {
+        for (let k = 0; k < pts.length; k += 1) {
+          const p = pts[k]; const dx = p.x - sx; const dy = p.y - sy; const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) { bestD2 = d2; ex = p.x; ey = p.y; hitEnemy = e; hitKind = null; }
+        }
+      }
     }
-    return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy };
+    return { ex, ey, line: new Phaser.Geom.Line(sx, sy, ex, ey), hitEnemy, hitKind };
   }
 
   // Spawn a temporary fire field that applies ignite to boss while inside
