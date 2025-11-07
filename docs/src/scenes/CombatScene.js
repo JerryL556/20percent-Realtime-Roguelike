@@ -44,12 +44,26 @@ export default class CombatScene extends Phaser.Scene {
     const b8 = addBtn(7, 'Spawn Prism', () => { this.enemies.add(sp(createPrismEnemy)); });
     const b9 = addBtn(8, 'Spawn Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); });
     const b10 = addBtn(9, 'Spawn Rook', () => { this.enemies.add(sp(createRookEnemy)); });
-    const b11 = addBtn(11, 'Spawn Boss', () => { this.enemies.add(sp((sc, x, y) => { const e = createBoss(sc, x, y, 600, 20, 50); e.isEnemy = true; return e; })); });
-    const b12 = addBtn(13, 'Clear Enemies', () => {
-      try { this.enemies.getChildren().forEach((e) => { if (e && e.active && !e.isDummy) e.destroy(); }); } catch (_) {}
+    // In Shooting Range, hide the Spawn Boss option
+    const nodes = [title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10];
+    let row = 11;
+    if (!this.gs?.shootingRange) {
+      const b11 = addBtn(row, 'Spawn Boss', () => { this.enemies.add(sp((sc, x, y) => { const e = createBoss(sc, x, y, 600, 20, 50); e.isEnemy = true; return e; })); });
+      nodes.push(b11);
+      row += 2;
+    }
+    // Clear Enemies: in Shooting Range, clear truly all enemies (including dummy), bullets, and grenades
+    const bClear = addBtn(row, 'Clear Enemies', () => {
+      try {
+        const all = this.enemies?.getChildren?.() || [];
+        all.forEach((e) => { if (e && e.active) e.destroy(); });
+      } catch (_) {}
+      try { (this.enemyBullets?.getChildren?.() || []).forEach((b) => b?.destroy?.()); } catch (_) {}
+      try { (this.enemyGrenades?.getChildren?.() || []).forEach((g) => g?.destroy?.()); } catch (_) {}
     });
-    const close = makeTextButton(this, cx, y0 + 15 * line, 'Close', () => this.closePanel([title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, close]));
-    this.panel._extra = [title, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, close];
+    nodes.push(bClear);
+    const close = makeTextButton(this, cx, y0 + (row + 2) * line, 'Close', () => this.closePanel([...nodes, close]));
+    this.panel._extra = [...nodes, close];
   }
 
   closePanel(extra = []) {
