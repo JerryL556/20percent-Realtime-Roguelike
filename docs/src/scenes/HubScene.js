@@ -289,8 +289,8 @@ export default class HubScene extends Phaser.Scene {
     // Optional: preview description on hover (basic hooks; can refine text later)
     const setDesc = (s) => { try { desc.setText(s); } catch (_) {} };
     try {
-      campaignBtn.on('pointerover', () => setDesc('Campaign: Progress rooms, bosses, loot and upgrades.'));
-      bossRushBtn.on('pointerover', () => setDesc('Boss Rush: Fight bosses back-to-back for glory.'));
+      campaignBtn.on('pointerover', () => setDesc('Campaign: Progress through the game'));
+      bossRushBtn.on('pointerover', () => setDesc('Boss Rush: Fight all three bosses in a row'));
       deepDiveBtn.on('pointerover', () => setDesc('Deep Dive: Endless escalating rooms with stage cycles.'));
       rangeBtn.on('pointerover', () => setDesc('Shooting Range: Test weapons and builds in a safe arena.'));
     } catch (_) {}
