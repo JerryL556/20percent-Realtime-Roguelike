@@ -61,26 +61,26 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150�?cone, 48px range, 10 damage
+  // Player melee implementation: 150° cone, 56px range, 10 damage (faster registration)
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
     const ptr = this.inputMgr.pointer;
     const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
     const totalDeg = 150; const half = Phaser.Math.DegToRad(totalDeg / 2);
-    const range = 48;
+    const range = 56; // increased for easier hits
     this._meleeAlt = !this._meleeAlt;
     // Simple transparent fan to indicate affected area (white)
     try { this.spawnMeleeVfx(caster, ang, totalDeg, 120, 0xffffff, range, this._meleeAlt); } catch (_) {}
-    // Damage check against enemies (mid-swing ~60ms to match enemy timing)
+    // Damage check against enemies (earlier ~30ms for snappier feedback)
     try {
-      this.time.delayedCall(60, () => {
+      this.time.delayedCall(30, () => {
         const enemies = this.enemies?.getChildren?.() || [];
         enemies.forEach((e) => {
           if (!e?.active || !e.isEnemy || !caster?.active) return;
           const dx = e.x - caster.x; const dy = e.y - caster.y;
           const d = Math.hypot(dx, dy) || 1;
-          const pad = (e.body?.halfWidth || 6);
+          const pad = (e.body?.halfWidth || 6) + 4; // small forgiveness
           if (d > (range + pad)) return;
           const dir = Math.atan2(dy, dx);
           const diff = Math.abs(Phaser.Math.Angle.Wrap(dir - ang));
