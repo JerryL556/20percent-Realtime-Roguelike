@@ -3230,6 +3230,26 @@ export default class CombatScene extends Phaser.Scene {
         // Post-sweep slow for melee enemies (reduced slowdown: 60% speed)
         if (e.isMelee && e._meleeSlowUntil && now < e._meleeSlowUntil) { e._svx *= 0.6; e._svy *= 0.6; }
         e.body.setVelocity(e._svx, e._svy);
+        // Separate, lightweight hover effect: only when overlapping player, nudge position outward
+        // This does not alter movement modes or velocities; we only correct penetration
+        try {
+          if (e.isMelee) {
+            const pBody = this.player.body || {};
+            const eBody = e.body || {};
+            const pr = Math.max(4, Math.max(pBody.halfWidth || 0, pBody.halfHeight || 0) || 6);
+            const er = Math.max(4, Math.max(eBody.halfWidth || 0, eBody.halfHeight || 0) || 6);
+            const minSep = pr + er - 1; // require a small gap; treat below as overlap
+            const dxs = e.x - this.player.x; const dys = e.y - this.player.y;
+            const d2 = dxs * dxs + dys * dys;
+            if (d2 < (minSep * minSep)) {
+              const d = Math.max(1e-3, Math.sqrt(d2));
+              let ux = dxs / d, uy = dys / d;
+              if (!isFinite(ux) || !isFinite(uy)) { ux = 1; uy = 0; }
+              const push = (minSep - d) + 0.5; // add a tiny buffer
+              e.x += ux * push; e.y += uy * push;
+            }
+          }
+        } catch (_) {}
         // Stuck detection triggers repath (more aggressive during Grenadier charge)
         if (e._lastPosT === undefined) { e._lastPosT = now; e._lx = e.x; e._ly = e.y; }
         if (now - e._lastPosT > 400) {
