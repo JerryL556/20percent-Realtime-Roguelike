@@ -14,7 +14,15 @@ import { makeTextButton } from '../ui/Buttons.js';
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
 
 export default class CombatScene extends Phaser.Scene {
-  constructor() { super(SceneKeys.Combat); }
+  constructor() {
+    super(SceneKeys.Combat);
+    // Cluster bomblet travel tuning (independent of explosion radius)
+    this.CLUSTER_MIN_TRAVEL = 8;
+    this.CLUSTER_MAX_TRAVEL = 20;
+    // Caustic Cluster (ability) bomblet travel range (increased)
+    this.CC_MIN_TRAVEL = 20;
+    this.CC_MAX_TRAVEL = 40;
+  }
   preload() {
     // Ensure weapon images are loaded even if entering this scene directly
     try { preloadWeaponAssets(this); } catch (_) {}
@@ -720,7 +728,7 @@ export default class CombatScene extends Phaser.Scene {
           const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
           for (let i = 0; i < count; i += 1) {
             const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-            const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
             const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
             c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
             c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
@@ -934,8 +942,8 @@ export default class CombatScene extends Phaser.Scene {
           const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
           for (let i = 0; i < count; i += 1) {
             const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
-            const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
-            const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const ang = base + jitter;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
             const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
             c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
             c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -1200,7 +1208,7 @@ export default class CombatScene extends Phaser.Scene {
         const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
         for (let i = 0; i < count; i += 1) {
           const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-          const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
           c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -1667,7 +1675,7 @@ export default class CombatScene extends Phaser.Scene {
                   const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
                   for (let i = 0; i < count; i += 1) {
                     const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                    const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                     const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                     c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                     c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -1726,7 +1734,7 @@ export default class CombatScene extends Phaser.Scene {
                     const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
                     for (let i = 0; i < count; i += 1) {
                       const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                      const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                       const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                       c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                       c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -1791,7 +1799,7 @@ export default class CombatScene extends Phaser.Scene {
                     const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
                     for (let i = 0; i < count; i += 1) {
                       const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                      const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                       const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                       c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                       c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -1873,8 +1881,8 @@ export default class CombatScene extends Phaser.Scene {
               const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
               for (let i = 0; i < count; i += 1) {
                 const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
-                const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
-                const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+                const ang = base + jitter;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                 const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                 c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                 c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -2432,15 +2440,15 @@ export default class CombatScene extends Phaser.Scene {
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'bits') {
           this.deployBITs();
-          this.ability.cooldownMs = 10000;
+          this.ability.cooldownMs = 14000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'repulse') {
           this.deployRepulsionPulse();
-          this.ability.cooldownMs = 5000; // 5s for Repulsion Pulse
+          this.ability.cooldownMs = 6000; // 6s for Repulsion Pulse
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'caustic_cluster') {
           this.deployCausticCluster();
-          this.ability.cooldownMs = 1000; // 1s for testing
+          this.ability.cooldownMs = 10000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
@@ -4814,7 +4822,7 @@ export default class CombatScene extends Phaser.Scene {
         const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
         for (let i = 0; i < count; i += 1) {
           const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                const dist = Phaser.Math.Between(minD, maxD); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
           c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
@@ -4971,7 +4979,8 @@ export default class CombatScene extends Phaser.Scene {
           const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
           for (let i = 0; i < count; i += 1) {
             const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
-            const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+            const ang = base + jitter;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80)));
             const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
             const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
             c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
@@ -5021,6 +5030,11 @@ export default class CombatScene extends Phaser.Scene {
     };
   }
 }
+
+
+
+
+
 
 
 

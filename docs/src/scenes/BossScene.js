@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -12,7 +12,15 @@ const DISABLE_WALLS = true; // Temporary: remove concrete walls
 const TEMP_BOSS_BOUND_GUARD = false; // Try: keep boss on-screen (reversible)
 
 export default class BossScene extends Phaser.Scene {
-  constructor() { super(SceneKeys.Boss); }
+  constructor() {
+    super(SceneKeys.Boss);
+    // Cluster bomblet travel tuning (independent of explosion radius)
+    this.CLUSTER_MIN_TRAVEL = 8;
+    this.CLUSTER_MAX_TRAVEL = 20;
+    // Caustic Cluster (ability) bomblet travel range (increased)
+    this.CC_MIN_TRAVEL = 20;
+    this.CC_MAX_TRAVEL = 40;
+  }
 
   create() {
     const { width, height } = this.scale;
@@ -234,7 +242,79 @@ export default class BossScene extends Phaser.Scene {
       runChildUpdate: true,
     });
     this.physics.add.overlap(this.bullets, this.bossGroup, (b, e) => {
-      if (this._won || !b.active || !e.active) return;
+      if (this._won || !b?.active || !e?.active) return;
+      // Special handling: Caustic Cluster and Cluster Bomb should detonate on boss contact
+      if (b._cc || b._ccCluster) {
+        const ex = b.x; const ey = b.y; const r = b._blastRadius || 60; const r2 = r * r;
+        try { impactBurst(this, ex, ey, { color: 0x33ff66, size: 'large', radius: r }); } catch (_) {}
+        // Damage boss if within radius
+        try { const boss = e; if (boss?.active) { const dx = boss.x - ex; const dy = boss.y - ey; if ((dx * dx + dy * dy) <= r2) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (b._aoeDamage || 5); if (boss.hp <= 0) this.killBoss(boss); } } } catch (_) {}
+        // Toxin field from caustic
+        try { this.spawnToxinField(ex, ey, r, 6000, 20); } catch (_) {}
+        // Spawn child clusters if primary
+        if (b._cc) {
+          const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
+          for (let i = 0; i < count; i += 1) {
+            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+            const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80)));
+            const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+            const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+            c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+            c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
+            c.update = () => {
+              try {
+                const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+                // Early detonation on boss or barricade contact
+                try { const boss2 = this.boss; if (boss2?.active) { const rect2 = boss2.getBounds?.() || new Phaser.Geom.Rectangle(boss2.x - 10, boss2.y - 10, 20, 20); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) collide2 = true; } } catch (_) {}
+                try { const arr2 = this.barricades?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } } catch (_) {}
+                if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                  const cx = c.x; const cy = c.y; const rr = c._blastRadius || 60; const r2c = rr * rr;
+                  try { impactBurst(this, cx, cy, { color: 0x33ff66, size: 'large', radius: rr }); } catch (_) {}
+                  try { this.spawnToxinField(cx, cy, rr, 6000, 20); } catch (_) {}
+                  try { const boss3 = this.boss; if (boss3?.active) { const ddx2 = boss3.x - cx; const ddy2 = boss3.y - cy; if ((ddx2 * ddx2 + ddy2 * ddy2) <= r2c) { if (typeof boss3.hp !== 'number') boss3.hp = boss3.maxHp || 300; boss3.hp -= (c._aoeDamage || 5); if (boss3.hp <= 0) this.killBoss(boss3); } } } catch (_) {}
+                  try { c.destroy(); } catch (_) {}
+                }
+              } catch (_) { try { c.destroy(); } catch (__ ) {} }
+            };
+          }
+        }
+        try { b.destroy(); } catch (_) {}
+        return;
+      }
+      // Cluster Bomb (rocket core): detonate on boss contact and spawn orange bomblets
+      if (b._rocket && b._clusterBomb) {
+        const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius;
+        try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+        // Splash damage to boss in radius
+        try { const boss = e; if (boss?.active) { const ddx = boss.x - ex; const ddy = boss.y - ey; if ((ddx * ddx + ddy * ddy) <= r2) { if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; const splash = b._rocket ? (b.damage || 12) : Math.ceil((b.damage || 12) * 0.5); boss.hp -= splash; if (boss.hp <= 0) this.killBoss(boss); } } } catch (_) {}
+        // Damage soft barricades nearby
+        try { this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 12)); } catch (_) {}
+        // Spawn 8 orange bomblets with wider random distance but overall shorter than toxin
+        const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
+        for (let i = 0; i < count; i += 1) {
+          const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+          const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30)));
+          const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+          const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
+          c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
+          c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
+          c.update = () => {
+            try {
+              const mx = c.x - c._startX; const my = c.y - c._startY; let collide2 = false;
+              try { const boss2 = this.boss; if (boss2?.active) { const rect2 = boss2.getBounds?.() || new Phaser.Geom.Rectangle(boss2.x - 10, boss2.y - 10, 20, 20); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rect2)) collide2 = true; } } catch (_) {}
+              try { const arr2 = this.barricadesSoft?.getChildren?.() || []; for (let k = 0; k < arr2.length && !collide2; k += 1) { const s2 = arr2[k]; if (!s2?.active) continue; const rectB = s2.getBounds?.() || new Phaser.Geom.Rectangle(s2.x - 8, s2.y - 8, 16, 16); if (Phaser.Geom.Intersects.CircleToRectangle(new Phaser.Geom.Circle(c.x, c.y, 6), rectB)) { collide2 = true; break; } } } catch (_) {}
+              if ((mx * mx + my * my) >= c._travelMax2 || collide2) {
+                const cx = c.x; const cy = c.y; const rr = c._blastRadius || 52; const r2c = rr * rr;
+                try { impactBurst(this, cx, cy, { color: 0xffaa33, size: 'large', radius: rr }); } catch (_) {}
+                try { const list = this.enemies?.getChildren?.() || []; for (let m = 0; m < list.length; m += 1) { const t = list[m]; if (!t?.active) continue; const ddx = t.x - cx; const ddy = t.y - cy; if ((ddx * ddx + ddy * ddy) <= r2c) { const dmg2 = c._aoeDamage || 20; if (t.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + dmg2; } else { if (typeof t.hp !== 'number') t.hp = t.maxHp || 20; t.hp -= dmg2; if (t.hp <= 0) { this.killEnemy(t); } } } } } catch (_) {}
+                try { c.destroy(); } catch (_) {}
+              }
+            } catch (_) { try { c.destroy(); } catch (__ ) {} }
+          };
+        }
+        try { b.destroy(); } catch (_) {}
+        return;
+      }
       // Only track per-target hits for piercing bullets to allow shotgun pellets to stack normally
       if (b._core === 'pierce') {
         if (!b._hitSet) b._hitSet = new Set();
@@ -379,7 +459,7 @@ export default class BossScene extends Phaser.Scene {
     this._lastAbilityRollAt = 0;
   }
 
-  // Player melee (same as Combat): 150�? 48px, 10 dmg
+  // Player melee (same as Combat): 150?? 48px, 10 dmg
   performPlayerMelee() {
     const caster = this.player; if (!caster) return;
     const ptr = this.inputMgr.pointer; const ang = Math.atan2(ptr.worldY - caster.y, ptr.worldX - caster.x);
@@ -683,10 +763,10 @@ export default class BossScene extends Phaser.Scene {
 
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2�?frame
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2??frame
         b._fov = Phaser.Math.DegToRad(60);
         b._noTurnUntil = this.time.now + 120;
-        // Slightly increase Smart HMG homing: ~0.75��/frame (~45��/s)
+        // Slightly increase Smart HMG homing: ~0.75??/frame (~45??/s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
 
@@ -732,14 +812,14 @@ export default class BossScene extends Phaser.Scene {
         b._aoeDamage = (typeof weapon.aoeDamage === 'number') ? weapon.aoeDamage : weapon.damage;
         b._core = 'blast'; b._blastRadius = weapon.blastRadius || 40; b._rocket = true; b._stunOnHit = weapon._stunOnHit || 0;
         b._angle = angle0; b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        // Turn rate (time-based): ~120�?s equals 2�?frame at 60 FPS
-        // Drastically higher when no Smart Core: 480��/s baseline
+        // Turn rate (time-based): ~120??s equals 2??frame at 60 FPS
+        // Drastically higher when no Smart Core: 480??/s baseline
         b._turnRate = Phaser.Math.DegToRad(480);
         // Smart core support
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          // Preserve Smart Core homing identical to old behavior (120��/s scaled by mult)
+          // Preserve Smart Core homing identical to old behavior (120??/s scaled by mult)
           b._turnRate = Phaser.Math.DegToRad(120) * mult;
           b._fov = Phaser.Math.DegToRad(90);
         }
@@ -848,7 +928,7 @@ export default class BossScene extends Phaser.Scene {
                   const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
                   for (let i = 0; i < count; i += 1) {
                     const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                      const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                     const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                     c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                     c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -887,8 +967,7 @@ export default class BossScene extends Phaser.Scene {
                     const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
                     for (let i = 0; i < count; i += 1) {
                       const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                      const dist = Math.random() < 0.5 ? Math.max(40, Math.floor(radius)) : Phaser.Math.Between(minD, maxD);
-                      const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                       const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                       c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                       c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -925,7 +1004,7 @@ export default class BossScene extends Phaser.Scene {
                   const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
                   for (let i = 0; i < count; i += 1) {
                     const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-                    const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                     const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                     c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
                     c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -983,7 +1062,8 @@ export default class BossScene extends Phaser.Scene {
               const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
               for (let i = 0; i < count; i += 1) {
                 const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25);
-                const ang = base + jitter; const dist = Phaser.Math.Between(8, 20);
+                const ang = base + jitter;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30)));
                 const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
                 const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
                 c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
@@ -1385,19 +1465,19 @@ export default class BossScene extends Phaser.Scene {
         const abilityId = this.gs?.abilityId || 'ads';
         if (abilityId === 'ads') {
           this.deployADS?.();
-          this.ability.cooldownMs = 3000;
+          this.ability.cooldownMs = 10000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'bits') {
           this.deployBITs();
-          this.ability.cooldownMs = 3000;
+          this.ability.cooldownMs = 14000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'repulse') {
           this.deployRepulsionPulse();
-          this.ability.cooldownMs = 5000; // 5s universal for Repulsion Pulse
+          this.ability.cooldownMs = 6000; // 6s universal for Repulsion Pulse
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         } else if (abilityId === 'caustic_cluster') {
           this.deployCausticCluster();
-          this.ability.cooldownMs = 1000; // 1s for testing
+          this.ability.cooldownMs = 10000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
@@ -2151,7 +2231,8 @@ export default class BossScene extends Phaser.Scene {
       if (b._cc) {
         const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
         for (let i = 0; i < count; i += 1) {
-          const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter; const dist = Phaser.Math.Between(minD, maxD);
+          const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80)));
           const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
@@ -2434,7 +2515,7 @@ export default class BossScene extends Phaser.Scene {
         const count = 8; const minD = Math.max(60, Math.floor(radius * 1.2)); const maxD = Math.max(minD + 1, Math.floor(radius * 2.0));
         for (let i = 0; i < count; i += 1) {
           const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-          const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(radius * 0.60)), Math.max(Math.max(8, Math.floor(radius * 0.60)) + 1, Math.floor(radius * 1.30))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
           c.setVelocity(vx2, vy2); c.setTint(0xffaa33); c._clusterChild = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = 52; c._aoeDamage = 20;
@@ -2807,7 +2888,7 @@ export default class BossScene extends Phaser.Scene {
         const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
         for (let i = 0; i < count; i += 1) {
           const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
-          const dist = Phaser.Math.Between(8, 20); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80))); const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
           const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
           c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
           c.setVelocity(vx2, vy2); c.setTint(0x33ff66); c._ccCluster = true; c._startX = ex; c._startY = ey; c._travelMax2 = dist * dist; c._blastRadius = r; c._aoeDamage = 5;
@@ -2880,7 +2961,8 @@ export default class BossScene extends Phaser.Scene {
           // Spawn clusters
           const count = 5; const minD = Math.max(60, Math.floor(r * 1.2)); const maxD = Math.max(minD + 1, Math.floor(r * 2.0));
           for (let i = 0; i < count; i += 1) {
-            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter; const dist = Phaser.Math.Between(8, 20);
+            const base = (i / count) * Math.PI * 2; const jitter = Phaser.Math.FloatBetween(-0.25, 0.25); const ang = base + jitter;
+ const dist = Phaser.Math.Between(Math.max(8, Math.floor(r * 1.30)), Math.max(Math.max(8, Math.floor(r * 1.30)) + 1, Math.floor(r * 1.80)));
             const spd = 420; const vx2 = Math.cos(ang) * spd; const vy2 = Math.sin(ang) * spd;
             const c = this.bullets.get(ex, ey, 'bullet'); if (!c) continue;
             c.setActive(true).setVisible(true); c.setCircle(4).setOffset(-4, -4); try { c.setScale(1.1); } catch (_) {}
@@ -2909,6 +2991,11 @@ export default class BossScene extends Phaser.Scene {
     };
   }
 }
+
+
+
+
+
 
 
 
