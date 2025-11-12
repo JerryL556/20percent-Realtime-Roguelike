@@ -52,6 +52,14 @@ export default class BossScene extends Phaser.Scene {
 
     // Player (Inle art, scaled to 12px height)
     this.player = this.physics.add.sprite(width / 2, height - 60, 'player_inle').setCollideWorldBounds(true);
+    // Invisible player hitbox placeholder (like the dummy placeholder)
+    try {
+      this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
+        .setVisible(false).setActive(true);
+      this.playerHitbox.setSize(12, 12).setOffset(0, 0);
+      this.playerHitbox.body.allowGravity = false;
+      this.playerHitbox.body.setImmovable(true);
+    } catch (_) {}
     try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
     this.player.iframesUntil = 0;
@@ -86,6 +94,8 @@ export default class BossScene extends Phaser.Scene {
         try {
           const ptr = this.input?.activePointer;
           if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
+          // keep invisible player hitbox in sync
+          try { if (this.playerHitbox) this.playerHitbox.setPosition(this.player.x, this.player.y); } catch (_) {}
         } catch (_) {}
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
         try {
@@ -463,6 +473,22 @@ export default class BossScene extends Phaser.Scene {
         }
       }
       // Always destroy boss bullet on contact, even during i-frames
+      try { b.destroy(); } catch (_) {}
+    });
+    // Mirror overlap for invisible player hitbox
+    this.physics.add.overlap(this.playerHitbox, this.bossBullets, (_hb, b) => {
+      const inIframes = this.time.now < this.player.iframesUntil;
+      if (!inIframes) {
+        this.applyPlayerDamage(10);
+        this.player.iframesUntil = this.time.now + 600;
+        if (this.gs.hp <= 0) {
+          const eff = getPlayerEffects(this.gs);
+          this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+          this.gs.nextScene = SceneKeys.Hub;
+          SaveManager.saveToLocal(this.gs);
+          this.scene.start(SceneKeys.Hub);
+        }
+      }
       try { b.destroy(); } catch (_) {}
     });
   // Boss bullets also collide with destructible barricades
@@ -2194,8 +2220,8 @@ export default class BossScene extends Phaser.Scene {
       }
     } catch (_) {}
 
-    // Boss ability: grenade volley for Shotgunner
-    if (this.boss && this.boss.active && this.boss.bossType !== 'Dasher') {
+    // Boss ability: grenade volley (Shotgunner only)
+    if (this.boss && this.boss.active && this.boss.bossType === 'Shotgunner') {
       if (time >= (this._grenadeNextAvailableAt || 0)) {
         if (!this._lastAbilityRollAt || (time - this._lastAbilityRollAt) > 500) {
           this._lastAbilityRollAt = time; if (Math.random() < 0.35) { this.castGrenadeVolley(); this._grenadeNextAvailableAt = time + 6000; }

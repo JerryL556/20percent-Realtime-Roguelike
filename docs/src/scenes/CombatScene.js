@@ -441,6 +441,8 @@ export default class CombatScene extends Phaser.Scene {
             this.dummy.setFlipX(this.player.x < this.dummy.x);
             try { if (this.dummyPlaceholder) this.dummyPlaceholder.setPosition(this.dummy.x, this.dummy.y); } catch (_) {}
           }
+          // Keep invisible player hitbox in sync
+          try { if (this.playerHitbox) this.playerHitbox.setPosition(this.player.x, this.player.y); } catch (_) {}
         } catch (_) {}
         // Shield regeneration (regens even from 0 after a delay)
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
@@ -1105,6 +1107,42 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
       // Always destroy enemy bullet on contact, even during i-frames
+      try { b.destroy(); } catch (_) {}
+    });
+    // Mirror overlap for invisible player hitbox
+    this.physics.add.overlap(this.playerHitbox, this.enemyBullets, (_hb, b) => {
+      const inIframes = this.time.now < this.player.iframesUntil;
+      if (b?._rocket) {
+        const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius;
+        const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+        if ((pdx * pdx + pdy * pdy) <= r2 && !inIframes) {
+          let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
+          this.player.iframesUntil = this.time.now + 600;
+          if (this.gs.hp <= 0) {
+            const eff = getPlayerEffects(this.gs);
+            this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+            this.gs.nextScene = SceneKeys.Hub;
+            SaveManager.saveToLocal(this.gs);
+            this.scene.start(SceneKeys.Hub);
+          }
+        }
+        try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
+        this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
+        try { b.destroy(); } catch (_) {}
+        return;
+      }
+      if (!inIframes) {
+        const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
+        this.applyPlayerDamage(dmg);
+        this.player.iframesUntil = this.time.now + 600;
+        if (this.gs.hp <= 0) {
+          const eff = getPlayerEffects(this.gs);
+          this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+          this.gs.nextScene = SceneKeys.Hub;
+          SaveManager.saveToLocal(this.gs);
+          this.scene.start(SceneKeys.Hub);
+        }
+      }
       try { b.destroy(); } catch (_) {}
     });
     // Enemy bullets blocked by barricades as well
