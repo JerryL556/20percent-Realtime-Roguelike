@@ -685,10 +685,15 @@ export default class CombatScene extends Phaser.Scene {
         for (let i = 0; i < stageNormal; i += 1) spawnOneNormal();
         for (let i = 0; i < stageElite; i += 1) spawnOneElite();
       } else {
-        // Normal game: existing composition
+        // Campaign (Normal) game: composition based on depth for normals, elites by stage
         room.spawnPoints.forEach(() => spawnOneNormal());
-        // Exactly 1 elite
-        spawnOneElite();
+        // Default 1 elite; Stage 3 uses 2 elites
+        let eliteCount = 1;
+        try {
+          const st = Math.max(1, this.gs?.campaignSelectedStage || this.gs?.campaignStage || 1);
+          if (st === 3) eliteCount = 2;
+        } catch (_) {}
+        for (let i = 0; i < eliteCount; i += 1) spawnOneElite();
       }
     }
 
