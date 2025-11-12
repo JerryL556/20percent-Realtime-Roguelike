@@ -436,10 +436,10 @@ export default class CombatScene extends Phaser.Scene {
         try {
           const ptr = this.input?.activePointer;
           if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
-          // Make shooting-range dummy face the player and keep invisible hitbox in sync
+          // Make shooting-range dummy face the player and keep invisible placeholder in sync
           if (this.gs?.shootingRange && this.dummy && this.dummy.active) {
             this.dummy.setFlipX(this.player.x < this.dummy.x);
-            try { if (this.dummyHitbox) this.dummyHitbox.setPosition(this.dummy.x, this.dummy.y); } catch (_) {}
+            try { if (this.dummyPlaceholder) this.dummyPlaceholder.setPosition(this.dummy.x, this.dummy.y); } catch (_) {}
           }
         } catch (_) {}
         // Shield regeneration (regens even from 0 after a delay)
@@ -649,30 +649,20 @@ export default class CombatScene extends Phaser.Scene {
       this.dummy.isDummy = true;
       this.dummy.maxHp = 999999;
       this.dummy.hp = this.dummy.maxHp;
-      this.enemies.add(this.dummy);
+      // Do not add the visual dummy to enemies; use an invisible placeholder instead
       this.dummyLabel = this.add.text(this.dummy.x, this.dummy.y - 16, 'DMG: 0', { fontFamily: 'monospace', fontSize: 12, color: '#ffff66' }).setOrigin(0.5);
 
-      // Invisible placeholder hitbox to register bullet collision while keeping dummy behavior unchanged
+      // Invisible placeholder enemy (exactly like before), used for bullet collisions and AoE logic
       try {
-        this.dummyHitbox = this.physics.add.sprite(this.dummy.x, this.dummy.y, 'enemy_square')
-          .setVisible(false).setActive(true).setImmovable(true);
-        this.dummyHitbox.body.allowGravity = false;
-        try { this.dummyHitbox.setSize(24, 24).setOffset(0, 0); } catch (_) {}
-        // Bullet overlap for dummy hitbox so bullets get removed on contact and damage tallied
-        this.physics.add.overlap(this.bullets, this.dummyHitbox, (b, hb) => {
-          try {
-            if (!b?.active || !hb?.active) return;
-            const baseDmg = b.damage || 10;
-            this._dummyDamage = (this._dummyDamage || 0) + baseDmg;
-            if (b._core === 'pierce' && (b._pierceLeft || 0) > 0) {
-              b._pierceLeft -= 1;
-            } else {
-              try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
-              try { b.setActive(false).setVisible(false); } catch (_) {}
-              this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
-            }
-          } catch (_) {}
-        }, null, this);
+        this.dummyPlaceholder = this.physics.add.sprite(this.dummy.x, this.dummy.y, 'enemy_square');
+        this.dummyPlaceholder.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
+        this.dummyPlaceholder.setTint(0xffff00).setVisible(false).setActive(true);
+        this.dummyPlaceholder.isEnemy = true;
+        this.dummyPlaceholder.isDummy = true;
+        this.dummyPlaceholder.maxHp = 999999;
+        this.dummyPlaceholder.hp = this.dummyPlaceholder.maxHp;
+        try { this.dummyPlaceholder.body.setImmovable(true); this.dummyPlaceholder.body.moves = false; } catch (_) {}
+        this.enemies.add(this.dummyPlaceholder);
       } catch (_) {}
 
       // Portal back to Hub (right side)
