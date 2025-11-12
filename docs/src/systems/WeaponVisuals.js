@@ -19,7 +19,9 @@ export const WEAPON_TEXTURES = {
 };
 
 // Global multiplier to tweak all weapon sprite sizes uniformly
-export const WEAPON_SCALE_MULT = 3;
+// Global multiplier to tweak all weapon sprite sizes uniformly
+// Scaled down to 75% of previous size (from 3 -> 2.25)
+export const WEAPON_SCALE_MULT = 2.25;
 
 // Optionally present in assets but not used as a weapon sprite here
 const OPTIONAL_ASSETS = [
