@@ -27,6 +27,7 @@ export const WEAPON_SCALE_MULT = 2.25;
 const OPTIONAL_ASSETS = [
   { key: 'ability_ads', path: 'assets/ADS.png' },
   { key: 'ability_bit', path: 'assets/BIT.png' },
+  { key: 'ability_landmine', path: 'assets/Landmines.png' },
 ];
 
 // Optional per-weapon fine-tuning for muzzle alignment (in on-screen pixels)

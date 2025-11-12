@@ -2636,6 +2636,10 @@ export default class CombatScene extends Phaser.Scene {
           this.deployCausticCluster();
           this.ability.cooldownMs = 10000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
+        } else if (abilityId === 'landmine_dispenser') {
+          this.deployLandmineDispenser();
+          this.ability.cooldownMs = 15000; // 15s
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
     }
@@ -5213,6 +5217,87 @@ export default class CombatScene extends Phaser.Scene {
       } catch (_) { try { b.destroy(); } catch (__ ) {} }
       // Cull if off-screen
       const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
+    };
+  }
+
+  // Ability: Landmine Dispenser
+  deployLandmineDispenser() {
+    const x = this.player.x, y = this.player.y;
+    // Visual-only dispenser (no physics/collision)
+    let disp = null;
+    try { disp = createFittedImage(this, x, y, 'ability_landmine', 20); } catch (_) {}
+    if (disp) { try { disp.setDepth(8000); } catch (_) {} }
+    // Ensure container for mines
+    if (!this._mines) this._mines = [];
+    const count = 10; const full = Math.PI * 2; const step = full / count;
+    const startAng = -Math.PI / 2; // start upward, clockwise placement
+    const placeOne = (i) => {
+      const ang = startAng + i * step; // clockwise by incrementing i
+      const spd = 260; // initial outward speed until blocked
+      const vx = Math.cos(ang) * spd; const vy = Math.sin(ang) * spd;
+      const mine = this.physics.add.image(x, y, 'bullet');
+      mine.setActive(true).setVisible(true);
+      try { mine.setTint(0x33ff66); } catch (_) {}
+      try { mine.setScale(1.1); } catch (_) {}
+      // Keep square hitbox; slightly larger for stable collisions
+      try { mine.body.setSize(6, 6, true); } catch (_) {}
+      mine.setVelocity(vx, vy);
+      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20;
+      // Colliders: stop on enemies, barricades, walls (become armed). No friendly fire.
+      const armMine = () => {
+        if (mine._armed) return; mine._armed = true;
+        try { mine.setVelocity(0, 0); } catch (_) {}
+        try { mine.body.setVelocity(0, 0); } catch (_) {}
+        try { mine.body.moves = false; mine.body.setImmovable(true); } catch (_) {}
+      };
+      try { this.physics.add.collider(mine, this.enemies, () => armMine()); } catch (_) {}
+      try { if (this.walls) this.physics.add.collider(mine, this.walls, () => armMine()); } catch (_) {}
+      try {
+        if (this.barricadesHard) this.physics.add.collider(mine, this.barricadesHard, () => armMine());
+        if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => armMine());
+      } catch (_) {}
+      // Per-frame check for trigger when armed
+      mine.update = () => {
+        try {
+          if (!mine.active) return;
+          if (!mine._armed) return; // only trigger after stopping
+          const r = mine._detRadius || 30; const r2 = r * r;
+          const arr = this.enemies?.getChildren?.() || [];
+          for (let k = 0; k < arr.length; k += 1) {
+            const e = arr[k]; if (!e?.active || e?.isDummy) continue;
+            const dx = e.x - mine.x; const dy = e.y - mine.y; if ((dx * dx + dy * dy) <= r2) { this._explodeMine?.(mine); break; }
+          }
+        } catch (_) {}
+      };
+      // Add to custom group for updates
+      if (!this.mines) this.mines = this.physics.add.group({ runChildUpdate: true });
+      try { this.mines.add(mine); } catch (_) {}
+      this._mines.push(mine);
+    };
+    // Timed emission clockwise
+    for (let i = 0; i < count; i += 1) { this.time.delayedCall(i * 90, () => placeOne(i)); }
+    // Cleanup dispenser sprite after emission
+    if (disp) this.time.delayedCall(count * 90 + 200, () => { try { disp.destroy(); } catch (_) {} });
+    // Helper to detonate a mine
+    this._explodeMine = (mine) => {
+      if (!mine?.active) return;
+      const ex = mine.x; const ey = mine.y; const r = mine._blastRadius || 60; const r2 = r * r;
+      try { impactBurst(this, ex, ey, { color: 0x66ff66, size: 'large', radius: r }); } catch (_) {}
+      // Damage + stun enemies (no friendly fire)
+      try {
+        const arr = this.enemies?.getChildren?.() || [];
+        const nowS = this.time.now;
+        for (let i = 0; i < arr.length; i += 1) {
+          const e = arr[i]; if (!e?.active || e.isDummy) continue;
+          const dx = e.x - ex; const dy = e.y - ey; if ((dx * dx + dy * dy) <= r2) {
+            let dmg = mine._dmg || 30; if (typeof e.hp !== 'number') e.hp = e.maxHp || 20; e.hp -= dmg; if (e.hp <= 0) { this.killEnemy?.(e); }
+            // Apply stun accumulation (20 -> guaranteed stun)
+            e._stunValue = Math.min(10, (e._stunValue || 0) + (mine._stunVal || 0));
+            if ((e._stunValue || 0) >= 10) { e._stunnedUntil = nowS + 200; e._stunValue = 0; }
+          }
+        }
+      } catch (_) {}
+      try { mine.destroy(); } catch (_) {}
     };
   }
 }

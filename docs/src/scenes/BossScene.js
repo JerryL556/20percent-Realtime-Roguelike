@@ -1599,6 +1599,10 @@ export default class BossScene extends Phaser.Scene {
           this.deployCausticCluster();
           this.ability.cooldownMs = 10000;
           this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
+        } else if (abilityId === 'landmine_dispenser') {
+          this.deployLandmineDispenser?.();
+          this.ability.cooldownMs = 15000; // 15s
+          this.ability.onCooldownUntil = nowT + this.ability.cooldownMs;
         }
       }
     }
@@ -2345,6 +2349,52 @@ export default class BossScene extends Phaser.Scene {
       const n = Phaser.Math.Between(3, 5);
       for (let k = 0; k < n; k += 1) { place(gx + Phaser.Math.Between(-1, 1), gy + Phaser.Math.Between(-1, 1)); }
     }
+  }
+
+  // Ability: Landmine Dispenser (Boss Scene)
+  deployLandmineDispenser() {
+    const x = this.player.x, y = this.player.y;
+    let disp = null; try { disp = createFittedImage(this, x, y, 'ability_landmine', 20); } catch (_) {}
+    if (disp) { try { disp.setDepth(8000); } catch (_) {} }
+    if (!this._mines) this._mines = [];
+    const count = 10; const full = Math.PI * 2; const step = full / count; const startAng = -Math.PI / 2;
+    const placeOne = (i) => {
+      const ang = startAng + i * step; const spd = 260; const vx = Math.cos(ang) * spd; const vy = Math.sin(ang) * spd;
+      const mine = this.physics.add.image(x, y, 'bullet');
+      mine.setActive(true).setVisible(true);
+      try { mine.setTint(0x33ff66); } catch (_) {}
+      try { mine.setScale(1.1); } catch (_) {}
+      try { mine.body.setSize(6, 6, true); } catch (_) {}
+      mine.setVelocity(vx, vy);
+      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20;
+      const armMine = () => { if (mine._armed) return; mine._armed = true; try { mine.setVelocity(0, 0); } catch (_) {} try { mine.body.setVelocity(0, 0); mine.body.moves = false; mine.body.setImmovable(true); } catch (_) {} };
+      try { if (this.walls) this.physics.add.collider(mine, this.walls, () => armMine()); } catch (_) {}
+      try { if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => armMine()); } catch (_) {}
+      try { if (this.bossGroup) this.physics.add.collider(mine, this.bossGroup, () => armMine()); } catch (_) {}
+      mine.update = () => {
+        try {
+          if (!mine.active || !mine._armed) return;
+          const r = mine._detRadius || 30; const r2 = r * r;
+          const boss = this.boss; if (boss?.active) { const dx = boss.x - mine.x; const dy = boss.y - mine.y; if ((dx * dx + dy * dy) <= r2) { this._explodeMineBoss?.(mine); return; } }
+        } catch (_) {}
+      };
+      if (!this.mines) this.mines = this.physics.add.group({ runChildUpdate: true });
+      try { this.mines.add(mine); } catch (_) {}
+      this._mines.push(mine);
+    };
+    for (let i = 0; i < count; i += 1) this.time.delayedCall(i * 90, () => placeOne(i));
+    if (disp) this.time.delayedCall(count * 90 + 200, () => { try { disp.destroy(); } catch (_) {} });
+    this._explodeMineBoss = (mine) => {
+      if (!mine?.active) return; const ex = mine.x; const ey = mine.y; const r = mine._blastRadius || 60;
+      try { impactBurst(this, ex, ey, { color: 0x66ff66, size: 'large', radius: r }); } catch (_) {}
+      try {
+        const boss = this.boss; if (boss?.active) { const dx = boss.x - ex; const dy = boss.y - ey; if ((dx * dx + dy * dy) <= (r * r)) {
+          if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (mine._dmg || 30); if (boss.hp <= 0) this.killBoss(boss);
+          boss._stunValue = Math.min(10, (boss._stunValue || 0) + (mine._stunVal || 0)); if ((boss._stunValue || 0) >= 10) { boss._stunnedUntil = this.time.now + 200; boss._stunValue = 0; }
+        } }
+      } catch (_) {}
+      try { mine.destroy(); } catch (_) {}
+    };
   }
 
   // Hazel ability stubs (to be implemented later)

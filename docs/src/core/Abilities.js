@@ -24,6 +24,14 @@ export const abilityDefs = [
       'Each detonation leaves a green toxin field (6s). Enemies inside become disoriented and less accurate.',
     ].join('\n'),
   },
+  {
+    id: 'landmine_dispenser',
+    name: 'Landmine Dispenser',
+    desc: [
+      'Deploys a dispenser that releases 10 landmines around itself in a circle.',
+      'Mines are green blocks, persist until triggered, and detonate for 30 dmg and 20 stun (60px radius) when an enemy enters 30px.',
+    ].join('\n'),
+  },
 ];
 
 export function getAbilityById(id) {
