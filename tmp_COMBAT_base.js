@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -115,7 +115,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150° cone, 48px range, 10 damage (90ms swing, 45ms hit)
+  // Player melee implementation: 150掳 cone, 48px range, 10 damage (90ms swing, 45ms hit)
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -196,17 +196,9 @@ export default class CombatScene extends Phaser.Scene {
         }
       } catch (_) {}
       gs.lastDamagedAt = this.time.now;
-      // On death in Deep Dive: record best then reset run so level/stage restart when returning to hub
+      // Reset Deep Dive run on death so level/stage restart when returning to hub
       try {
         if ((gs.hp | 0) <= 0 && gs.gameMode === 'DeepDive') {
-          try {
-            const cur = gs.deepDive || { level: 1, stage: 1 };
-            const best = gs.deepDiveBest || { level: 0, stage: 0 };
-            if (cur.level > best.level || (cur.level === best.level && cur.stage > best.stage)) {
-              gs.deepDiveBest = { level: cur.level, stage: cur.stage };
-              SaveManager.saveToLocal(gs);
-            }
-          } catch (_) {}
           gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
         }
       } catch (_) {}
@@ -269,7 +261,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180�? safe for lerp)
+          // Linear interpolate angles (range is <= 180锟? safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -403,22 +395,6 @@ export default class CombatScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(width / 2, height / 2, 'player_inle').setCollideWorldBounds(true);
     try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
-    // Dedicated 12x12 collider proxy for barricades/walls
-    try {
-      this.playerCollider = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(false).setActive(true).setCollideWorldBounds(true);
-      this.playerCollider.setSize(12, 12).setOffset(0, 0);
-      this.playerCollider.body.allowGravity = false;
-      if (this.player?.body) this.player.body.checkCollision.none = true;
-    } catch (_) {}
-    // Player hitbox placeholder (invisible) for consistent bullet collisions
-    try {
-      this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(false).setActive(true);
-      this.playerHitbox.setSize(12, 12).setOffset(0, 0);
-      this.playerHitbox.body.allowGravity = false;
-      this.playerHitbox.body.setImmovable(true);
-    } catch (_) {}
     this.player.iframesUntil = 0;
     this.playerFacing = 0; // radians
 
@@ -460,14 +436,10 @@ export default class CombatScene extends Phaser.Scene {
         try {
           const ptr = this.input?.activePointer;
           if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
-          // Make shooting-range dummy face the player and keep invisible placeholder in sync
+          // Make shooting-range dummy face the player
           if (this.gs?.shootingRange && this.dummy && this.dummy.active) {
             this.dummy.setFlipX(this.player.x < this.dummy.x);
-            try { if (this.dummyPlaceholder) this.dummyPlaceholder.setPosition(this.dummy.x, this.dummy.y); } catch (_) {}
           }
-      // Keep collider proxy and invisible bullet hitbox in sync
-      try { if (this.playerCollider && this.player) this.player.setPosition(this.playerCollider.x, this.playerCollider.y); } catch (_) {}
-      try { if (this.playerHitbox && this.player) this.playerHitbox.setPosition(this.player.x, this.player.y); } catch (_) {}
         } catch (_) {}
         // Shield regeneration (regens even from 0 after a delay)
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
@@ -676,21 +648,8 @@ export default class CombatScene extends Phaser.Scene {
       this.dummy.isDummy = true;
       this.dummy.maxHp = 999999;
       this.dummy.hp = this.dummy.maxHp;
-      // Do not add the visual dummy to enemies; use an invisible placeholder instead
+      this.enemies.add(this.dummy);
       this.dummyLabel = this.add.text(this.dummy.x, this.dummy.y - 16, 'DMG: 0', { fontFamily: 'monospace', fontSize: 12, color: '#ffff66' }).setOrigin(0.5);
-
-      // Invisible placeholder enemy (exactly like before), used for bullet collisions and AoE logic
-      try {
-        this.dummyPlaceholder = this.physics.add.sprite(this.dummy.x, this.dummy.y, 'enemy_square');
-        this.dummyPlaceholder.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
-        this.dummyPlaceholder.setTint(0xffff00).setVisible(false).setActive(true);
-        this.dummyPlaceholder.isEnemy = true;
-        this.dummyPlaceholder.isDummy = true;
-        this.dummyPlaceholder.maxHp = 999999;
-        this.dummyPlaceholder.hp = this.dummyPlaceholder.maxHp;
-        try { this.dummyPlaceholder.body.setImmovable(true); this.dummyPlaceholder.body.moves = false; } catch (_) {}
-        this.enemies.add(this.dummyPlaceholder);
-      } catch (_) {}
 
       // Portal back to Hub (right side)
       const px = width - 40; const py = height / 2;
@@ -703,16 +662,12 @@ export default class CombatScene extends Phaser.Scene {
 
     // Colliders
     if (this.walls) {
-      const pCol = this.playerCollider || this.player;
-      this.physics.add.collider(pCol, this.walls);
+      this.physics.add.collider(this.player, this.walls);
       this.physics.add.collider(this.enemies, this.walls);
     }
     // Colliders with barricades (block movement and bullets)
-    {
-      const pCol = this.playerCollider || this.player;
-      this.physics.add.collider(pCol, this.barricadesHard);
-      this.physics.add.collider(pCol, this.barricadesSoft);
-    }
+    this.physics.add.collider(this.player, this.barricadesHard);
+    this.physics.add.collider(this.player, this.barricadesSoft);
     this.physics.add.collider(this.enemies, this.barricadesHard);
     this.physics.add.collider(this.enemies, this.barricadesSoft);
     // Enemies can break destructible barricades by pushing into them
@@ -847,7 +802,7 @@ export default class CombatScene extends Phaser.Scene {
         try { b.destroy(); } catch (_) {}
         return;
       }
-      // Rook shield: block non-rail bullets (including rockets) within 90° front arc
+      // Rook shield: block non-rail bullets (including rockets) within 90掳 front arc
       if (e.isRook && !b._rail) {
         try {
           const r = (e._shieldRadius || 60);
@@ -1067,8 +1022,7 @@ export default class CombatScene extends Phaser.Scene {
       if (e.hp <= 0) { this.killEnemy(e); }
     });
 
-    const overlapPlayerRef = this.playerCollider || this.player;
-    this.physics.add.overlap(overlapPlayerRef, this.enemies, (p, e) => {
+    this.physics.add.overlap(this.player, this.enemies, (p, e) => {
       // Ignore dummy collisions for player damage
       if (e?.isDummy) return;
       // Melee enemies do not apply touch damage; only their cone hit can damage
@@ -1101,7 +1055,7 @@ export default class CombatScene extends Phaser.Scene {
     // Grenades collide with barricades (respect cover)
     this.physics.add.collider(this.enemyGrenades, this.barricadesHard, (b, s) => this.onEnemyGrenadeHitBarricade(b, s));
     this.physics.add.collider(this.enemyGrenades, this.barricadesSoft, (b, s) => this.onEnemyGrenadeHitBarricade(b, s));
-    this.physics.add.overlap(overlapPlayerRef, this.enemyBullets, (p, b) => {
+    this.physics.add.overlap(this.player, this.enemyBullets, (p, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
       if (b?._rocket) {
         // Rocket: explode on contact, apply AoE to player
@@ -1137,42 +1091,6 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
       // Always destroy enemy bullet on contact, even during i-frames
-      try { b.destroy(); } catch (_) {}
-    });
-    // Mirror overlap for invisible player hitbox (guard creation to avoid undefined references)
-    if (this.playerHitbox && this.enemyBullets) this.physics.add.overlap(this.playerHitbox, this.enemyBullets, (_hb, b) => {
-      const inIframes = this.time.now < this.player.iframesUntil;
-      if (b?._rocket) {
-        const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius;
-        const pdx = this.player.x - ex; const pdy = this.player.y - ey;
-        if ((pdx * pdx + pdy * pdy) <= r2 && !inIframes) {
-          let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
-          this.player.iframesUntil = this.time.now + 600;
-          if (this.gs.hp <= 0) {
-            const eff = getPlayerEffects(this.gs);
-            this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
-            this.gs.nextScene = SceneKeys.Hub;
-            SaveManager.saveToLocal(this.gs);
-            this.scene.start(SceneKeys.Hub);
-          }
-        }
-        try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
-        this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
-        try { b.destroy(); } catch (_) {}
-        return;
-      }
-      if (!inIframes) {
-        const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
-        this.applyPlayerDamage(dmg);
-        this.player.iframesUntil = this.time.now + 600;
-        if (this.gs.hp <= 0) {
-          const eff = getPlayerEffects(this.gs);
-          this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
-          this.gs.nextScene = SceneKeys.Hub;
-          SaveManager.saveToLocal(this.gs);
-          this.scene.start(SceneKeys.Hub);
-        }
-      }
       try { b.destroy(); } catch (_) {}
     });
     // Enemy bullets blocked by barricades as well
@@ -1526,9 +1444,9 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2�?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2锟?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
-        // Slightly increase Smart HMG homing: ~0.75��/frame (~45��/s)
+        // Slightly increase Smart HMG homing: ~0.75锟斤拷/frame (~45锟斤拷/s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1588,7 +1506,7 @@ export default class CombatScene extends Phaser.Scene {
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0); // low velocity
         // Max turn per frame baseline is increased for no-core missiles (effectively time-scaled later)
-        // Drastically higher base homing for no-core: 8 deg/frame (~480��/s at 60 FPS)
+        // Drastically higher base homing for no-core: 8 deg/frame (~480锟斤拷/s at 60 FPS)
         b._maxTurn = Phaser.Math.DegToRad(8);
         // Apply optional guided turn-rate multiplier from cores
         if (typeof weapon._guidedTurnMult === 'number') {
@@ -1599,8 +1517,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1�?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90�?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1锟?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90锟?cone total
         }
         // Preserve Smart Core homing equal to old behavior: 2 deg/frame scaled by mult
         if (b._smart) {
@@ -1630,7 +1548,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45�?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45锟?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -2341,13 +2259,13 @@ export default class CombatScene extends Phaser.Scene {
           this._dashTrailLast.x = this.player.x; this._dashTrailLast.y = this.player.y;
         }
       } catch (_) {}
-      (this.playerCollider || this.player).setVelocity(this.dash.vx, this.dash.vy);
+      this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
       this._dashTrailLast = null;
       const mv = this.inputMgr.moveVec;
       const speed = 200 * (eff.moveSpeedMult || 1);
-      (this.playerCollider || this.player).setVelocity(mv.x * speed, mv.y * speed);
+      this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
 
     // Regen charges
@@ -3343,7 +3261,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150�? 48px, 10 dmg
+    // Player melee: C key, 150锟? 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -3400,7 +3318,7 @@ export default class CombatScene extends Phaser.Scene {
         let speed = e.speed || 60;
         // Global speed boost for all enemies
         speed *= 1.5;
-        // Rook: update and draw shield; turn slowly toward player (30°/s)
+        // Rook: update and draw shield; turn slowly toward player (30掳/s)
         if (e.isRook) {
           try {
             const targetAng = Math.atan2(dy, dx);
@@ -3462,7 +3380,7 @@ export default class CombatScene extends Phaser.Scene {
         }
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
-          // Align enemy melee FOV with player melee (150° total => 75° half-angle)
+          // Align enemy melee FOV with player melee (150掳 total => 75掳 half-angle)
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
           let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 170, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 500 };
           if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 }; }
@@ -3477,7 +3395,7 @@ export default class CombatScene extends Phaser.Scene {
           if (e._mState === 'windup') {
             vx = 0; vy = 0;
             if (now >= (e._meleeUntil || 0)) {
-              // Start sweep (VFX matches player's 150° cone)
+              // Start sweep (VFX matches player's 150掳 cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
               // Enemy slash VFX fixed at 90ms to match player
               try { this.spawnMeleeVfx(e, e._meleeFacing, 150, 90, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
@@ -3718,7 +3636,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors �?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors 锟?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -4798,7 +4716,7 @@ export default class CombatScene extends Phaser.Scene {
     const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
       const e = enemies[i]; if (!e?.active) continue;
-      // Rook shield: treat 90° arc as obstacle if facing the beam source
+      // Rook shield: treat 90掳 arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
           const r = (e._shieldRadius || 60);

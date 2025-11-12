@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -52,24 +52,8 @@ export default class BossScene extends Phaser.Scene {
 
     // Player (Inle art, scaled to 12px height)
     this.player = this.physics.add.sprite(width / 2, height - 60, 'player_inle').setCollideWorldBounds(true);
-    // Player hitbox placeholder (invisible)
-    try {
-      this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(false).setActive(true);
-      this.playerHitbox.setSize(12, 12).setOffset(0, 0);
-      this.playerHitbox.body.allowGravity = false;
-      this.playerHitbox.body.setImmovable(true);
-    } catch (_) {}
     try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
-    // Dedicated 12x12 collider proxy for barricades/walls
-    try {
-      this.playerCollider = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(false).setActive(true).setCollideWorldBounds(true);
-      this.playerCollider.setSize(12, 12).setOffset(0, 0);
-      this.playerCollider.body.allowGravity = false;
-      if (this.player?.body) this.player.body.checkCollision.none = true;
-    } catch (_) {}
     this.player.iframesUntil = 0;
     this.playerFacing = 0;
     this.dash = { active: false, until: 0, cooldownUntil: 0, vx: 0, vy: 0, charges: 0, regen: [] };
@@ -95,8 +79,6 @@ export default class BossScene extends Phaser.Scene {
     // Keep weapon sprite updated every frame (follows player even if boss is stunned)
     try {
       this.events.on('update', () => {
-        // Glue visual player to collider position
-        try { if (this.playerCollider && this.player) this.player.setPosition(this.playerCollider.x, this.playerCollider.y); } catch (_) {}
         updateWeaponSprite(this);
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
@@ -104,8 +86,6 @@ export default class BossScene extends Phaser.Scene {
         try {
           const ptr = this.input?.activePointer;
           if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
-          // keep invisible player hitbox in sync
-          try { if (this.playerHitbox) this.playerHitbox.setPosition(this.player.x, this.player.y); } catch (_) {}
         } catch (_) {}
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
         try {
@@ -203,20 +183,13 @@ export default class BossScene extends Phaser.Scene {
       this.boss.speed = 80;
       this.boss.dashDamage = Math.floor(20 * (mods.enemyDamage || 1));
       try { this.boss.setTint(0xff4444); } catch (_) {}
-    } else if (bossType === 'Shotgunner') {
+    } else {
       this.boss.bossType = 'Shotgunner';
       this.boss.maxHp = Math.floor(650 * (mods.enemyHp || 1));
       this.boss.hp = this.boss.maxHp;
       this.boss.speed = 50;
       this.boss.dashDamage = Math.floor(16 * (mods.enemyDamage || 1));
       try { this.boss.setTint(0xffff66); } catch (_) {}
-    } else if (bossType === 'Hazel') {
-      this.boss.bossType = 'Hazel';
-      this.boss.maxHp = Math.floor(700 * (mods.enemyHp || 1));
-      this.boss.hp = this.boss.maxHp;
-      this.boss.speed = 60;
-      this.boss.dashDamage = Math.floor(18 * (mods.enemyDamage || 1));
-      try { this.boss.setTint(0x66ccff); } catch (_) {}
     }
     try { this.gs.lastBossType = this.boss.bossType; SaveManager.saveToLocal(this.gs); } catch (_) {}
     this._dashSeq = null;
@@ -248,18 +221,14 @@ export default class BossScene extends Phaser.Scene {
       this.walls = null;
     }
     if (this.walls) {
-      const pCol = this.playerCollider || this.player;
-      this.physics.add.collider(pCol, this.walls);
+      this.physics.add.collider(this.player, this.walls);
       this.physics.add.collider(this.boss, this.walls);
     }
 
     // Barricades (destructible soft cover)
     this.barricadesSoft = this.physics.add.staticGroup();
     try { this.generateBossBarricades(); } catch (_) {}
-    {
-      const pCol = this.playerCollider || this.player;
-      this.physics.add.collider(pCol, this.barricadesSoft);
-    }
+    this.physics.add.collider(this.player, this.barricadesSoft);
     // Boss vs barricades: allow melee chip when not dashing; no separation during Dasher dash
     this.physics.add.collider(
       this.boss,
@@ -272,8 +241,7 @@ export default class BossScene extends Phaser.Scene {
     );
 
     // Basic overlap damage
-    const overlapPlayerRef = this.playerCollider || this.player;
-    this.physics.add.overlap(overlapPlayerRef, this.boss, () => {
+    this.physics.add.overlap(this.player, this.boss, () => {
       if (this.time.now < this.player.iframesUntil) return;
       this.applyPlayerDamage(this.boss.damage);
       this.player.iframesUntil = this.time.now + 700;
@@ -474,7 +442,7 @@ export default class BossScene extends Phaser.Scene {
       maxSize: 64,
       runChildUpdate: true,
     });
-    this.physics.add.overlap(overlapPlayerRef, this.bossBullets, (p, b) => {
+    this.physics.add.overlap(this.player, this.bossBullets, (p, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
       if (!inIframes) {
         this.applyPlayerDamage(10); // boss bullet damage
@@ -490,22 +458,6 @@ export default class BossScene extends Phaser.Scene {
       // Always destroy boss bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
-    // Mirror overlap for invisible player hitbox (guard)
-    if (this.playerHitbox && this.bossBullets) this.physics.add.overlap(this.playerHitbox, this.bossBullets, (_hb, b) => {
-      const inIframes = this.time.now < this.player.iframesUntil;
-      if (!inIframes) {
-        this.applyPlayerDamage(10);
-        this.player.iframesUntil = this.time.now + 600;
-        if (this.gs.hp <= 0) {
-          const eff = getPlayerEffects(this.gs);
-          this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
-          this.gs.nextScene = SceneKeys.Hub;
-          SaveManager.saveToLocal(this.gs);
-          this.scene.start(SceneKeys.Hub);
-        }
-      }
-      try { b.destroy(); } catch (_) {}
-    });
   // Boss bullets also collide with destructible barricades
     this.physics.add.collider(this.bossBullets, this.barricadesSoft, (b, s) => this.onBossBulletHitBarricade(b, s));
     // Player bullets (rockets, caustic) collide with barricades in boss arena
@@ -517,7 +469,7 @@ export default class BossScene extends Phaser.Scene {
     // Place near top area
     this.bossHpBar = new HpBar(this, barX, 60, barW, 10);
     // Boss name above the HP bar (dynamic)
-    this.bossName = (this.boss?.bossType === 'Dasher') ? 'Dasher' : (this.boss?.bossType === 'Hazel' ? 'Hazel' : 'Shotgunner');
+    this.bossName = (this.boss?.bossType === 'Dasher') ? 'Dasher' : 'Shotgunner';
     this.bossNameText = this.add.text(width / 2, 48, this.bossName, { fontFamily: 'monospace', fontSize: 16, color: '#ff6666' }).setOrigin(0.5);
     this.exitRect = null;
     this.exitG = this.add.graphics();
@@ -590,17 +542,9 @@ export default class BossScene extends Phaser.Scene {
         }
       } catch (_) {}
       gs.lastDamagedAt = this.time.now;
-      // On death in Deep Dive: record best then reset progression before returning to hub
+      // Reset Deep Dive progression on death before returning to hub
       try {
         if ((gs.hp | 0) <= 0 && gs.gameMode === 'DeepDive') {
-          try {
-            const cur = gs.deepDive || { level: 1, stage: 1 };
-            const best = gs.deepDiveBest || { level: 0, stage: 0 };
-            if (cur.level > best.level || (cur.level === best.level && cur.stage > best.stage)) {
-              gs.deepDiveBest = { level: cur.level, stage: cur.stage };
-              SaveManager.saveToLocal(gs);
-            }
-          } catch (_) {}
           gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
         }
       } catch (_) {}
@@ -1396,12 +1340,12 @@ export default class BossScene extends Phaser.Scene {
           this._dashTrailLast.x = this.player.x; this._dashTrailLast.y = this.player.y;
         }
       } catch (_) {}
-      (this.playerCollider || this.player).setVelocity(this.dash.vx, this.dash.vy);
+      this.player.setVelocity(this.dash.vx, this.dash.vy);
     } else {
       this.dash.active = false;
       this._dashTrailLast = null;
       const speed = 200 * (eff.moveSpeedMult || 1);
-      (this.playerCollider || this.player).setVelocity(mv.x * speed, mv.y * speed);
+      this.player.setVelocity(mv.x * speed, mv.y * speed);
     }
 
     // Regen charges
@@ -2186,7 +2130,6 @@ export default class BossScene extends Phaser.Scene {
     // Boss shooting pattern (pause during dash)
     if (this.boss && this.boss.active && !this._castingGrenades) {
       const isDasher = (this.boss.bossType === 'Dasher');
-      const isHazel = (this.boss.bossType === 'Hazel');
       // Do not shoot while any dash sequence is active
       const canShoot = !this._dashSeq;
       const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
@@ -2204,13 +2147,6 @@ export default class BossScene extends Phaser.Scene {
             if (b) { b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.setTint(0xff4444); b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); }; }
             this._bossBurstLeft -= 1; this._bossNextBurstAt = this._bossBurstLeft <= 0 ? 0 : nowT + 100; if (this._bossBurstLeft <= 0) this.lastBossShot = nowT;
           }
-        }
-      } else if (isHazel) {
-        if (canShoot && (!this._hazelLastShot || (time - this._hazelLastShot) >= 1000)) {
-          this._hazelLastShot = time;
-          const ang = base; const vx = Math.cos(ang) * 420; const vy = Math.sin(ang) * 420;
-          const b = this.bossBullets.get(this.boss.x, this.boss.y, 'bullet');
-          if (b) { b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.setTint(0x66ccff); b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); }; }
         }
       } else {
         if (!this.lastBossShot || time - this.lastBossShot > 700) {
@@ -2243,8 +2179,8 @@ export default class BossScene extends Phaser.Scene {
       }
     } catch (_) {}
 
-    // Boss ability: grenade volley (Shotgunner only)
-    if (this.boss && this.boss.active && this.boss.bossType === 'Shotgunner') {
+    // Boss ability: grenade volley for Shotgunner
+    if (this.boss && this.boss.active && this.boss.bossType !== 'Dasher') {
       if (time >= (this._grenadeNextAvailableAt || 0)) {
         if (!this._lastAbilityRollAt || (time - this._lastAbilityRollAt) > 500) {
           this._lastAbilityRollAt = time; if (Math.random() < 0.35) { this.castGrenadeVolley(); this._grenadeNextAvailableAt = time + 6000; }
@@ -2303,10 +2239,6 @@ export default class BossScene extends Phaser.Scene {
       for (let k = 0; k < n; k += 1) { place(gx + Phaser.Math.Between(-1, 1), gy + Phaser.Math.Between(-1, 1)); }
     }
   }
-
-  // Hazel ability stubs (to be implemented later)
-  castHazelAbilityOne() { /* placeholder */ }
-  castHazelAbilityTwo() { /* placeholder */ }
 
   // Player bullet hits a barricade (all barricades here are destructible)
   onBulletHitBarricade(b, s) {
