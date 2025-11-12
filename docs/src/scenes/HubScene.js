@@ -39,6 +39,29 @@ export default class HubScene extends Phaser.Scene {
       this.time.delayedCall(150, ensureDeepDiveLabel);
     } catch (_) {}
 
+    // Campaign indicator in Hub when Campaign (Normal) mode is selected
+    try {
+      const ensureCampaignLabel = () => {
+        const ui = this.scene.get(SceneKeys.UI);
+        if (!ui) return;
+        if (!ui.campaignText || !ui.campaignText.active) {
+          ui.campaignText = ui.add.text(12, 44, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'Normal') {
+          const st = Math.max(1, this.gs?.campaignStage || 1);
+          const completed = !!this.gs?.campaignCompleted;
+          const txt = completed ? 'Campain: Completed' : `Campain: Stage ${st}`;
+          ui.campaignText.setText(txt);
+          ui.campaignText.setVisible(true);
+        } else {
+          ui.campaignText.setVisible(false);
+        }
+      };
+      ensureCampaignLabel();
+      this.time.delayedCall(50, ensureCampaignLabel);
+      this.time.delayedCall(150, ensureCampaignLabel);
+    } catch (_) {}
+
 
     // Fully restore player HP and Shield upon entering Hub
     try {
