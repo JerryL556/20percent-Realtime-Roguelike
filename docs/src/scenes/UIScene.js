@@ -635,7 +635,7 @@ export default class UIScene extends Phaser.Scene {
       if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = [];
       allCoreIds.forEach((id) => { if (!gs.ownedWeaponCores.includes(id)) gs.ownedWeaponCores.push(id); });
     } catch (_) {}
-    const priceMod = 120; const priceCoreG = 200; const priceCoreDC = 1;
+    const priceMod = 120; const priceCoreG = 150; const priceCoreDC = 1;
     const renderList = () => {
       try {
         try { list.removeAll(true); } catch (_) {}
@@ -1013,7 +1013,7 @@ export default class UIScene extends Phaser.Scene {
   showResourceHint(text) {
     try {
       const { width } = this.scale;
-      // Place below the in-game "Clear enemies" prompt (y ï¿?40)
+      // Place below the in-game "Clear enemies" prompt (y ???40)
       const baseY = 64;
       const gap = 18;
       const idx = (this._resourceToasts || []).length;

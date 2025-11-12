@@ -21,7 +21,7 @@ export function difficultyModifiers(diff) {
 export class GameState {
   constructor() {
     this.gold = 99999; // testing default
-    this.droneCores = 0; // secondary currency for cores
+    this.droneCores = 30; // secondary currency for cores (start with 30)
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -72,7 +72,7 @@ export class GameState {
 
   startNewRun(seed, difficulty) {
     this.gold = 99999; // testing default
-    this.droneCores = 0;
+    this.droneCores = 30;
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -240,7 +240,7 @@ export class GameState {
     const gs = new GameState();
     Object.assign(gs, obj);
     if (typeof gs.xp !== 'number') gs.xp = 0;
-    if (typeof gs.droneCores !== 'number') gs.droneCores = 0;
+    if (typeof gs.droneCores !== 'number') gs.droneCores = 30;
     gs.rng = new RNG(gs.runSeed);
     if (!gs.ownedWeapons) gs.ownedWeapons = ['pistol'];
     if (!gs.equippedWeapons || !Array.isArray(gs.equippedWeapons)) gs.equippedWeapons = [gs.ownedWeapons[0] || 'pistol', null];
