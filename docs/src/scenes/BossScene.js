@@ -2385,7 +2385,7 @@ export default class BossScene extends Phaser.Scene {
       try { mine.setTint(0x33ff66); } catch (_) {}
       try { mine.setScale(1.1); } catch (_) {}
       try { mine.body.setSize(6, 6, true); } catch (_) {}
-      mine.setVelocity(vx, vy); mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; const stopR = 60; mine._travelMax2 = stopR * stopR;
+      mine.setVelocity(vx, vy); mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; const stopR = 100; mine._travelMax2 = stopR * stopR;
       const armMine = () => { if (mine._armed) return; mine._armed = true; try { mine.setVelocity(0, 0); } catch (_) {} try { mine.body.setVelocity(0, 0); mine.body.moves = false; mine.body.setImmovable(true); } catch (_) {} };
       try { if (this.walls) this.physics.add.collider(mine, this.walls, () => armMine()); } catch (_) {}
       try { if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => armMine()); } catch (_) {}
@@ -3213,6 +3213,7 @@ export default class BossScene extends Phaser.Scene {
     };
   }
 }
+
 
 
 
