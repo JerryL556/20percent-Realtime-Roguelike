@@ -16,15 +16,16 @@ export default class HubScene extends Phaser.Scene {
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
-    // Deep Dive indicator in Hub when DeepDive mode is selected
+    // Deep Dive indicator in Hub when DeepDive mode is selected (mirror CombatScene behavior with retries)
     try {
-      const ui = this.scene.get(SceneKeys.UI);
-      if (ui) {
+      const ensureDeepDiveLabel = () => {
+        const ui = this.scene.get(SceneKeys.UI);
+        if (!ui) return;
         if (!ui.deepDiveText || !ui.deepDiveText.active) {
           ui.deepDiveText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'DeepDive') {
-          const best = this.gs.deepDiveBest || { level: 0, stage: 0 };
+          const best = this.gs?.deepDiveBest || { level: 0, stage: 0 };
           const L = Math.max(0, best.level || 0);
           const S = Math.max(0, Math.min(4, best.stage || 0));
           ui.deepDiveText.setText(`Deepest dive: ${L}-${S}`);
@@ -32,7 +33,10 @@ export default class HubScene extends Phaser.Scene {
         } else {
           ui.deepDiveText.setVisible(false);
         }
-      }
+      };
+      ensureDeepDiveLabel();
+      this.time.delayedCall(50, ensureDeepDiveLabel);
+      this.time.delayedCall(150, ensureDeepDiveLabel);
     } catch (_) {}
 
 
