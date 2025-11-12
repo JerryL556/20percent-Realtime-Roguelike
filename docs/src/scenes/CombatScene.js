@@ -196,9 +196,17 @@ export default class CombatScene extends Phaser.Scene {
         }
       } catch (_) {}
       gs.lastDamagedAt = this.time.now;
-      // Reset Deep Dive run on death so level/stage restart when returning to hub
+      // On death in Deep Dive: record best then reset run so level/stage restart when returning to hub
       try {
         if ((gs.hp | 0) <= 0 && gs.gameMode === 'DeepDive') {
+          try {
+            const cur = gs.deepDive || { level: 1, stage: 1 };
+            const best = gs.deepDiveBest || { level: 0, stage: 0 };
+            if (cur.level > best.level || (cur.level === best.level && cur.stage > best.stage)) {
+              gs.deepDiveBest = { level: cur.level, stage: cur.stage };
+              SaveManager.saveToLocal(gs);
+            }
+          } catch (_) {}
           gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
         }
       } catch (_) {}

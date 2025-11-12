@@ -356,7 +356,7 @@ export const weaponCores = [
       if (!w || w.id !== 'rifle') return w;
       const slower = Math.floor((w.fireRateMs || 111) * 1.25);
       const newDmg = Math.max(1, (w.damage || 0) - 2);
-      return { ...w, fireRateMs: slower, damage: newDmg, _igniteOnHit: 5 };
+      return { ...w, fireRateMs: slower, damage: newDmg, _igniteOnHit: 4 };
     },
   },
   {

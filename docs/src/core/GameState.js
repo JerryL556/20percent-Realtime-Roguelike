@@ -20,8 +20,8 @@ export function difficultyModifiers(diff) {
 
 export class GameState {
   constructor() {
-    this.gold = 99999; // testing default
-    this.droneCores = 30; // secondary currency for cores (start with 30)
+    this.gold = 500;
+    this.droneCores = 1; // secondary currency for cores
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -57,6 +57,8 @@ export class GameState {
     this.gameMode = 'Normal';
     // Deep Dive state
     this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
+    // Best Deep Dive record (persists across runs until improved)
+    this.deepDiveBest = { level: 0, stage: 0 };
     // Boss Rush sequence queue (array of boss type strings)
     this.bossRushQueue = [];
     // Track last spawned boss type in Normal mode to alternate
@@ -71,8 +73,8 @@ export class GameState {
   }
 
   startNewRun(seed, difficulty) {
-    this.gold = 99999; // testing default
-    this.droneCores = 30;
+    this.gold = 500;
+    this.droneCores = 1;
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -227,6 +229,7 @@ export class GameState {
       nextScene: this.nextScene,
       gameMode: this.gameMode,
       deepDive: this.deepDive,
+      deepDiveBest: this.deepDiveBest,
       bossRushQueue: this.bossRushQueue,
       lastBossType: this.lastBossType,
       abilityId: this.abilityId,
@@ -240,8 +243,9 @@ export class GameState {
     const gs = new GameState();
     Object.assign(gs, obj);
     if (typeof gs.xp !== 'number') gs.xp = 0;
-    if (typeof gs.droneCores !== 'number') gs.droneCores = 30;
+    if (typeof gs.droneCores !== 'number') gs.droneCores = 1;
     gs.rng = new RNG(gs.runSeed);
+    if (!gs.deepDiveBest) gs.deepDiveBest = { level: 0, stage: 0 };
     if (!gs.ownedWeapons) gs.ownedWeapons = ['pistol'];
     if (!gs.equippedWeapons || !Array.isArray(gs.equippedWeapons)) gs.equippedWeapons = [gs.ownedWeapons[0] || 'pistol', null];
     if (!gs.activeWeapon) gs.activeWeapon = gs.equippedWeapons[0] || gs.ownedWeapons[0] || 'pistol';

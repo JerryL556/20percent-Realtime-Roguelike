@@ -16,8 +16,24 @@ export default class HubScene extends Phaser.Scene {
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
-    // Ensure deep dive tracker is hidden in Hub if it exists
-    try { const ui = this.scene.get(SceneKeys.UI); if (ui && ui.deepDiveText) ui.deepDiveText.setVisible(false); } catch (_) {}
+    // Deep Dive indicator in Hub when DeepDive mode is selected
+    try {
+      const ui = this.scene.get(SceneKeys.UI);
+      if (ui) {
+        if (!ui.deepDiveText || !ui.deepDiveText.active) {
+          ui.deepDiveText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'DeepDive') {
+          const best = this.gs.deepDiveBest || { level: 0, stage: 0 };
+          const L = Math.max(0, best.level || 0);
+          const S = Math.max(0, Math.min(4, best.stage || 0));
+          ui.deepDiveText.setText(`Deepest dive: ${L}-${S}`);
+          ui.deepDiveText.setVisible(true);
+        } else {
+          ui.deepDiveText.setVisible(false);
+        }
+      }
+    } catch (_) {}
 
 
     // Fully restore player HP and Shield upon entering Hub
@@ -77,6 +93,14 @@ export default class HubScene extends Phaser.Scene {
     this.portalZone.body.setImmovable(true);
     this.portalG = this.add.graphics();
     this.portalG.fillStyle(0x22ff88, 1).fillRect(this.portalZone.x - 10, this.portalZone.y - 20, 20, 40);
+
+    // Bonus block (left side): grants 5000g + 20 DC on interact
+    this.bonusZone = this.add.zone(24, height / 2, 20, 20);
+    this.physics.world.enable(this.bonusZone);
+    this.bonusZone.body.setAllowGravity(false);
+    this.bonusZone.body.setImmovable(true);
+    this.bonusG = this.add.graphics();
+    this.bonusG.fillStyle(0xff3333, 1).fillRect(this.bonusZone.x - 10, this.bonusZone.y - 10, 20, 20);
 
     // Overlap detection
     this.physics.add.overlap(this.player, this.npcZone);
@@ -405,7 +429,9 @@ export default class HubScene extends Phaser.Scene {
     const nearNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.npcZone.getBounds());
     const nearModeNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.modeNpcZone.getBounds());
     const nearPortal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.portalZone.getBounds());
-    if (nearNpc) this.prompt.setText('E: Shop');
+    const nearBonus = this.bonusZone ? Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.bonusZone.getBounds()) : false;
+    if (nearBonus && !this.gs._bonusClaimed) this.prompt.setText('E: Claim Bonus');
+    else if (nearNpc) this.prompt.setText('E: Shop');
     else if (nearModeNpc) this.prompt.setText('E: Select Mode');
     else if (nearPortal) {
       if (this.gs?.gameMode === 'BossRush') this.prompt.setText('E: Enter Boss');
@@ -433,6 +459,13 @@ export default class HubScene extends Phaser.Scene {
     }
 
     if (this.inputMgr.pressedInteract) {
+      if (nearBonus && !this.gs._bonusClaimed) {
+        this.gs.gold = (this.gs.gold || 0) + 5000;
+        this.gs.droneCores = (this.gs.droneCores || 0) + 20;
+        this.gs._bonusClaimed = true;
+        try { SaveManager.saveToLocal(this.gs); } catch (_) {}
+        try { this.bonusG.clear(); this.bonusG.fillStyle(0x444444, 1).fillRect(this.bonusZone.x - 10, this.bonusZone.y - 10, 20, 20); } catch (_) {}
+      }
       if (nearNpc) this.openNpcPanel();
       if (nearModeNpc) this.openModePanel();
       if (nearPortal) {
