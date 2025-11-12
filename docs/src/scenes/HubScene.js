@@ -45,7 +45,8 @@ export default class HubScene extends Phaser.Scene {
         const ui = this.scene.get(SceneKeys.UI);
         if (!ui) return;
         if (!ui.campaignText || !ui.campaignText.active) {
-          ui.campaignText = ui.add.text(12, 44, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          // Align with other trackers (top-left y=28)
+          ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'Normal') {
           const st = Math.max(1, this.gs?.campaignSelectedStage || 1);
@@ -68,10 +69,13 @@ export default class HubScene extends Phaser.Scene {
         const ui = this.scene.get(SceneKeys.UI);
         if (!ui) return;
         if (!ui.bossRushText || !ui.bossRushText.active) {
-          ui.bossRushText = ui.add.text(12, 60, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          // Align with other trackers (top-left y=28)
+          ui.bossRushText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'BossRush') {
-          ui.bossRushText.setText('Boss Rush Not Completed');
+          const left = Array.isArray(this.gs?.bossRushQueue) ? this.gs.bossRushQueue.length : 0;
+          const txt = (left === 0) ? 'Boss Rush Completed' : 'Boss Rush Not Completed';
+          ui.bossRushText.setText(txt);
           ui.bossRushText.setVisible(true);
         } else {
           ui.bossRushText.setVisible(false);
@@ -534,6 +538,41 @@ export default class HubScene extends Phaser.Scene {
           ui.deepDiveText.setVisible(true);
         } else {
           ui.deepDiveText.setVisible(false);
+        }
+      }
+    } catch (_) {}
+
+    // Keep Campaign label updated dynamically while in Hub
+    try {
+      const ui = this.scene.get(SceneKeys.UI);
+      if (ui) {
+        if (!ui.campaignText || !ui.campaignText.active) {
+          ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'Normal') {
+          const st = Math.max(1, this.gs?.campaignSelectedStage || 1);
+          const completed = !!this.gs?.campaignCompleted;
+          ui.campaignText.setText(completed ? 'Campaign: Completed' : `Campaign: Stage ${st}`);
+          ui.campaignText.setVisible(true);
+        } else {
+          ui.campaignText.setVisible(false);
+        }
+      }
+    } catch (_) {}
+
+    // Keep Boss Rush label updated dynamically while in Hub
+    try {
+      const ui = this.scene.get(SceneKeys.UI);
+      if (ui) {
+        if (!ui.bossRushText || !ui.bossRushText.active) {
+          ui.bossRushText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'BossRush') {
+          const left = Array.isArray(this.gs?.bossRushQueue) ? this.gs.bossRushQueue.length : 0;
+          ui.bossRushText.setText(left === 0 ? 'Boss Rush Completed' : 'Boss Rush Not Completed');
+          ui.bossRushText.setVisible(true);
+        } else {
+          ui.bossRushText.setVisible(false);
         }
       }
     } catch (_) {}
