@@ -2405,7 +2405,7 @@ export default class BossScene extends Phaser.Scene {
     if (disp) this.time.delayedCall(count * 90 + 200, () => { try { disp.destroy(); } catch (_) {} });
     this._explodeMineBoss = (mine) => {
       if (!mine?.active) return; const ex = mine.x; const ey = mine.y; const r = mine._blastRadius || 60;
-      try { impactBurst(this, ex, ey, { color: 0x66ff66, size: 'large', radius: r }); } catch (_) {}
+      try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
       try {
         const boss = this.boss; if (boss?.active) { const dx = boss.x - ex; const dy = boss.y - ey; if ((dx * dx + dy * dy) <= (r * r)) {
           if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (mine._dmg || 30); if (boss.hp <= 0) this.killBoss(boss);
@@ -3213,6 +3213,7 @@ export default class BossScene extends Phaser.Scene {
     };
   }
 }
+
 
 
 

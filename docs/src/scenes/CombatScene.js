@@ -5309,7 +5309,7 @@ export default class CombatScene extends Phaser.Scene {
     this._explodeMine = (mine) => {
       if (!mine?.active) return;
       const ex = mine.x; const ey = mine.y; const r = mine._blastRadius || 60; const r2 = r * r;
-      try { impactBurst(this, ex, ey, { color: 0x66ff66, size: 'large', radius: r }); } catch (_) {}
+      try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
       // Damage + stun enemies (no friendly fire)
       try {
         const arr = this.enemies?.getChildren?.() || [];
@@ -5328,6 +5328,7 @@ export default class CombatScene extends Phaser.Scene {
     };
   }
 }
+
 
 
 
