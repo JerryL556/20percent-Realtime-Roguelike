@@ -187,7 +187,27 @@ export default class BossScene extends Phaser.Scene {
             }
           }
         } catch (_) {}
-        // Player melee parity with Combat: check input each frame
+                // Landmine Dispenser (Boss): manage mine travel + detection globally
+        try {
+          if (Array.isArray(this._mines) && this._mines.length) {
+            this._mines = this._mines.filter((m) => m && m.active);
+            for (let i = 0; i < this._mines.length; i += 1) {
+              const m = this._mines[i]; if (!m?.active) continue;
+              if (!m._armed) {
+                const dx = (m.x - (m._ox || 0)); const dy = (m.y - (m._oy || 0));
+                if ((dx * dx + dy * dy) >= (m._travelMax2 || 3600)) {
+                  try { m.setVelocity(0, 0); m.body.setVelocity(0, 0); m.body.moves = false; m.body.setImmovable(true); } catch (_) {}
+                  m._armed = true;
+                }
+              } else {
+                const r = m._detRadius || 30; const boss = this.boss; if (boss?.active) {
+                  const dx = boss.x - m.x; const dy = boss.y - m.y; if ((dx * dx + dy * dy) <= (r * r)) { this._explodeMineBoss?.(m); }
+                }
+              }
+            }
+          }
+        } catch (_) {}
+// Player melee parity with Combat: check input each frame
         try { if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.(); } catch (_) {}
         // Shield regeneration (regens even from 0 after a delay)
         try {
@@ -2365,8 +2385,7 @@ export default class BossScene extends Phaser.Scene {
       try { mine.setTint(0x33ff66); } catch (_) {}
       try { mine.setScale(1.1); } catch (_) {}
       try { mine.body.setSize(6, 6, true); } catch (_) {}
-      mine.setVelocity(vx, vy);
-      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20;
+      mine.setVelocity(vx, vy); mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; const stopR = 60; mine._travelMax2 = stopR * stopR;
       const armMine = () => { if (mine._armed) return; mine._armed = true; try { mine.setVelocity(0, 0); } catch (_) {} try { mine.body.setVelocity(0, 0); mine.body.moves = false; mine.body.setImmovable(true); } catch (_) {} };
       try { if (this.walls) this.physics.add.collider(mine, this.walls, () => armMine()); } catch (_) {}
       try { if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => armMine()); } catch (_) {}
@@ -3194,6 +3213,10 @@ export default class BossScene extends Phaser.Scene {
     };
   }
 }
+
+
+
+
 
 
 

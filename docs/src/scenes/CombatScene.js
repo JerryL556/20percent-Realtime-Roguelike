@@ -269,7 +269,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180ï¿½? safe for lerp)
+          // Linear interpolate angles (range is <= 180ï¿? safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -572,6 +572,33 @@ export default class CombatScene extends Phaser.Scene {
               ui.deepDiveText.setVisible(true);
             } else {
               ui.deepDiveText.setVisible(false);
+            }
+          }
+        } catch (_) {}
+        // Landmine Dispenser: manage mine travel + detection globally so it works in all contexts
+        try {
+          if (Array.isArray(this._mines) && this._mines.length) {
+            const nowT = this.time.now;
+            this._mines = this._mines.filter((m) => m && m.active);
+            const enemies = this.enemies?.getChildren?.() || [];
+            for (let i = 0; i < this._mines.length; i += 1) {
+              const m = this._mines[i]; if (!m?.active) continue;
+              // Stop at fixed radius if not yet armed
+              if (!m._armed) {
+                const dx = (m.x - (m._ox || 0)); const dy = (m.y - (m._oy || 0));
+                if ((dx * dx + dy * dy) >= (m._travelMax2 || 3600)) {
+                  try { m.setVelocity(0, 0); m.body.setVelocity(0, 0); m.body.moves = false; m.body.setImmovable(true); } catch (_) {}
+                  m._armed = true;
+                }
+              } else {
+                // Armed: trigger when enemy enters detection radius (skip dummy)
+                const r = m._detRadius || 30; const r2 = r * r;
+                for (let k = 0; k < enemies.length; k += 1) {
+                  const e = enemies[k]; if (!e?.active || e.isDummy) continue;
+                  const dx = e.x - m.x; const dy = e.y - m.y;
+                  if ((dx * dx + dy * dy) <= r2) { this._explodeMine?.(m); break; }
+                }
+              }
             }
           }
         } catch (_) {}
@@ -1604,7 +1631,7 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2ï¿½?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2ï¿?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
         // Slightly increase Smart HMG homing: ~0.75ï¿½ï¿½/frame (~45ï¿½ï¿½/s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
@@ -1677,8 +1704,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1ï¿½?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90ï¿½?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1ï¿?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90ï¿?cone total
         }
         // Preserve Smart Core homing equal to old behavior: 2 deg/frame scaled by mult
         if (b._smart) {
@@ -1708,7 +1735,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45ï¿½?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45ï¿?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -3425,7 +3452,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150ï¿½? 48px, 10 dmg
+    // Player melee: C key, 150ï¿? 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -3800,7 +3827,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors ï¿½?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors ï¿?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -5242,7 +5269,7 @@ export default class CombatScene extends Phaser.Scene {
       // Keep square hitbox; slightly larger for stable collisions
       try { mine.body.setSize(6, 6, true); } catch (_) {}
       mine.setVelocity(vx, vy);
-      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20;
+      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; const stopR = 60; mine._travelMax2 = stopR * stopR;
       // Colliders: stop on enemies, barricades, walls (become armed). No friendly fire.
       const armMine = () => {
         if (mine._armed) return; mine._armed = true;
@@ -5301,6 +5328,7 @@ export default class CombatScene extends Phaser.Scene {
     };
   }
 }
+
 
 
 
