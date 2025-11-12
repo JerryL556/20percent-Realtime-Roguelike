@@ -52,10 +52,10 @@ export default class BossScene extends Phaser.Scene {
 
     // Player (Inle art, scaled to 12px height)
     this.player = this.physics.add.sprite(width / 2, height - 60, 'player_inle').setCollideWorldBounds(true);
-    // Invisible player hitbox placeholder (like the dummy placeholder)
+    // Player hitbox placeholder (visible)
     try {
       this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(false).setActive(true);
+        .setVisible(true).setActive(true);
       this.playerHitbox.setSize(12, 12).setOffset(0, 0);
       this.playerHitbox.body.allowGravity = false;
       this.playerHitbox.body.setImmovable(true);
@@ -475,8 +475,8 @@ export default class BossScene extends Phaser.Scene {
       // Always destroy boss bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
-    // Mirror overlap for invisible player hitbox
-    this.physics.add.overlap(this.playerHitbox, this.bossBullets, (_hb, b) => {
+    // Mirror overlap for invisible player hitbox (guard)
+    if (this.playerHitbox && this.bossBullets) this.physics.add.overlap(this.playerHitbox, this.bossBullets, (_hb, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
       if (!inIframes) {
         this.applyPlayerDamage(10);

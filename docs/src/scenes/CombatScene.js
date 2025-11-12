@@ -395,6 +395,14 @@ export default class CombatScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(width / 2, height / 2, 'player_inle').setCollideWorldBounds(true);
     try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
+    // Player hitbox placeholder (visible) for consistent bullet collisions
+    try {
+      this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
+        .setVisible(true).setActive(true);
+      this.playerHitbox.setSize(12, 12).setOffset(0, 0);
+      this.playerHitbox.body.allowGravity = false;
+      this.playerHitbox.body.setImmovable(true);
+    } catch (_) {}
     this.player.iframesUntil = 0;
     this.playerFacing = 0; // radians
 
@@ -1109,8 +1117,8 @@ export default class CombatScene extends Phaser.Scene {
       // Always destroy enemy bullet on contact, even during i-frames
       try { b.destroy(); } catch (_) {}
     });
-    // Mirror overlap for invisible player hitbox
-    this.physics.add.overlap(this.playerHitbox, this.enemyBullets, (_hb, b) => {
+    // Mirror overlap for invisible player hitbox (guard creation to avoid undefined references)
+    if (this.playerHitbox && this.enemyBullets) this.physics.add.overlap(this.playerHitbox, this.enemyBullets, (_hb, b) => {
       const inIframes = this.time.now < this.player.iframesUntil;
       if (b?._rocket) {
         const ex = b.x; const ey = b.y; const radius = b._blastRadius || 70; const r2 = radius * radius;
