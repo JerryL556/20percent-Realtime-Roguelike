@@ -62,6 +62,26 @@ export default class HubScene extends Phaser.Scene {
       this.time.delayedCall(150, ensureCampaignLabel);
     } catch (_) {}
 
+    // Boss Rush indicator in Hub when BossRush mode is selected
+    try {
+      const ensureBossRushLabel = () => {
+        const ui = this.scene.get(SceneKeys.UI);
+        if (!ui) return;
+        if (!ui.bossRushText || !ui.bossRushText.active) {
+          ui.bossRushText = ui.add.text(12, 60, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'BossRush') {
+          ui.bossRushText.setText('Boss Rush Not Completed');
+          ui.bossRushText.setVisible(true);
+        } else {
+          ui.bossRushText.setVisible(false);
+        }
+      };
+      ensureBossRushLabel();
+      this.time.delayedCall(50, ensureBossRushLabel);
+      this.time.delayedCall(150, ensureBossRushLabel);
+    } catch (_) {}
+
 
     // Fully restore player HP and Shield upon entering Hub
     try {
