@@ -53,7 +53,7 @@ export default class BossScene extends Phaser.Scene {
           ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'Normal') {
-          const S = Math.max(1, this.gs?.campaignStage || 1);
+          const S = Math.max(1, this.gs?.campaignSelectedStage || 1);
           ui.campaignText.setText(`Campaign ${S}-4`);
           ui.campaignText.setVisible(true);
         } else {

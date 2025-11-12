@@ -48,7 +48,7 @@ export default class HubScene extends Phaser.Scene {
           ui.campaignText = ui.add.text(12, 44, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'Normal') {
-          const st = Math.max(1, this.gs?.campaignStage || 1);
+          const st = Math.max(1, this.gs?.campaignSelectedStage || 1);
           const completed = !!this.gs?.campaignCompleted;
           const txt = completed ? 'Campaign: Completed' : `Campaign: Stage ${st}`;
           ui.campaignText.setText(txt);
@@ -340,8 +340,7 @@ export default class HubScene extends Phaser.Scene {
     // Vertical choices
     const y0 = 140; const line = 30; const cx = width / 2;
     const campaignBtn = makeTextButton(this, cx, y0 + 0 * line, 'Campaign', () => {
-      try { this.gs.setGameMode('Normal'); SaveManager.saveToLocal(this.gs); } catch (_) {}
-      this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
+      try { this.openCampaignStageMenu(); } catch (_) {}
     });
     const bossRushBtn = makeTextButton(this, cx, y0 + 1 * line, 'Boss Rush', () => {
       try { this.gs.setGameMode('BossRush'); SaveManager.saveToLocal(this.gs); } catch (_) {}
@@ -375,6 +374,32 @@ export default class HubScene extends Phaser.Scene {
       this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
     this.panel._extra = [title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn];
+  }
+
+  openCampaignStageMenu() {
+    // Close existing menu if any
+    if (this.panel) this.closePanel();
+    const { width } = this.scale;
+    const panelW = 300; const panelH = 220; const panelX = width / 2 - panelW / 2; const panelY = 100;
+    this.panel = drawPanel(this, panelX, panelY, panelW, panelH);
+    this.panel._type = 'campaignStageSelect';
+    const title = this.add.text(width / 2, panelY + 18, 'Select Campaign Stage', { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
+    const cx = width / 2; const y0 = panelY + 60; const line = 28;
+    const gs = this.gs;
+    const unlocked = Math.min(3, Math.max(1, (gs?.campaignCompleted ? 3 : (gs?.campaignMaxUnlocked || 1))));
+    const mk = (iy, label, stage) => {
+      const btn = makeTextButton(this, cx, y0 + iy * line, label, () => {
+        try { this.gs.setGameMode('Normal'); this.gs.shootingRange = false; this.gs.campaignSelectedStage = stage; SaveManager.saveToLocal(this.gs); } catch (_) {}
+        this.closePanel([title, s1, s2, s3, closeBtn]);
+      });
+      if (stage > unlocked) { try { btn.disableInteractive(); btn.setAlpha(0.4); } catch (_) {} }
+      return btn;
+    };
+    const s1 = mk(0, 'Stage 1', 1);
+    const s2 = mk(1, 'Stage 2', 2);
+    const s3 = mk(2, 'Stage 3', 3);
+    const closeBtn = makeTextButton(this, cx, panelY + panelH - 18, 'Close', () => { this.closePanel([title, s1, s2, s3, closeBtn]); });
+    this.panel._extra = [title, s1, s2, s3, closeBtn];
   }
 
   closePanel(extra = []) {

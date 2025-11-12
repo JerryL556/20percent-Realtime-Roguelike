@@ -402,7 +402,7 @@ export default class CombatScene extends Phaser.Scene {
           ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'Normal' && !this.gs?.shootingRange) {
-          const S = Math.max(1, this.gs?.campaignStage || 1);
+          const S = Math.max(1, this.gs?.campaignSelectedStage || 1);
           const L = Math.max(1, Math.min(3, (this.gs?.roomsClearedInCycle || 0) + 1));
           ui.campaignText.setText(`Campaign ${S}-${L}`);
           ui.campaignText.setVisible(true);
@@ -558,7 +558,7 @@ export default class CombatScene extends Phaser.Scene {
           const ui = this.scene.get(SceneKeys.UI);
           if (ui && ui.campaignText) {
             if (this.gs?.gameMode === 'Normal' && !this.gs?.shootingRange) {
-              const S = Math.max(1, this.gs?.campaignStage || 1);
+              const S = Math.max(1, this.gs?.campaignSelectedStage || 1);
               const L = Math.max(1, Math.min(3, (this.gs?.roomsClearedInCycle || 0) + 1));
               ui.campaignText.setText(`Campaign ${S}-${L}`);
               ui.campaignText.setVisible(true);

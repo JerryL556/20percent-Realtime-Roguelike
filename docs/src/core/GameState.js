@@ -55,8 +55,9 @@ export class GameState {
     this.nextScene = 'Hub';
     // Game mode: 'Normal' or 'BossRush'
     this.gameMode = 'Normal';
-    // Campaign progression (Normal mode): stage 1..3, completes after stage 3 boss
-    this.campaignStage = 1;
+    // Campaign progression (Normal mode): replayable stages 1..3
+    this.campaignSelectedStage = 1; // current stage to play
+    this.campaignMaxUnlocked = 1;   // highest unlocked stage
     this.campaignCompleted = false;
     // Deep Dive state
     this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
@@ -103,7 +104,8 @@ export class GameState {
     this.currentDepth = 1;
     this.nextScene = 'Hub';
     this.gameMode = 'Normal';
-    this.campaignStage = 1;
+    this.campaignSelectedStage = 1;
+    this.campaignMaxUnlocked = 1;
     this.campaignCompleted = false;
     this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
     this.bossRushQueue = [];
@@ -164,13 +166,16 @@ export class GameState {
       }
       return;
     }
-    // Campaign (Normal) mode: advance stage only on victory and exit to Hub
+    // Campaign (Normal) mode: unlock next stage on victory; selected stage doesn't auto-increment
     if (this.gameMode === 'Normal') {
       if (!this.campaignCompleted) {
-        if (typeof this.campaignStage !== 'number' || this.campaignStage < 1) this.campaignStage = 1;
-        if (this.campaignStage < 3) this.campaignStage += 1; else this.campaignCompleted = true;
+        const sel = Math.max(1, Math.min(3, this.campaignSelectedStage || 1));
+        this.campaignMaxUnlocked = Math.max(this.campaignMaxUnlocked || 1, sel);
+        if ((this.campaignMaxUnlocked < 3) && (sel >= this.campaignMaxUnlocked)) {
+          this.campaignMaxUnlocked += 1;
+        }
+        if (this.campaignMaxUnlocked >= 3 && sel === 3) this.campaignCompleted = true;
       }
-      // Always return to Hub after boss
       this.nextScene = 'Hub';
       return;
     }
@@ -186,7 +191,7 @@ export class GameState {
       return (this.bossRushQueue && this.bossRushQueue[0]) ? this.bossRushQueue[0] : 'Dasher';
     }
     // Campaign (Normal) mode: fixed per-stage boss order: 1=Shotgunner, 2=Dasher, 3=Hazel
-    const st = Math.max(1, Math.min(3, typeof this.campaignStage === 'number' ? this.campaignStage : 1));
+    const st = Math.max(1, Math.min(3, typeof this.campaignSelectedStage === 'number' ? this.campaignSelectedStage : 1));
     if (st === 1) return 'Shotgunner';
     if (st === 2) return 'Dasher';
     return 'Hazel';
@@ -213,7 +218,8 @@ export class GameState {
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
       this.nextScene = 'Hub';
-      if (typeof this.campaignStage !== 'number' || this.campaignStage < 1) this.campaignStage = 1;
+      if (typeof this.campaignSelectedStage !== 'number' || this.campaignSelectedStage < 1) this.campaignSelectedStage = 1;
+      if (typeof this.campaignMaxUnlocked !== 'number' || this.campaignMaxUnlocked < 1) this.campaignMaxUnlocked = 1;
       if (typeof this.campaignCompleted !== 'boolean') this.campaignCompleted = false;
     }
   }
@@ -247,7 +253,8 @@ export class GameState {
       achievements: this.achievements,
       nextScene: this.nextScene,
       gameMode: this.gameMode,
-      campaignStage: this.campaignStage,
+      campaignSelectedStage: this.campaignSelectedStage,
+      campaignMaxUnlocked: this.campaignMaxUnlocked,
       campaignCompleted: this.campaignCompleted,
       deepDive: this.deepDive,
       deepDiveBest: this.deepDiveBest,
@@ -279,7 +286,8 @@ export class GameState {
     gs.dashMaxCharges = Math.min(gs.dashMaxCharges || 3, 5);
     gs.dashRegenMs = Math.max(gs.dashRegenMs || 6000, 6000);
     if (!gs.gameMode) gs.gameMode = 'Normal';
-    if (typeof gs.campaignStage !== 'number' || gs.campaignStage < 1) gs.campaignStage = 1;
+    if (typeof gs.campaignSelectedStage !== 'number' || gs.campaignSelectedStage < 1) gs.campaignSelectedStage = 1;
+    if (typeof gs.campaignMaxUnlocked !== 'number' || gs.campaignMaxUnlocked < 1) gs.campaignMaxUnlocked = 1;
     if (typeof gs.campaignCompleted !== 'boolean') gs.campaignCompleted = false;
     if (!Array.isArray(gs.bossRushQueue)) gs.bossRushQueue = [];
     if (!gs.deepDive || typeof gs.deepDive !== 'object') gs.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
