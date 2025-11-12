@@ -629,12 +629,7 @@ export default class UIScene extends Phaser.Scene {
     const onWheel = (pointer, _objs, _dx, dy) => { const px = pointer.worldX ?? pointer.x; const py = pointer.worldY ?? pointer.y; if (px>=view.x && px<=view.x+view.w && py>=view.y && py<=view.y+view.h) { list.y = clamp(list.y - dy * 0.5, minY, maxY); drawScrollbar(minY === view.y ? view.h : (view.y - minY + view.h)); } };
     this.input.on('wheel', onWheel); this._shopWheelHandler = onWheel;
 
-    // Ensure all cores are owned for now (temporary per request)
-    try {
-      const allCoreIds = (weaponCores || []).map((c) => c.id).filter(Boolean);
-      if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = [];
-      allCoreIds.forEach((id) => { if (!gs.ownedWeaponCores.includes(id)) gs.ownedWeaponCores.push(id); });
-    } catch (_) {}
+    // Ensure cores default to unowned (purchasable)\r\n    try { if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = []; } catch (_) {}
     const priceMod = 120; const priceCoreG = 150; const priceCoreDC = 1;
     const renderList = () => {
       try {
