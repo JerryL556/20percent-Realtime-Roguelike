@@ -392,18 +392,19 @@ export default class CombatScene extends Phaser.Scene {
       this.time.delayedCall(50, ensureDeepDiveLabel);
       this.time.delayedCall(150, ensureDeepDiveLabel);
     } catch (_) {}
-    // Campaign (Normal) label in Combat: show "Campain S-L" where L is 1..3 for rooms
+    // Campaign (Normal) label in Combat: show "Campaign S-L" where L is 1..3 for rooms
     try {
       const ensureCampaignLabel = () => {
         const ui = this.scene.get(SceneKeys.UI);
         if (!ui) return;
         if (!ui.campaignText || !ui.campaignText.active) {
-          ui.campaignText = ui.add.text(12, 12, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          // Place to match Deep Dive label position in Combat
+          ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'Normal' && !this.gs?.shootingRange) {
           const S = Math.max(1, this.gs?.campaignStage || 1);
           const L = Math.max(1, Math.min(3, (this.gs?.roomsClearedInCycle || 0) + 1));
-          ui.campaignText.setText(`Campain ${S}-${L}`);
+          ui.campaignText.setText(`Campaign ${S}-${L}`);
           ui.campaignText.setVisible(true);
         } else {
           ui.campaignText.setVisible(false);
@@ -559,7 +560,7 @@ export default class CombatScene extends Phaser.Scene {
             if (this.gs?.gameMode === 'Normal' && !this.gs?.shootingRange) {
               const S = Math.max(1, this.gs?.campaignStage || 1);
               const L = Math.max(1, Math.min(3, (this.gs?.roomsClearedInCycle || 0) + 1));
-              ui.campaignText.setText(`Campain ${S}-${L}`);
+              ui.campaignText.setText(`Campaign ${S}-${L}`);
               ui.campaignText.setVisible(true);
             } else {
               ui.campaignText.setVisible(false);

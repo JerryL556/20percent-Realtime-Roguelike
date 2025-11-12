@@ -43,17 +43,18 @@ export default class BossScene extends Phaser.Scene {
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
     this.gs = this.registry.get('gameState');
-    // Campaign label in Boss scene (display Campain S-4)
+    // Campaign label in Boss scene (display Campaign S-4)
     try {
       const ensureCampaignLabel = () => {
         const ui = this.scene.get(SceneKeys.UI);
         if (!ui) return;
         if (!ui.campaignText || !ui.campaignText.active) {
-          ui.campaignText = ui.add.text(12, 12, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          // Place to match the style/position of Deep Dive labels
+          ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'Normal') {
           const S = Math.max(1, this.gs?.campaignStage || 1);
-          ui.campaignText.setText(`Campain ${S}-4`);
+          ui.campaignText.setText(`Campaign ${S}-4`);
           ui.campaignText.setVisible(true);
         } else {
           ui.campaignText.setVisible(false);

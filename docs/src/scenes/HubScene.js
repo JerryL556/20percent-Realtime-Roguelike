@@ -50,7 +50,7 @@ export default class HubScene extends Phaser.Scene {
         if (this.gs?.gameMode === 'Normal') {
           const st = Math.max(1, this.gs?.campaignStage || 1);
           const completed = !!this.gs?.campaignCompleted;
-          const txt = completed ? 'Campain: Completed' : `Campain: Stage ${st}`;
+          const txt = completed ? 'Campaign: Completed' : `Campaign: Stage ${st}`;
           ui.campaignText.setText(txt);
           ui.campaignText.setVisible(true);
         } else {
