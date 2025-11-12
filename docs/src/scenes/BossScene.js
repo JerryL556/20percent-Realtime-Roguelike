@@ -52,10 +52,10 @@ export default class BossScene extends Phaser.Scene {
 
     // Player (Inle art, scaled to 12px height)
     this.player = this.physics.add.sprite(width / 2, height - 60, 'player_inle').setCollideWorldBounds(true);
-    // Player hitbox placeholder (visible)
+    // Player hitbox placeholder (invisible)
     try {
       this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(true).setActive(true);
+        .setVisible(false).setActive(true);
       this.playerHitbox.setSize(12, 12).setOffset(0, 0);
       this.playerHitbox.body.allowGravity = false;
       this.playerHitbox.body.setImmovable(true);

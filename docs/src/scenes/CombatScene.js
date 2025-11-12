@@ -395,10 +395,10 @@ export default class CombatScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(width / 2, height / 2, 'player_inle').setCollideWorldBounds(true);
     try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
-    // Player hitbox placeholder (visible) for consistent bullet collisions
+    // Player hitbox placeholder (invisible) for consistent bullet collisions
     try {
       this.playerHitbox = this.physics.add.sprite(this.player.x, this.player.y, 'player_square')
-        .setVisible(true).setActive(true);
+        .setVisible(false).setActive(true);
       this.playerHitbox.setSize(12, 12).setOffset(0, 0);
       this.playerHitbox.body.allowGravity = false;
       this.playerHitbox.body.setImmovable(true);
