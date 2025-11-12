@@ -4,6 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { drawPanel } from '../ui/Panels.js';
 import { makeTextButton } from '../ui/Buttons.js';
 import { getPlayerEffects } from '../core/Loadout.js';
+import { fitImageHeight } from '../systems/WeaponVisuals.js';
 import { weaponDefs } from '../core/Weapons.js';
 
 export default class HubScene extends Phaser.Scene {
@@ -33,8 +34,9 @@ export default class HubScene extends Phaser.Scene {
     // World bounds
     this.physics.world.setBounds(0, 0, width, height);
 
-    // Player placeholder
-    this.player = this.physics.add.sprite(width / 2, height / 2 + 60, 'player_square').setCollideWorldBounds(true);
+    // Player (Inle art, scaled to 12px height)
+    this.player = this.physics.add.sprite(width / 2, height / 2 + 60, 'player_inle').setCollideWorldBounds(true);
+    try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
     // no graphics draw; use texture
     this.player.iframesUntil = 0;
@@ -45,20 +47,28 @@ export default class HubScene extends Phaser.Scene {
     this.registry.set('dashRegenProgress', 1);
 
     // NPC vendor (static)
-    this.npcZone = this.add.zone(width / 2, height / 2 - 20, 40, 40);
+    // Shop NPC: move much further left and up
+    this.npcZone = this.add.zone(width - 320, height - 240, 40, 40);
     this.physics.world.enable(this.npcZone);
     this.npcZone.body.setAllowGravity(false);
     this.npcZone.body.setImmovable(true);
-    this.npcG = this.add.graphics();
-    this.npcG.fillStyle(0x44aaff, 1).fillRect(this.npcZone.x - 10, this.npcZone.y - 10, 20, 20);
+    // Shop NPC sprite
+    try {
+      this.npcSprite = this.add.image(this.npcZone.x, this.npcZone.y, 'npc_shop');
+      fitImageHeight(this, this.npcSprite, 24);
+    } catch (_) {}
 
     // Mode-select NPC (upper-right)
-    this.modeNpcZone = this.add.zone(width - 80, 60, 40, 40);
+    // Mode-select NPC: top-right corner, further inset toward center
+    this.modeNpcZone = this.add.zone(width - 140, 120, 40, 40);
     this.physics.world.enable(this.modeNpcZone);
     this.modeNpcZone.body.setAllowGravity(false);
     this.modeNpcZone.body.setImmovable(true);
-    this.modeNpcG = this.add.graphics();
-    this.modeNpcG.fillStyle(0xff66cc, 1).fillRect(this.modeNpcZone.x - 10, this.modeNpcZone.y - 10, 20, 20);
+    // Mode-select NPC sprite
+    try {
+      this.modeNpcSprite = this.add.image(this.modeNpcZone.x, this.modeNpcZone.y, 'npc_mode');
+      fitImageHeight(this, this.modeNpcSprite, 24);
+    } catch (_) {}
 
     // Portal to Combat/Boss
     this.portalZone = this.add.zone(width - 60, height / 2, 40, 80);
@@ -102,6 +112,21 @@ export default class HubScene extends Phaser.Scene {
 
     // Dialogue/Shop panel hidden
     this.panel = null;
+
+    // Flip player left/right based on cursor X (update each frame)
+    try {
+      this.events.on('update', () => {
+        try {
+          const ptr = this.input?.activePointer;
+          if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
+        } catch (_) {}
+        // Make NPCs face the player (left/right only)
+        try {
+          if (this.npcSprite) this.npcSprite.setFlipX(this.player.x < this.npcSprite.x);
+          if (this.modeNpcSprite) this.modeNpcSprite.setFlipX(this.player.x < this.modeNpcSprite.x);
+        } catch (_) {}
+      });
+    } catch (_) {}
 
     // Save on enter
     if (this.gs) SaveManager.saveToLocal(this.gs);

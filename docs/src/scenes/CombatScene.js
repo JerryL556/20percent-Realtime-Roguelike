@@ -7,7 +7,7 @@ import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
-import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint } from '../systems/WeaponVisuals.js';
+import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint, fitImageHeight } from '../systems/WeaponVisuals.js';
 import { drawPanel } from '../ui/Panels.js';
 import { makeTextButton } from '../ui/Buttons.js';
 
@@ -345,6 +345,21 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
     try { this.scene.bringToTop(SceneKeys.UI); } catch (_) {}
+    // Normal combat background (exclude hub/boss scenes by only applying here)
+    try {
+      if (this.textures?.exists('bg_normal')) {
+        const bg = this.add.image(width / 2, height / 2, 'bg_normal');
+        const tex = this.textures.get('bg_normal');
+        const src = tex.getSourceImage?.() || {};
+        const iw = src.naturalWidth || src.width || tex.frames['__BASE']?.width || bg.width || width;
+        const ih = src.naturalHeight || src.height || tex.frames['__BASE']?.height || bg.height || height;
+        const scale = Math.max(width / iw, height / ih);
+        bg.setScale(scale);
+        bg.setScrollFactor?.(0);
+        try { bg.setDepth(-1000); } catch (_) {}
+        this._bg = bg;
+      }
+    } catch (_) {}
     this.gs = this.registry.get('gameState');
     this.gs = this.registry.get('gameState');
     // Ensure Deep Dive tracker text exists in UI scene (create deterministically)
@@ -376,8 +391,9 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
     this.inputMgr = new InputManager(this);
 
-    // Player
-    this.player = this.physics.add.sprite(width / 2, height / 2, 'player_square').setCollideWorldBounds(true);
+    // Player (Inle art, scaled to 12px height)
+    this.player = this.physics.add.sprite(width / 2, height / 2, 'player_inle').setCollideWorldBounds(true);
+    try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
     this.player.iframesUntil = 0;
     this.playerFacing = 0; // radians
@@ -416,6 +432,15 @@ export default class CombatScene extends Phaser.Scene {
         // Always try to sync texture in case it finished loading after create
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
+        // Face player left/right based on cursor X
+        try {
+          const ptr = this.input?.activePointer;
+          if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
+          // Make shooting-range dummy face the player
+          if (this.gs?.shootingRange && this.dummy && this.dummy.active) {
+            this.dummy.setFlipX(this.player.x < this.dummy.x);
+          }
+        } catch (_) {}
         // Shield regeneration (regens even from 0 after a delay)
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
         try {
@@ -615,9 +640,10 @@ export default class CombatScene extends Phaser.Scene {
 
       // Persistent dummy target in the center-right
       this._dummyDamage = 0;
-      this.dummy = this.physics.add.sprite(width / 2 + 120, height / 2, 'enemy_square');
-      this.dummy.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
-      this.dummy.setTint(0xffff00);
+      this.dummy = this.physics.add.sprite(width / 2 + 120, height / 2, 'dummy_target');
+      try { fitImageHeight(this, this.dummy, 24); } catch (_) {}
+      // Match player visual scale and ensure overlaps/collisions register robustly
+      this.dummy.setSize(24, 24).setOffset(0, 0).setCollideWorldBounds(true);
       this.dummy.isEnemy = true;
       this.dummy.isDummy = true;
       this.dummy.maxHp = 999999;

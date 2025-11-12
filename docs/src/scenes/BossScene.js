@@ -5,7 +5,7 @@ import { createBoss } from '../systems/EnemyFactory.js';
 import { HpBar } from '../ui/HpBar.js';
 import { getWeaponById } from '../core/Weapons.js';
 import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy } from '../systems/Effects.js';
-import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint } from '../systems/WeaponVisuals.js';
+import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint, fitImageHeight } from '../systems/WeaponVisuals.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 
 const DISABLE_WALLS = true; // Temporary: remove concrete walls
@@ -24,6 +24,21 @@ export default class BossScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Boss background (scaled to cover viewport, behind gameplay)
+    try {
+      if (this.textures?.exists('bg_boss')) {
+        const bg = this.add.image(width / 2, height / 2, 'bg_boss');
+        const tex = this.textures.get('bg_boss');
+        const src = tex.getSourceImage?.() || {};
+        const iw = src.naturalWidth || src.width || tex.frames['__BASE']?.width || bg.width || width;
+        const ih = src.naturalHeight || src.height || tex.frames['__BASE']?.height || bg.height || height;
+        const scale = Math.max(width / iw, height / ih);
+        bg.setScale(scale);
+        bg.setScrollFactor?.(0);
+        try { bg.setDepth(-1000); } catch (_) {}
+        this._bg = bg;
+      }
+    } catch (_) {}
     // Ensure UI overlay is active during boss fight
     this.scene.launch(SceneKeys.UI);
     this.gs = this.registry.get('gameState');
@@ -35,8 +50,9 @@ export default class BossScene extends Phaser.Scene {
     } catch (_) {}
     this.inputMgr = new InputManager(this);
 
-    // Player
-    this.player = this.physics.add.sprite(width / 2, height - 60, 'player_square').setCollideWorldBounds(true);
+    // Player (Inle art, scaled to 12px height)
+    this.player = this.physics.add.sprite(width / 2, height - 60, 'player_inle').setCollideWorldBounds(true);
+    try { fitImageHeight(this, this.player, 24); } catch (_) {}
     this.player.setSize(12, 12);
     this.player.iframesUntil = 0;
     this.playerFacing = 0;
@@ -66,6 +82,11 @@ export default class BossScene extends Phaser.Scene {
         updateWeaponSprite(this);
         if (this.gs) syncWeaponTexture(this, this.gs.activeWeapon);
         this._lastActiveWeapon = this.gs?.activeWeapon;
+        // Face player left/right based on cursor X
+        try {
+          const ptr = this.input?.activePointer;
+          if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
+        } catch (_) {}
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
         try {
           const gs = this.gs; if (!gs || !this.player) return;
@@ -2650,6 +2671,12 @@ export default class BossScene extends Phaser.Scene {
       // Keep beam under weapon layer; weapon is set to a very high depth
       try { this.laser.g.setDepth(8000); this.laser.g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
     }
+    // Add muzzle graphics overlay like CombatScene for parity
+    if (!this.laser.mg) {
+      this.laser.mg = this.add.graphics();
+      try { this.laser.mg.setDepth(9000); } catch (_) {}
+      try { this.laser.mg.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    }
     const lz = this.laser;
     const canPress = ptr?.isDown && ((ptr.buttons & 1) === 1);
     const canFire = canPress && !lz.overheat;
@@ -2678,24 +2705,39 @@ export default class BossScene extends Phaser.Scene {
     }
     this.registry.set('laserHeat', lz.heat); this.registry.set('laserOverheated', !!lz.overheat);
     lz.g.clear();
+    try { lz.mg.clear(); } catch (_) {}
     if (canFire && !lz.overheat) {
       const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, ptr.worldX, ptr.worldY);
-      // Start from weapon sprite location for more natural origin
-      const wx = (this.weaponSprite?.x ?? this.player.x);
-      const wy = (this.weaponSprite?.y ?? this.player.y);
-      const sx = wx + Math.cos(angle) * 4;
-      const sy = wy + Math.sin(angle) * 4;
+      // Use muzzle world position for consistent origin with CombatScene
+      const muzzle = getWeaponMuzzleWorld(this, 2);
+      const sx = muzzle.x;
+      const sy = muzzle.y;
       const hit = this.computeLaserEnd(angle, sx, sy);
       const ex = hit.ex, ey = hit.ey; const e = hit.hitEnemy;
       try {
-        lz.g.lineStyle(3, 0xff3333, 0.9).beginPath(); lz.g.moveTo(sx, sy); lz.g.lineTo(ex, ey); lz.g.strokePath();
-        lz.g.lineStyle(1, 0x66aaff, 1).beginPath(); lz.g.moveTo(sx, sy - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
+        // Blue layered beam identical to normal rooms
+        lz.g.lineStyle(3, 0x66aaff, 0.95).beginPath(); lz.g.moveTo(sx, sy); lz.g.lineTo(ex, ey); lz.g.strokePath();
+        lz.g.lineStyle(1, 0xaaddff, 1).beginPath(); lz.g.moveTo(sx, sy - 1); lz.g.lineTo(ex, ey); lz.g.strokePath();
+      } catch (_) {}
+      // Muzzle twitch/split rays + small bloom for parity with CombatScene
+      try {
+        const base = angle + Phaser.Math.DegToRad(Phaser.Math.Between(-3, 3));
+        const offs = [-28, -14, 0, 14, 28].map((d) => Phaser.Math.DegToRad(d + Phaser.Math.Between(-3, 3)));
+        for (let i = 0; i < offs.length; i += 1) {
+          const a = base + offs[i];
+          const len = 12 + (i === 2 ? 1 : 0);
+          const hx = sx + Math.cos(a) * len;
+          const hy = sy + Math.sin(a) * len;
+          const thick = (i === 2) ? 2 : 1;
+          lz.mg.lineStyle(thick, 0xffffff, 0.55).beginPath(); lz.mg.moveTo(sx, sy); lz.mg.lineTo(hx, hy); lz.mg.strokePath();
+        }
+        lz.mg.fillStyle(0xffffff, 0.5).fillCircle(sx, sy, 1.5);
       } catch (_) {}
       lz.lastTickAt = (lz.lastTickAt || 0) + dt;
       if (lz.lastTickAt >= tickRate) {
         const step = lz.lastTickAt; lz.lastTickAt = 0; const dps = 30; const ignitePerSec = 8; const dmg = Math.max(0, Math.round(dps * step)); const igniteAdd = ignitePerSec * step;
         if (e && e.active) {
-          try { impactBurst(this, ex, ey, { color: 0xff4455, size: 'small' }); } catch (_) {}
+          try { impactBurst(this, ex, ey, { color: 0x66aaff, size: 'small' }); } catch (_) {}
           if (typeof e.hp !== 'number') e.hp = e.maxHp || 300; e.hp -= dmg; if (e.hp <= 0) this.killBoss(e);
           e._igniteValue = Math.min(10, (e._igniteValue || 0) + igniteAdd);
           if ((e._igniteValue || 0) >= 10) {

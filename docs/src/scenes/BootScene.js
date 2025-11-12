@@ -6,6 +6,19 @@ export default class BootScene extends Phaser.Scene {
   preload() {
     // Load external PNG assets for weapons
     try { preloadWeaponAssets(this); } catch (_) {}
+    // Load player/NPC PNG assets
+    try {
+      const A = (k, p) => { if (!this.textures.exists(k)) this.load.image(k, p); };
+      A('player_inle', 'assets/Inle.png');
+      A('npc_shop', 'assets/Shop.png');
+      A('npc_mode', 'assets/Mode.png');
+      A('dummy_target', 'assets/Dummy.png');
+    } catch (_) {}
+    // Load player PNG asset
+    try {
+      const A = (k, p) => { if (!this.textures.exists(k)) this.load.image(k, p); };
+      A('player_inle', 'assets/Inle.png');
+    } catch (_) {}
     // Load enemy PNG assets (non-boss)
     try {
       const A = (k, p) => { if (!this.textures.exists(k)) this.load.image(k, p); };
@@ -20,6 +33,11 @@ export default class BootScene extends Phaser.Scene {
       A('enemy_rook', 'assets/Rook.png');
       A('enemy_bombardier', 'assets/Bombardier.png');   // grenadier
       A('enemy_bombardier_special', 'assets/BombardierSpecial.png');
+    } catch (_) {}
+    // Backgrounds
+    try {
+      if (!this.textures.exists('bg_normal')) this.load.image('bg_normal', 'assets/Normal Background.png');
+      if (!this.textures.exists('bg_boss')) this.load.image('bg_boss', 'assets/Boss Background.png');
     } catch (_) {}
     // Generate simple textures used by bullets and optional sprites
     const g = this.make.graphics({ x: 0, y: 0, add: false });
