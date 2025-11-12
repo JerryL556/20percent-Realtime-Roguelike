@@ -451,6 +451,25 @@ export default class HubScene extends Phaser.Scene {
       } catch (_) { this.prompt.setText('Mode: Campaign'); }
     }
 
+    // Keep Deep Dive best record label updated every frame while in Hub
+    try {
+      const ui = this.scene.get(SceneKeys.UI);
+      if (ui) {
+        if (!ui.deepDiveText || !ui.deepDiveText.active) {
+          ui.deepDiveText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+        }
+        if (this.gs?.gameMode === 'DeepDive') {
+          const best = this.gs?.deepDiveBest || { level: 0, stage: 0 };
+          const L = Math.max(0, best.level || 0);
+          const S = Math.max(0, Math.min(4, best.stage || 0));
+          ui.deepDiveText.setText(`Deepest dive: ${L}-${S}`);
+          ui.deepDiveText.setVisible(true);
+        } else {
+          ui.deepDiveText.setVisible(false);
+        }
+      }
+    } catch (_) {}
+
     // Auto-close the conversation box if player moves away from NPC
     if (this.panel && this.panel._type === 'npcPrompt') {
       const dx = this.player.x - this.npcZone.x;
