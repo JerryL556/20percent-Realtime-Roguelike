@@ -177,14 +177,8 @@ export class GameState {
   setGameMode(mode) {
     if (mode === 'BossRush') {
       this.gameMode = 'BossRush';
-      // Initialize a shuffled list of bosses for this run
-      const bosses = ['Shotgunner', 'Dasher'];
-      // Fisher–Yates using run RNG
-      for (let i = bosses.length - 1; i > 0; i -= 1) {
-        const j = this.rng.int(0, i);
-        const tmp = bosses[i]; bosses[i] = bosses[j]; bosses[j] = tmp;
-      }
-      this.bossRushQueue = bosses;
+      // Fixed order: Shotgunner (stage 1), Dasher (stage 2), Hazel (stage 3)
+      this.bossRushQueue = ['Shotgunner', 'Dasher', 'Hazel'];
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
       this.nextScene = 'Boss';

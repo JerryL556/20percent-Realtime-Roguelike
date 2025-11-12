@@ -183,13 +183,20 @@ export default class BossScene extends Phaser.Scene {
       this.boss.speed = 80;
       this.boss.dashDamage = Math.floor(20 * (mods.enemyDamage || 1));
       try { this.boss.setTint(0xff4444); } catch (_) {}
-    } else {
+    } else if (bossType === 'Shotgunner') {
       this.boss.bossType = 'Shotgunner';
       this.boss.maxHp = Math.floor(650 * (mods.enemyHp || 1));
       this.boss.hp = this.boss.maxHp;
       this.boss.speed = 50;
       this.boss.dashDamage = Math.floor(16 * (mods.enemyDamage || 1));
       try { this.boss.setTint(0xffff66); } catch (_) {}
+    } else if (bossType === 'Hazel') {
+      this.boss.bossType = 'Hazel';
+      this.boss.maxHp = Math.floor(700 * (mods.enemyHp || 1));
+      this.boss.hp = this.boss.maxHp;
+      this.boss.speed = 60;
+      this.boss.dashDamage = Math.floor(18 * (mods.enemyDamage || 1));
+      try { this.boss.setTint(0x66ccff); } catch (_) {}
     }
     try { this.gs.lastBossType = this.boss.bossType; SaveManager.saveToLocal(this.gs); } catch (_) {}
     this._dashSeq = null;
@@ -469,7 +476,7 @@ export default class BossScene extends Phaser.Scene {
     // Place near top area
     this.bossHpBar = new HpBar(this, barX, 60, barW, 10);
     // Boss name above the HP bar (dynamic)
-    this.bossName = (this.boss?.bossType === 'Dasher') ? 'Dasher' : 'Shotgunner';
+    this.bossName = (this.boss?.bossType === 'Dasher') ? 'Dasher' : (this.boss?.bossType === 'Hazel' ? 'Hazel' : 'Shotgunner');
     this.bossNameText = this.add.text(width / 2, 48, this.bossName, { fontFamily: 'monospace', fontSize: 16, color: '#ff6666' }).setOrigin(0.5);
     this.exitRect = null;
     this.exitG = this.add.graphics();
@@ -2130,6 +2137,7 @@ export default class BossScene extends Phaser.Scene {
     // Boss shooting pattern (pause during dash)
     if (this.boss && this.boss.active && !this._castingGrenades) {
       const isDasher = (this.boss.bossType === 'Dasher');
+      const isHazel = (this.boss.bossType === 'Hazel');
       // Do not shoot while any dash sequence is active
       const canShoot = !this._dashSeq;
       const base = Phaser.Math.Angle.Between(this.boss.x, this.boss.y, this.player.x, this.player.y);
@@ -2147,6 +2155,13 @@ export default class BossScene extends Phaser.Scene {
             if (b) { b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.setTint(0xff4444); b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); }; }
             this._bossBurstLeft -= 1; this._bossNextBurstAt = this._bossBurstLeft <= 0 ? 0 : nowT + 100; if (this._bossBurstLeft <= 0) this.lastBossShot = nowT;
           }
+        }
+      } else if (isHazel) {
+        if (canShoot && (!this._hazelLastShot || (time - this._hazelLastShot) >= 1000)) {
+          this._hazelLastShot = time;
+          const ang = base; const vx = Math.cos(ang) * 420; const vy = Math.sin(ang) * 420;
+          const b = this.bossBullets.get(this.boss.x, this.boss.y, 'bullet');
+          if (b) { b.setActive(true).setVisible(true); b.setCircle(2).setOffset(-2, -2); b.setVelocity(vx, vy); b.setTint(0x66ccff); b.update = () => { if (!this.cameras.main.worldView.contains(b.x, b.y)) b.destroy(); }; }
         }
       } else {
         if (!this.lastBossShot || time - this.lastBossShot > 700) {
@@ -2239,6 +2254,10 @@ export default class BossScene extends Phaser.Scene {
       for (let k = 0; k < n; k += 1) { place(gx + Phaser.Math.Between(-1, 1), gy + Phaser.Math.Between(-1, 1)); }
     }
   }
+
+  // Hazel ability stubs (to be implemented later)
+  castHazelAbilityOne() { /* placeholder */ }
+  castHazelAbilityTwo() { /* placeholder */ }
 
   // Player bullet hits a barricade (all barricades here are destructible)
   onBulletHitBarricade(b, s) {
