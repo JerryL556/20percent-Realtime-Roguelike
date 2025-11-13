@@ -193,7 +193,7 @@ export default class BossScene extends Phaser.Scene {
             this._mines = this._mines.filter((m) => m && m.active);
             for (let i = 0; i < this._mines.length; i += 1) {
               const m = this._mines[i]; if (!m?.active) continue;
-              if (!m._armed) {
+              if\ \(!m\._armed\)\ \{\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ //\ kinematic\ step\ for\ mine\ travel\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ if\ \(typeof\ m\._ox\ ===\ 'number'\ &&\ typeof\ m\._oy\ ===\ 'number'\)\ \{\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ if\ \(typeof\ m\._speed\ !==\ 'number'\)\ m\._speed\ =\ 260;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ if\ \(typeof\ m\._ang\ !==\ 'number'\ \|\|\ !isFinite\(m\._ang\)\)\ m\._ang\ =\ Math\.atan2\(\(m\.y\ -\ m\._oy\),\ \(m\.x\ -\ m\._ox\)\);\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ dt\ =\ \(\(this\.game\?\.loop\?\.delta\)\ \|\|\ 16\)\ /\ 1000;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ r\ =\ Math\.sqrt\(m\._travelMax2\ \|\|\ 3600\);\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ tx\ =\ m\._ox\ \+\ Math\.cos\(m\._ang\)\ \*\ r;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ ty\ =\ m\._oy\ \+\ Math\.sin\(m\._ang\)\ \*\ r;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ vxk\ =\ Math\.cos\(m\._ang\)\ \*\ m\._speed;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ vyk\ =\ Math\.sin\(m\._ang\)\ \*\ m\._speed;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ nx\ =\ m\.x\ \+\ vxk\ \*\ dt;\ const\ ny\ =\ m\.y\ \+\ vyk\ \*\ dt;\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ let\ hit\ =\ false;\ const\ line\ =\ new\ Phaser\.Geom\.Line\(m\.x,\ m\.y,\ nx,\ ny\);\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ scan\ =\ \(grp\)\ =>\ \{\ const\ arr\ =\ grp\?\.getChildren\?\.\(\)\ \|\|\ \[];\ for\ \(let\ a=0;a<arr\.length\ &&\ !hit;a\+\+\)\{\ const\ s=arr\[a];\ if\ \(!s\?\.active\)\ continue;\ const\ rect\ =\ s\.getBounds\?\.\(\)\ \|\|\ new\ Phaser\.Geom\.Rectangle\(s\.x-8,s\.y-8,16,16\);\ if\ \(Phaser\.Geom\.Intersects\.LineToRectangle\(line,\ rect\)\)\ hit=true;\ }\ };\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ scan\(this\.barricadesSoft\);\ if\ \(this\.walls\)\ scan\(this\.walls\);\ if\ \(this\.bossGroup\)\ scan\(this\.bossGroup\);\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ boss\ =\ this\.boss;\ if\ \(boss\?\.active\ &&\ !hit\)\ \{\ const\ rect\ =\ boss\.getBounds\?\.\(\)\ \|\|\ new\ Phaser\.Geom\.Rectangle\(boss\.x-10,boss\.y-10,20,20\);\ if\ \(Phaser\.Geom\.Intersects\.LineToRectangle\(line,\ rect\)\)\ hit\ =\ true;\ }\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ toTarget2\ =\ \(tx\ -\ m\.x\)\*\(tx\ -\ m\.x\)\ \+\ \(ty\ -\ m\.y\)\*\(ty\ -\ m\.y\);\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ const\ step2\ =\ \(vxk\*dt\)\*\(vxk\*dt\)\ \+\ \(vyk\*dt\)\*\(vyk\*dt\);\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ if\ \(step2\ <\ toTarget2\ &&\ !hit\)\ \{\ try\ \{\ m\.setPosition\(nx,\ ny\);\ }\ catch\(_\)\{}\ }\n\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
                 const dx = (m.x - (m._ox || 0)); const dy = (m.y - (m._oy || 0));
                 if ((dx * dx + dy * dy) >= (m._travelMax2 || 3600)) {
                   try { m.setVelocity(0, 0); m.body.setVelocity(0, 0); m.body.moves = false; m.body.setImmovable(true); } catch (_) {}
@@ -3213,6 +3213,7 @@ export default class BossScene extends Phaser.Scene {
     };
   }
 }
+
 
 
 
