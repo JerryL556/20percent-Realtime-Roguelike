@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -115,7 +115,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150° cone, 48px range, 10 damage (90ms swing, 45ms hit)
+  // Player melee implementation: 150掳 cone, 48px range, 10 damage (90ms swing, 45ms hit)
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -269,7 +269,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180�? safe for lerp)
+          // Linear interpolate angles (range is <= 180锟? safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -615,7 +615,7 @@ export default class CombatScene extends Phaser.Scene {
                 for (let k = 0; k < enemies.length; k += 1) {
                   const e = enemies[k]; if (!e?.active || e.isDummy) continue;
                   const dx = e.x - m.x; const dy = e.y - m.y;
-                  if ((dx * dx + dy * dy) <= r2) { this._explodeMine?.(m); break; }
+                  if ((dx * dx + dy * dy) <= r2) { m._explodeFn?.(m); break; }
                 }
               }
             }
@@ -971,7 +971,7 @@ export default class CombatScene extends Phaser.Scene {
         try { b.destroy(); } catch (_) {}
         return;
       }
-      // Rook shield: block non-rail bullets (including rockets) within 90° front arc
+      // Rook shield: block non-rail bullets (including rockets) within 90掳 front arc
       if (e.isRook && !b._rail) {
         try {
           const r = (e._shieldRadius || 60);
@@ -1650,9 +1650,9 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2�?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2锟?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
-        // Slightly increase Smart HMG homing: ~0.75��/frame (~45��/s)
+        // Slightly increase Smart HMG homing: ~0.75锟斤拷/frame (~45锟斤拷/s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
         b._noTurnUntil = this.time.now + 120; // brief straight launch
 
@@ -1712,7 +1712,7 @@ export default class CombatScene extends Phaser.Scene {
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0); // low velocity
         // Max turn per frame baseline is increased for no-core missiles (effectively time-scaled later)
-        // Drastically higher base homing for no-core: 8 deg/frame (~480��/s at 60 FPS)
+        // Drastically higher base homing for no-core: 8 deg/frame (~480锟斤拷/s at 60 FPS)
         b._maxTurn = Phaser.Math.DegToRad(8);
         // Apply optional guided turn-rate multiplier from cores
         if (typeof weapon._guidedTurnMult === 'number') {
@@ -1723,8 +1723,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1�?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90�?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1锟?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90锟?cone total
         }
         // Preserve Smart Core homing equal to old behavior: 2 deg/frame scaled by mult
         if (b._smart) {
@@ -1754,7 +1754,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45�?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45锟?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -3471,7 +3471,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150�? 48px, 10 dmg
+    // Player melee: C key, 150锟? 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -3528,7 +3528,7 @@ export default class CombatScene extends Phaser.Scene {
         let speed = e.speed || 60;
         // Global speed boost for all enemies
         speed *= 1.5;
-        // Rook: update and draw shield; turn slowly toward player (30°/s)
+        // Rook: update and draw shield; turn slowly toward player (30掳/s)
         if (e.isRook) {
           try {
             const targetAng = Math.atan2(dy, dx);
@@ -3590,7 +3590,7 @@ export default class CombatScene extends Phaser.Scene {
         }
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
-          // Align enemy melee FOV with player melee (150° total => 75° half-angle)
+          // Align enemy melee FOV with player melee (150掳 total => 75掳 half-angle)
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
           let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 170, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 500 };
           if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 }; }
@@ -3605,7 +3605,7 @@ export default class CombatScene extends Phaser.Scene {
           if (e._mState === 'windup') {
             vx = 0; vy = 0;
             if (now >= (e._meleeUntil || 0)) {
-              // Start sweep (VFX matches player's 150° cone)
+              // Start sweep (VFX matches player's 150掳 cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
               // Enemy slash VFX fixed at 90ms to match player
               try { this.spawnMeleeVfx(e, e._meleeFacing, 150, 90, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
@@ -3846,7 +3846,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!e.lastShotAt) e.lastShotAt = 0;
         if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors �?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors 锟?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -4926,7 +4926,7 @@ export default class CombatScene extends Phaser.Scene {
     const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
       const e = enemies[i]; if (!e?.active) continue;
-      // Rook shield: treat 90° arc as obstacle if facing the beam source
+      // Rook shield: treat 90掳 arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
           const r = (e._shieldRadius || 60);
@@ -5311,7 +5311,7 @@ export default class CombatScene extends Phaser.Scene {
           const arr = this.enemies?.getChildren?.() || [];
           for (let k = 0; k < arr.length; k += 1) {
             const e = arr[k]; if (!e?.active || e?.isDummy) continue;
-            const dx = e.x - mine.x; const dy = e.y - mine.y; if ((dx * dx + dy * dy) <= r2) { this._explodeMine?.(mine); break; }
+            const dx = e.x - mine.x; const dy = e.y - mine.y; if ((dx * dx + dy * dy) <= r2) { mine._explodeFn?.(mine); break; }
           }
         } catch (_) {}
       };
@@ -5319,34 +5319,37 @@ export default class CombatScene extends Phaser.Scene {
       if (!this.mines) this.mines = this.physics.add.group({ runChildUpdate: true });
       try { this.mines.add(mine); } catch (_) {}
       this._mines.push(mine);
+      // Bind per-mine explosion handler to avoid first-use undefined refs
+      mine._explodeFn = (m) => {
+        if (!m?.active) return;
+        const ex = m.x; const ey = m.y; const r = m._blastRadius || 60; const r2 = r * r;
+        try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
+        // Damage + stun enemies (no friendly fire)
+        try {
+          const arr2 = this.enemies?.getChildren?.() || [];
+          const nowS = this.time.now;
+          for (let i2 = 0; i2 < arr2.length; i2 += 1) {
+            const e2 = arr2[i2]; if (!e2?.active || e2.isDummy) continue;
+            const dx2 = e2.x - ex; const dy2 = e2.y - ey; if ((dx2 * dx2 + dy2 * dy2) <= r2) {
+              let dmg2 = m._dmg || 30; if (typeof e2.hp !== 'number') e2.hp = e2.maxHp || 20; e2.hp -= dmg2; if (e2.hp <= 0) { this.killEnemy?.(e2); }
+              // Apply stun accumulation (20 -> guaranteed stun)
+              e2._stunValue = Math.min(10, (e2._stunValue || 0) + (m._stunVal || 0));
+              if ((e2._stunValue || 0) >= 10) { e2._stunnedUntil = nowS + 200; e2._stunValue = 0; }
+            }
+          }
+        } catch (_) {}
+        try { m.destroy(); } catch (_) {}
+      };
     };
     // Timed emission clockwise
     for (let i = 0; i < count; i += 1) { this.time.delayedCall(i * 90, () => placeOne(i)); }
     // Cleanup dispenser sprite after emission
     if (disp) this.time.delayedCall(count * 90 + 200, () => { try { disp.destroy(); } catch (_) {} });
-    // Helper to detonate a mine
-    this._explodeMine = (mine) => {
-      if (!mine?.active) return;
-      const ex = mine.x; const ey = mine.y; const r = mine._blastRadius || 60; const r2 = r * r;
-      try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
-      // Damage + stun enemies (no friendly fire)
-      try {
-        const arr = this.enemies?.getChildren?.() || [];
-        const nowS = this.time.now;
-        for (let i = 0; i < arr.length; i += 1) {
-          const e = arr[i]; if (!e?.active || e.isDummy) continue;
-          const dx = e.x - ex; const dy = e.y - ey; if ((dx * dx + dy * dy) <= r2) {
-            let dmg = mine._dmg || 30; if (typeof e.hp !== 'number') e.hp = e.maxHp || 20; e.hp -= dmg; if (e.hp <= 0) { this.killEnemy?.(e); }
-            // Apply stun accumulation (20 -> guaranteed stun)
-            e._stunValue = Math.min(10, (e._stunValue || 0) + (mine._stunVal || 0));
-            if ((e._stunValue || 0) >= 10) { e._stunnedUntil = nowS + 200; e._stunValue = 0; }
-          }
-        }
-      } catch (_) {}
-      try { mine.destroy(); } catch (_) {}
-    };
+    // Scene-level helper retained for compatibility (not used by mines directly)
+    this._explodeMine = (mine) => { try { mine?._explodeFn?.(mine); } catch (_) {} };
   }
 }
+
 
 
 

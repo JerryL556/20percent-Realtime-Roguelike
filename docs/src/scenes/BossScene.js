@@ -1,4 +1,4 @@
-import { SceneKeys } from '../core/SceneKeys.js';
+﻿import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { createBoss } from '../systems/EnemyFactory.js';
@@ -220,7 +220,7 @@ export default class BossScene extends Phaser.Scene {
                 }
               } else {
                 const r = m._detRadius || 30; const boss = this.boss; if (boss?.active) {
-                  const dx = boss.x - m.x; const dy = boss.y - m.y; if ((dx * dx + dy * dy) <= (r * r)) { this._explodeMineBoss?.(m); }
+                  const dx = boss.x - m.x; const dy = boss.y - m.y; if ((dx * dx + dy * dy) <= (r * r)) { m._explodeFn?.(m); }
                 }
               }
             }
@@ -2413,26 +2413,34 @@ export default class BossScene extends Phaser.Scene {
         try {
           if (!mine.active || !mine._armed) return;
           const r = mine._detRadius || 30; const r2 = r * r;
-          const boss = this.boss; if (boss?.active) { const dx = boss.x - mine.x; const dy = boss.y - mine.y; if ((dx * dx + dy * dy) <= r2) { this._explodeMineBoss?.(mine); return; } }
+          const boss = this.boss; if (boss?.active) { const dx = boss.x - mine.x; const dy = boss.y - mine.y; if ((dx * dx + dy * dy) <= r2) { mine._explodeFn?.(mine); return; } }
         } catch (_) {}
       };
       if (!this.mines) this.mines = this.physics.add.group({ runChildUpdate: true });
       try { this.mines.add(mine); } catch (_) {}
       this._mines.push(mine);
+      // Bind per-mine explosion handler (boss scene variant)
+      mine._explodeFn = (m) => {
+        if (!m?.active) return; const ex = m.x; const ey = m.y; const r = m._blastRadius || 60;
+        try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
+        try {
+          const boss = this.boss; if (boss?.active) {
+            const dx = boss.x - ex; const dy = boss.y - ey; if ((dx * dx + dy * dy) <= (r * r)) {
+              if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300;
+              boss.hp -= (m._dmg || 30);
+              if (boss.hp <= 0) this.killBoss(boss);
+              boss._stunValue = Math.min(10, (boss._stunValue || 0) + (m._stunVal || 0));
+              if ((boss._stunValue || 0) >= 10) { boss._stunnedUntil = this.time.now + 200; boss._stunValue = 0; }
+            }
+          }
+        } catch (_) {}
+        try { m.destroy(); } catch (_) {}
+      };
     };
     for (let i = 0; i < count; i += 1) this.time.delayedCall(i * 90, () => placeOne(i));
     if (disp) this.time.delayedCall(count * 90 + 200, () => { try { disp.destroy(); } catch (_) {} });
-    this._explodeMineBoss = (mine) => {
-      if (!mine?.active) return; const ex = mine.x; const ey = mine.y; const r = mine._blastRadius || 60;
-      try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
-      try {
-        const boss = this.boss; if (boss?.active) { const dx = boss.x - ex; const dy = boss.y - ey; if ((dx * dx + dy * dy) <= (r * r)) {
-          if (typeof boss.hp !== 'number') boss.hp = boss.maxHp || 300; boss.hp -= (mine._dmg || 30); if (boss.hp <= 0) this.killBoss(boss);
-          boss._stunValue = Math.min(10, (boss._stunValue || 0) + (mine._stunVal || 0)); if ((boss._stunValue || 0) >= 10) { boss._stunnedUntil = this.time.now + 200; boss._stunValue = 0; }
-        } }
-      } catch (_) {}
-      try { mine.destroy(); } catch (_) {}
-    };
+    // Scene-level helper retained for compatibility (not used by mines directly)
+    this._explodeMineBoss = (mine) => { try { mine?._explodeFn?.(mine); } catch (_) {} };
   }
 
   // Hazel ability stubs (to be implemented later)
@@ -3232,6 +3240,7 @@ export default class BossScene extends Phaser.Scene {
     };
   }
 }
+
 
 
 
