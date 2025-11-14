@@ -292,6 +292,14 @@ export function pixelSparks(scene, x, y, opts = {}) {
 
 // Pick a scrap tint based on enemy type flags
 export function getScrapTintForEnemy(e) {
+    // Boss-specific mapping by type (Bigwig/Dandelion/Hazel)
+    if (e?.isBoss) {
+      const t = String(e.bossType || '').toLowerCase();
+      if (t === 'bigwig') return 0x4a6b3a;
+      if (t === 'dandelion') return 0x9a6c3a;
+      if (t === 'hazel') return 0x55585d;
+      // fall through for unknown boss types
+    }
   try {
     // Dark tan group: Prism, Shredder (base melee), Charger (runner), Rook
     if (e?.isPrism || (e?.isMelee && !e?.isRunner && !e?.isRook) || e?.isRunner || e?.isRook) return 0x9a6c3a;
