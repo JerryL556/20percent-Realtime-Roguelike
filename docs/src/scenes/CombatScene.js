@@ -1741,8 +1741,8 @@ export default class CombatScene extends Phaser.Scene {
     try {
       const halfW = nameTagW / 2;
       const halfH = nameTagH / 2;
-      const maxSkew = Math.max(12, Math.floor(nameTagH * 0.6));
-      const skew = Math.min(maxSkew, Math.max(12, Math.floor(halfW - 6)));
+      // Subtle skew: base on height, capped to keep the shape readable
+      const skew = Math.max(6, Math.min(14, Math.floor(nameTagH * 0.35)));
       nameTag.beginPath();
       nameTag.moveTo(-halfW + skew, -halfH);   // top-left skewed right
       nameTag.lineTo( halfW + skew, -halfH);   // top-right skewed right
