@@ -351,6 +351,14 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Fallback: if init() wasn't called with data, read from scene settings
+    try {
+      const d = this.scene?.settings?.data;
+      if (d && typeof d === 'object') {
+        if (this._isBossRoom !== true && d.bossRoom) this._isBossRoom = true;
+        if (!this._bossId && d.bossId) this._bossId = String(d.bossId);
+      }
+    } catch (_) {}
     // Ensure physics world bounds match the visible area so enemies can't leave the screen
     this.physics.world.setBounds(0, 0, width, height);
     try { this.physics.world.setBoundsCollision(true, true, true, true); } catch (_) {}
