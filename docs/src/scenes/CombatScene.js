@@ -351,8 +351,7 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
-    try { console.log('[Combat] create() enter'); } catch (_) {}
-    // Fallback: if init() wasn't called with data, read from scene settings
+    try {     // Fallback: if init() wasn't called with data, read from scene settings
     try {
       const d = this.scene?.settings?.data;
       if (d && typeof d === 'object') {
@@ -371,19 +370,19 @@ export default class CombatScene extends Phaser.Scene {
         if (!this._bossId && typeof this.gs.chooseBossType === 'function') this._bossId = this.gs.chooseBossType();
       }
     } catch (_) {}
-    try { console.log('[Combat] flags:', { bossRoom: this._isBossRoom, bossId: this._bossId, mode: this.gs?.gameMode, next: this.gs?.nextScene }); } catch (_) {}
+    
     // Ensure no stale boss reference carries over between boss rooms
     this.boss = null;
 
     // Debug overlay for boss-room state
-    try {
-      const mk = (key, def='') => (this.registry.get(key) ?? def);
-      const txt = `BossRoom=${this._isBossRoom ? 'yes' : 'no'}  bossId=${this._bossId || '-'}\n` +
-                  `gs.mode=${this.gs?.gameMode || '-'} next=${this.gs?.nextScene || '-'}\n` +
-                  `enemies=${(this.enemies?.getChildren?.()||[]).length}`;
-      this._bossDbg = this.add.text(12, 56, txt, { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0,0).setDepth(9500);
-    } catch (_) {}
-    // Ensure physics world bounds match the visible area so enemies can't leave the screen
+    
+    
+    
+    
+    
+    
+    
+    
     this.physics.world.setBounds(0, 0, width, height);
     try { this.physics.world.setBoundsCollision(true, true, true, true); } catch (_) {}
     // Ensure UI overlay is active during combat
@@ -705,10 +704,8 @@ export default class CombatScene extends Phaser.Scene {
     try { this.prompt?.setText?.(''); } catch (_) {}
     // If this is a boss room, spawn the boss ASAP so exit logic doesn't trigger prematurely
     try {
-      console.log('[Combat] early spawn check:', this._isBossRoom, !!this.boss);
-      if (this._isBossRoom && !this.boss) {
-        console.log('[Combat] early boss spawn path');
-        const mods = this.gs?.getDifficultyMods?.() || {};
+            if (this._isBossRoom && !this.boss) {
+                const mods = this.gs?.getDifficultyMods?.() || {};
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
         let boss = createBoss(this, cx, cy, 400, 10, 60);
@@ -721,10 +718,10 @@ export default class CombatScene extends Phaser.Scene {
         try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
         this.boss = boss; this.enemies.add(boss);
         try { this.registry.set('bossName', bossType); this.registry.set('bossHp', boss.hp); this.registry.set('bossHpMax', boss.maxHp); this.registry.set('bossActive', true); } catch (_) {}
-        try { console.log('[Combat] Boss spawned (early):', bossType); } catch (_) {}
+        
         try { this.startBossIntro?.(bossType); } catch (_) {}
       }
-    } catch (err) { try { console.error('[Combat] early boss spawn exception', err); } catch (_) {} }
+    } catch (err) { }
     const mods = this.gs.getDifficultyMods();
     const room = generateRoom(this.gs.rng, this.gs.currentDepth);
     this.room = room;
@@ -1673,7 +1670,7 @@ export default class CombatScene extends Phaser.Scene {
       boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
       try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
       this.boss = boss; this.enemies.add(boss);
-      try { console.log('[Combat] Boss spawned:', bossType); } catch (_) {}
+      
       // Inform UI about boss
       try { this.registry.set('bossName', bossType); this.registry.set('bossHp', boss.hp); this.registry.set('bossHpMax', boss.maxHp); this.registry.set('bossActive', true); } catch (_) {}
       // Start intro cinematic and freeze gameplay
@@ -2569,15 +2566,15 @@ export default class CombatScene extends Phaser.Scene {
     // Boss AI updates (attacks driven here; movement via shooter pathing)
     try { if (this.boss && this.boss.active && !this._cinematicActive) this.updateBossAI(); } catch (_) {}
     // Update debug overlay
-    try {
-      if (this._bossDbg && this._bossDbg.active) {
-        const alive = (this.enemies?.getChildren?.() || []).filter((e) => e?.active && (typeof e.hp !== 'number' ? true : e.hp > 0)).length;
-        const b = this.boss;
-        const s = `BossRoom=${this._isBossRoom ? 'yes' : 'no'}  bossId=${this._bossId || '-'}\n` +
-                  `bossActive=${b?.active ? 'yes' : 'no'} hp=${(b&&typeof b.hp==='number')?b.hp:'-'}\n` +
-                  `enemiesAlive=${alive}`;
-        this._bossDbg.setText(s);
-      }
+    
+    
+    
+    
+    
+    
+    
+    
+    
     } catch (_) {}
 
     // Boss HUD sync
@@ -5673,3 +5670,5 @@ export default class CombatScene extends Phaser.Scene {
 
 
     // Reset per-room boss reference to avoid stale state across restarts
+
+
