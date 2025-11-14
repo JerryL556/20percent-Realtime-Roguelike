@@ -12,9 +12,14 @@ export default class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.add.text(width / 2, 60, 'Menu - Customization & Settings', { fontFamily: 'monospace', fontSize: 20, color: '#ffffff' }).setOrigin(0.5);
 
-    const gs = this.registry.get('gameState');
+    // Show the actual current difficulty if available (prefer saved state, then registry)
     const difficulties = [Difficulty.Easy, Difficulty.Normal, Difficulty.Hard];
-    let idx = gs ? difficulties.indexOf(gs.difficulty) : 1;
+    let state = this.registry.get('gameState') || SaveManager.loadFromLocal() || null;
+    let idx = 1; // default to Normal
+    if (state && state.difficulty) {
+      const found = difficulties.indexOf(state.difficulty);
+      idx = (found >= 0) ? found : 1;
+    }
     const diffText = this.add.text(width / 2, 130, `Difficulty: ${difficulties[idx]}`, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' }).setOrigin(0.5);
     makeTextButton(this, width / 2, 170, 'Cycle Difficulty', () => {
       idx = (idx + 1) % difficulties.length;
