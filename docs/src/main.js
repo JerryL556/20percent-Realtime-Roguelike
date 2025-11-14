@@ -3,7 +3,6 @@ import StartScene from './scenes/StartScene.js';
 import MenuScene from './scenes/MenuScene.js';
 import HubScene from './scenes/HubScene.js';
 import CombatScene from './scenes/CombatScene.js';
-import BossScene from './scenes/BossScene.js';
 import UIScene from './scenes/UIScene.js';
 import { SceneKeys } from './core/SceneKeys.js';
 import { Config } from './core/Config.js';
@@ -32,7 +31,6 @@ const gameConfig = {
     MenuScene,
     HubScene,
     CombatScene,
-    BossScene,
     UIScene,
   ],
 };

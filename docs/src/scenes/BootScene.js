@@ -39,6 +39,13 @@ export default class BootScene extends Phaser.Scene {
       if (!this.textures.exists('bg_normal')) this.load.image('bg_normal', 'assets/Normal Background.png');
       if (!this.textures.exists('bg_boss')) this.load.image('bg_boss', 'assets/Boss Background.png');
     } catch (_) {}
+    // Boss intro art (keys exactly the boss IDs)
+    try {
+      const A = (k, p) => { if (!this.textures.exists(k)) this.load.image(k, p); };
+      A('Bigwig', 'assets/Bigwig.png');
+      A('Dandelion', 'assets/Dandelion.png');
+      A('Hazel', 'assets/Hazel.png');
+    } catch (_) {}
     // Generate simple textures used by bullets and optional sprites
     const g = this.make.graphics({ x: 0, y: 0, add: false });
     g.clear(); g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 4, 4);

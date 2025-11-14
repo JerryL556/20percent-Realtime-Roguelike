@@ -188,12 +188,12 @@ export class GameState {
       if (!Array.isArray(this.bossRushQueue) || this.bossRushQueue.length === 0) {
         this.setGameMode('BossRush');
       }
-      return (this.bossRushQueue && this.bossRushQueue[0]) ? this.bossRushQueue[0] : 'Dasher';
+      return (this.bossRushQueue && this.bossRushQueue[0]) ? this.bossRushQueue[0] : 'Dandelion';
     }
-    // Campaign (Normal) mode: fixed per-stage boss order: 1=Shotgunner, 2=Dasher, 3=Hazel
+    // Campaign (Normal) mode: fixed per-stage boss order: 1=Bigwig, 2=Dandelion, 3=Hazel
     const st = Math.max(1, Math.min(3, typeof this.campaignSelectedStage === 'number' ? this.campaignSelectedStage : 1));
-    if (st === 1) return 'Shotgunner';
-    if (st === 2) return 'Dasher';
+    if (st === 1) return 'Bigwig';
+    if (st === 2) return 'Dandelion';
     return 'Hazel';
   }
 
@@ -201,8 +201,8 @@ export class GameState {
   setGameMode(mode) {
     if (mode === 'BossRush') {
       this.gameMode = 'BossRush';
-      // Fixed order: Shotgunner (stage 1), Dasher (stage 2), Hazel (stage 3)
-      this.bossRushQueue = ['Shotgunner', 'Dasher', 'Hazel'];
+      // Fixed order: Bigwig (stage 1), Dandelion (stage 2), Hazel (stage 3)
+      this.bossRushQueue = ['Bigwig', 'Dandelion', 'Hazel'];
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
       this.nextScene = 'Boss';

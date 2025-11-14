@@ -23,6 +23,10 @@ export default class CombatScene extends Phaser.Scene {
     this.CC_MIN_TRAVEL = 20;
     this.CC_MAX_TRAVEL = 40;
   }
+  init(data) {
+    this._isBossRoom = !!(data && data.bossRoom);
+    this._bossId = data && data.bossId ? String(data.bossId) : null;
+  }
   preload() {
     // Ensure weapon images are loaded even if entering this scene directly
     try { preloadWeaponAssets(this); } catch (_) {}
@@ -353,10 +357,11 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure UI overlay is active during combat
     this.scene.launch(SceneKeys.UI);
     try { this.scene.bringToTop(SceneKeys.UI); } catch (_) {}
-    // Normal combat background (exclude hub/boss scenes by only applying here)
+    // Background: use boss background if in boss room, else normal
     try {
-      if (this.textures?.exists('bg_normal')) {
-        const bg = this.add.image(width / 2, height / 2, 'bg_normal');
+      const bgKey = this._isBossRoom && this.textures?.exists('bg_boss') ? 'bg_boss' : 'bg_normal';
+      if (this.textures?.exists(bgKey)) {
+        const bg = this.add.image(width / 2, height / 2, bgKey);
         const tex = this.textures.get('bg_normal');
         const src = tex.getSourceImage?.() || {};
         const iw = src.naturalWidth || src.width || tex.frames['__BASE']?.width || bg.width || width;
@@ -765,18 +770,24 @@ export default class CombatScene extends Phaser.Scene {
         const stage = Math.max(1, Math.min(4, dd.stage || 1));
         const stageNormal = baseN + Math.min(stage - 1, 2);
         const stageElite = (stage === 4) ? (baseE * 2) : baseE;
-        for (let i = 0; i < stageNormal; i += 1) spawnOneNormal();
-        for (let i = 0; i < stageElite; i += 1) spawnOneElite();
+        if (!this._isBossRoom) {
+          for (let i = 0; i < stageNormal; i += 1) spawnOneNormal();
+          for (let i = 0; i < stageElite; i += 1) spawnOneElite();
+        }
       } else {
         // Campaign (Normal) game: composition based on depth for normals, elites by stage
-        room.spawnPoints.forEach(() => spawnOneNormal());
+        if (!this._isBossRoom) {
+          room.spawnPoints.forEach(() => spawnOneNormal());
+        }
         // Default 1 elite; Stage 3 uses 2 elites
         let eliteCount = 1;
         try {
           const st = Math.max(1, this.gs?.campaignSelectedStage || this.gs?.campaignStage || 1);
           if (st === 3) eliteCount = 2;
         } catch (_) {}
-        for (let i = 0; i < eliteCount; i += 1) spawnOneElite();
+        if (!this._isBossRoom) {
+          for (let i = 0; i < eliteCount; i += 1) spawnOneElite();
+        }
       }
     }
 
@@ -829,7 +840,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this.walls) {
       const pCol = this.playerCollider || this.player;
       this.physics.add.collider(pCol, this.walls);
-      this.physics.add.collider(this.enemies, this.walls);
+    this.physics.add.collider(this.enemies, this.walls);
     }
     // Colliders with barricades (block movement and bullets)
     {
@@ -1585,6 +1596,58 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {
       return false;
     }
+
+    // If boss room: spawn exactly one boss at center-top and set up intro/UI hooks
+    if (this._isBossRoom) {
+      const mods = this.gs.getDifficultyMods?.() || {};
+      const cx = width / 2; const cy = 100;
+      // Default boss if not provided by caller
+      let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
+      // Create base boss
+      let boss = createBoss(this, cx, cy, 600, 20, 50);
+      boss.isEnemy = true; boss.isBoss = true; boss.bossType = bossType;
+      // Tune stats and tint per boss type (names: Bigwig, Dandelion, Hazel)
+      if (bossType === 'Dandelion') {
+        boss.maxHp = Math.floor(750 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 80; boss.dashDamage = Math.floor(20 * (mods.enemyDamage || 1)); try { boss.setTint(0xff4444); } catch (_) {}
+      } else if (bossType === 'Bigwig') {
+        boss.maxHp = Math.floor(650 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 50; boss.dashDamage = Math.floor(16 * (mods.enemyDamage || 1)); try { boss.setTint(0xffff66); } catch (_) {}
+      } else { // Hazel (default)
+        boss.maxHp = Math.floor(700 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.dashDamage = Math.floor(18 * (mods.enemyDamage || 1)); try { boss.setTint(0x66ccff); } catch (_) {}
+      }
+      try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
+      this.boss = boss; this.enemies.add(boss);
+      // Inform UI about boss
+      try { this.registry.set('bossName', bossType); this.registry.set('bossHp', boss.hp); this.registry.set('bossHpMax', boss.maxHp); this.registry.set('bossActive', true); } catch (_) {}
+      // Start intro cinematic and freeze gameplay
+      try { this.startBossIntro?.(bossType); } catch (_) {}
+    }
+  }
+
+  startBossIntro(bossId) {
+    const { width, height } = this.scale;
+    // Freeze physics and inputs during intro
+    try { this.physics.world.pause(); } catch (_) {}
+    this._cinematicUntil = this.time.now + 2000;
+    this._cinematicActive = true;
+    // Create visuals
+    const artKey = bossId;
+    let art = null;
+    try { if (this.textures?.exists(artKey)) art = this.add.image(width + 200, height / 2, artKey); } catch (_) {}
+    const nameText = this.add.text(-200, 60, bossId, { fontFamily: 'monospace', fontSize: 24, color: '#ff3333' }).setOrigin(0.5, 0.5);
+    try { art?.setDepth(9000); nameText.setDepth(9001); } catch (_) {}
+    // Slide in
+    try { this.tweens.add({ targets: art, x: width / 2 + 140, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
+    try { this.tweens.add({ targets: nameText, x: width / 2, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
+    // Hold then slide out
+    this.time.delayedCall(600 + 800, () => {
+      try { this.tweens.add({ targets: art, x: width + 200, duration: 600, ease: 'Cubic.easeIn' }); } catch (_) {}
+      try { this.tweens.add({ targets: nameText, x: -200, duration: 600, ease: 'Cubic.easeIn', onComplete: () => { try { nameText.destroy(); } catch (_) {} } }); } catch (_) {}
+    });
+    // Unfreeze after 2s
+    this.time.delayedCall(2000, () => {
+      this._cinematicActive = false; this._cinematicUntil = 0; try { this.physics.world.resume(); } catch (_) {}
+      try { if (art) art.destroy(); } catch (_) {}
+    });
   }
 
   shoot() {
@@ -2417,6 +2480,19 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   update() {
+    // During intro cinematic, block player movement/actions
+    const nowIntro = this.time.now;
+    if (this._cinematicActive && nowIntro < (this._cinematicUntil || 0)) {
+      try { (this.playerCollider || this.player)?.setVelocity(0, 0); } catch (_) {}
+      try { if (this.player) this.player.body.moves = false; } catch (_) {}
+      // Keep boss HUD updated while frozen
+      if (this.boss && this.boss.active) {
+        try { this.registry.set('bossHp', this.boss.hp); this.registry.set('bossHpMax', this.boss.maxHp); this.registry.set('bossActive', true); this.registry.set('bossName', this.boss.bossType || this._bossId || ''); } catch (_) {}
+      }
+      return;
+    } else {
+      try { if (this.player) this.player.body.moves = true; } catch (_) {}
+    }
     // Update dash charge display for UI
     this.registry.set('dashCharges', this.dash.charges);
     // Dash regen progress for UI (0..1) for the next slot
@@ -2432,6 +2508,13 @@ export default class CombatScene extends Phaser.Scene {
       prog = 1;
     }
     this.registry.set('dashRegenProgress', prog);
+
+    // Boss HUD sync
+    if (this.boss && this.boss.active) {
+      try { this.registry.set('bossHp', this.boss.hp); this.registry.set('bossHpMax', this.boss.maxHp); this.registry.set('bossActive', true); this.registry.set('bossName', this.boss.bossType || this._bossId || ''); } catch (_) {}
+    } else {
+      try { this.registry.set('bossActive', false); } catch (_) {}
+    }
 
     // Dash handling
     const now = this.time.now;
@@ -4205,13 +4288,18 @@ export default class CombatScene extends Phaser.Scene {
       const playerRect = this.player.getBounds();
       if (Phaser.Geom.Intersects.RectangleToRectangle(playerRect, this.exitRect)) {
         if (this.inputMgr.pressedInteract) {
-          this.gs.progressAfterCombat();
+          if (this._isBossRoom) this.gs.progressAfterBoss(); else this.gs.progressAfterCombat();
           SaveManager.saveToLocal(this.gs);
-          const next = this.gs.nextScene === 'Boss' ? SceneKeys.Boss : SceneKeys.Combat;
-          this.scene.start(next);
-        }
+          if (this.gs.nextScene === 'Boss') {
+            let bossId = 'Dandelion';
+            try { if (typeof this.gs.chooseBossType === 'function') bossId = this.gs.chooseBossType(); } catch (_) {}
+            this.scene.start(SceneKeys.Combat, { bossRoom: true, bossId });
+          } else {
+            this.scene.start(SceneKeys.Combat);
+          }
       }
     }
+  }
   }
 
   createArenaWalls(room) {

@@ -599,16 +599,22 @@ export default class HubScene extends Phaser.Scene {
       if (nearNpc) this.openNpcPanel();
       if (nearModeNpc) this.openModePanel();
       if (nearPortal) {
-        let next = (this.gs?.gameMode === 'BossRush') ? SceneKeys.Boss : SceneKeys.Combat;
+        let next = (this.gs?.gameMode === 'BossRush') ? SceneKeys.Combat : SceneKeys.Combat;
         // Ensure Boss Rush queue is ready when entering boss portal
         try {
           if (next === SceneKeys.Boss && this.gs && (!Array.isArray(this.gs.bossRushQueue) || this.gs.bossRushQueue.length === 0)) {
             this.gs.setGameMode('BossRush');
           }
         } catch (_) {}
-        this.gs.nextScene = next;
+        this.gs.nextScene = (this.gs?.gameMode === 'BossRush') ? 'Boss' : 'Combat';
         SaveManager.saveToLocal(this.gs);
-        this.scene.start(next);
+        if (this.gs?.gameMode === 'BossRush') {
+          let bossId = 'Dandelion';
+          try { if (typeof this.gs.chooseBossType === 'function') bossId = this.gs.chooseBossType(); } catch (_) {}
+          this.scene.start(SceneKeys.Combat, { bossRoom: true, bossId });
+        } else {
+          this.scene.start(SceneKeys.Combat);
+        }
       }
     }
 

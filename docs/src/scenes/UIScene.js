@@ -23,6 +23,10 @@ export default class UIScene extends Phaser.Scene {
     this.shieldBar = new ShieldBar(this, 16, uiHpY - 8, 180, 8);
     this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0 | Drone Cores: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
+    // Boss UI: centered top name + HP bar (white outline, red fill)
+    this.bossNameText = this.add.text(width / 2, 24, '', { fontFamily: 'monospace', fontSize: 22, color: '#ff3333' }).setOrigin(0.5, 0.5);
+    this.bossBarG = this.add.graphics();
+    this.bossNameText.setVisible(false);
     this.dashBar = new DashBar(this, dashXStart, uiDashY, 14, 4);
     // Weapon label positioned to the right of the dash bar; will be refined in update()
     const gs0 = this.registry.get('gameState');
@@ -125,6 +129,32 @@ export default class UIScene extends Phaser.Scene {
         this.heatLabel.setPosition(wx + 180, uiTextY - 8);
         this.heatBar.draw(heat, overheated);
       }
+      // Boss UI draw
+      try {
+        const active = !!this.registry.get('bossActive');
+        if (active) {
+          const name = this.registry.get('bossName') || '';
+          const cur = Math.max(0, this.registry.get('bossHp') || 0);
+          const max = Math.max(1, this.registry.get('bossHpMax') || 1);
+          this.bossNameText.setText(String(name));
+          this.bossNameText.setVisible(true);
+          // Draw centered bar below the name
+          const barW = Math.min(280, Math.floor(width * 0.6));
+          const barH = 14;
+          const bx = Math.floor((width - barW) / 2);
+          const by = 48;
+          const pct = Math.max(0, Math.min(1, cur / max));
+          const fillW = Math.floor((barW - 4) * pct);
+          this.bossBarG.clear();
+          this.bossBarG.lineStyle(2, 0xffffff, 1);
+          this.bossBarG.strokeRect(bx, by, barW, barH);
+          this.bossBarG.fillStyle(0xff3333, 1);
+          this.bossBarG.fillRect(bx + 2, by + 2, fillW, barH - 4);
+        } else {
+          this.bossNameText.setVisible(false);
+          this.bossBarG.clear();
+        }
+      } catch (_) {}
       // Ability label + cooldown box
       try {
         const abilityName = (getAbilityById(gs.abilityId)?.name || '-');
