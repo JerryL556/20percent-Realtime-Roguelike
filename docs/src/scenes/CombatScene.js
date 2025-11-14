@@ -66,20 +66,110 @@ export default class CombatScene extends Phaser.Scene {
     const h3 = this.add.text(col3X, r0, 'Misc', headerStyle).setOrigin(0.5, 0);
 
     const nodes = [title, h1, h2, h3];
+    // Difficulty modifiers for spawning range enemies (HP/damage scale)
+    const mods = this.gs?.getDifficultyMods?.() || { enemyHp: 1, enemyDamage: 1 };
     let r = 1;
-    // Mass-Produced (normal)
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Melee', () => { this.enemies.add(sp(createEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Runner', () => { this.enemies.add(sp(createRunnerEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Shooter', () => { this.enemies.add(sp(createShooterEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'Machine Gunner', () => { this.enemies.add(sp(createMachineGunnerEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 4), 'Rocketeer', () => { this.enemies.add(sp(createRocketeerEnemy)); }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 5), 'Sniper', () => { this.enemies.add(sp(createSniperEnemy)); }));
+    // Mass-Produced (normal) - use same difficulty-scaled stats as regular rooms
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Melee', () => {
+      this.enemies.add(sp((sc, x, y) => {
+        const meleeDmg = Math.floor(Math.floor(10 * (mods.enemyDamage || 1)) * 1.5);
+        return createEnemy(sc, x, y, Math.floor(100 * (mods.enemyHp || 1)), meleeDmg, 60);
+      }));
+    }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Runner', () => {
+      this.enemies.add(sp((sc, x, y) => {
+        const meleeDmg = Math.floor(Math.floor(10 * (mods.enemyDamage || 1)) * 1.5);
+        return createRunnerEnemy(sc, x, y, Math.floor(60 * (mods.enemyHp || 1)), meleeDmg, 120);
+      }));
+    }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Shooter', () => {
+      this.enemies.add(sp((sc, x, y) => createShooterEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(90 * (mods.enemyHp || 1)),
+        Math.floor(8 * (mods.enemyDamage || 1)),
+        50,
+        900,
+      )));
+    }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'Machine Gunner', () => {
+      this.enemies.add(sp((sc, x, y) => createMachineGunnerEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(140 * (mods.enemyHp || 1)),
+        Math.floor(7 * (mods.enemyDamage || 1)),
+        35,
+        1100,
+        12,
+        24,
+      )));
+    }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 4), 'Rocketeer', () => {
+      this.enemies.add(sp((sc, x, y) => createRocketeerEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(80 * (mods.enemyHp || 1)),
+        Math.floor(12 * (mods.enemyDamage || 1)),
+        40,
+        2000,
+      )));
+    }));
+    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 5), 'Sniper', () => {
+      this.enemies.add(sp((sc, x, y) => createSniperEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(80 * (mods.enemyHp || 1)),
+        Math.floor(18 * (mods.enemyDamage || 1)),
+        40,
+      )));
+    }));
 
-    // Elite
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Grenadier', () => { this.enemies.add(sp(createGrenadierEnemy)); }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 1), 'Prism', () => { this.enemies.add(sp(createPrismEnemy)); }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Snitch', () => { this.enemies.add(sp(createSnitchEnemy)); }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 3), 'Rook', () => { this.enemies.add(sp(createRookEnemy)); }));
+    // Elite - use same difficulty-scaled stats as regular rooms
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Grenadier', () => {
+      this.enemies.add(sp((sc, x, y) => createGrenadierEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(260 * (mods.enemyHp || 1)),
+        Math.floor(14 * (mods.enemyDamage || 1)),
+        48,
+        2000,
+      )));
+    }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 1), 'Prism', () => {
+      this.enemies.add(sp((sc, x, y) => createPrismEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(180 * (mods.enemyHp || 1)),
+        Math.floor(16 * (mods.enemyDamage || 1)),
+        46,
+      )));
+    }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Snitch', () => {
+      this.enemies.add(sp((sc, x, y) => createSnitchEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(100 * (mods.enemyHp || 1)),
+        Math.floor(6 * (mods.enemyDamage || 1)),
+        60,
+      )));
+    }));
+    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 3), 'Rook', () => {
+      this.enemies.add(sp((sc, x, y) => createRookEnemy(
+        sc,
+        x,
+        y,
+        Math.floor(300 * (mods.enemyHp || 1)),
+        Math.floor(25 * (mods.enemyDamage || 1)),
+        35,
+      )));
+    }));
     // Boss only when not in Range
     if (!this.gs?.shootingRange) {
       nodes.push(addBtnAt(col2X, r0 + rLine * (r + 5), 'Spawn Boss', () => {
@@ -1498,11 +1588,16 @@ export default class CombatScene extends Phaser.Scene {
     // Bigwig: destroy all active turrets on boss death so player does not have to clear them
     try {
       if (e.isBoss && (e.bossType === 'Bigwig' || e._bossId === 'Bigwig')) {
-        const arr = this.enemies?.getChildren?.() || [];
-        for (let i = 0; i < arr.length; i += 1) {
-          const t = arr[i];
-          if (!t?.active || !t.isTurret) continue;
-          try { t.destroy(); } catch (_) {}
+        let found = true;
+        while (found) {
+          found = false;
+          const arr = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const t = arr[i];
+            if (!t?.active || !t.isTurret) continue;
+            try { t.destroy(); } catch (_) {}
+            found = true;
+          }
         }
       }
     } catch (_) {}
@@ -3783,12 +3878,24 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isDummy) { try { e.body.setVelocity(0, 0); } catch (_) {} return; }
       const now = this.time.now;
       const dt = (this.game?.loop?.delta || 16.7) / 1000; // seconds
+      // Bigwig: freeze completely during ability/turret channels (movement handled in boss AI)
+      try {
+        const isBigwig = e.isBoss && (e.bossType === 'Bigwig' || e._bossId === 'Bigwig');
+        const channelingBigwig = isBigwig && ((e._bwAbilityState === 'channel') || (e._bwTurretState === 'turretChannel'));
+        if (channelingBigwig) {
+          e.body?.setVelocity?.(0, 0);
+          return;
+        }
+      } catch (_) {}
       // Turrets: fully stationary enemies with custom firing + aim logic
       if (e.isTurret) {
         const nowT = this.time.now;
         const dxT = this.player.x - e.x;
         const dyT = this.player.y - e.y;
-        const ang = Math.atan2(dyT, dxT);
+        const distT = Math.hypot(dxT, dyT) || 1;
+        const fwdX = dxT / distT;
+        const fwdY = dyT / distT;
+        const angToPlayer = Math.atan2(dyT, dxT);
         // Maintain visuals (base + head)
         try {
           const base = e._turretBase;
@@ -3797,15 +3904,22 @@ export default class CombatScene extends Phaser.Scene {
             base.x = e.x; base.y = e.y;
           }
           if (head) {
-            head.x = e.x; head.y = e.y - 2;
+            const baseH = base ? (base.displayHeight || base.height || 12) : 12;
+            head.x = e.x;
+            // Place head slightly above the base center (original 0.14 offset)
+            head.y = e.y - baseH * 0.14;
           }
-          // Flip horizontally depending on player side (asset faces left by default)
+          // Flip base horizontally depending on player side (asset faces left by default)
           const facingRight = this.player.x >= e.x;
           const sx = facingRight ? -Math.abs(base?.scaleX || 1) : Math.abs(base?.scaleX || 1);
           if (base) base.scaleX = sx;
-          if (head) head.scaleX = sx;
-          // Rotate head to face player exactly
-          if (head) head.rotation = ang;
+          // Flip head vertically when player is on the right so its silhouette matches both sides
+          if (head) {
+            const sy = facingRight ? -Math.abs(head.scaleY || 1) : Math.abs(head.scaleY || 1);
+            head.scaleY = sy;
+          }
+          // Rotate head to face player exactly; asset faces left by default, so add PI
+          if (head) head.rotation = angToPlayer + Math.PI;
         } catch (_) {}
         // Always-on sniper-style aim line from head tip
         try {
@@ -3817,8 +3931,9 @@ export default class CombatScene extends Phaser.Scene {
           g.clear();
           const head = e._turretHead;
           const off = typeof e._turretMuzzleOffset === 'number' ? e._turretMuzzleOffset : 10;
-          const hx = head ? head.x + Math.cos(ang) * off : e.x;
-          const hy = head ? head.y + Math.sin(ang) * off : e.y;
+          // Muzzle sits at the tip of the head in the forward (to-player) direction
+          const hx = head ? head.x + fwdX * off : e.x;
+          const hy = head ? head.y + fwdY * off : e.y;
           g.lineStyle(1, 0xff2222, 1);
           g.beginPath();
           g.moveTo(hx, hy);
@@ -3830,7 +3945,7 @@ export default class CombatScene extends Phaser.Scene {
         // Firing: continuous 3-shot bursts, each burst ~0.75s, 0.75s between bursts
         const burstShots = 3;
         const burstDurationMs = 750;
-        const interBurstMs = 750;
+        const interBurstMs = 1100; // longer pause between bursts
         const shotGapMs = Math.floor(burstDurationMs / Math.max(1, burstShots - 1)); // ~375ms
         if (!e._tBurstLeft) e._tBurstLeft = 0;
         if (!e._tBurstCooldownUntil) e._tBurstCooldownUntil = 0;
@@ -3843,11 +3958,9 @@ export default class CombatScene extends Phaser.Scene {
           const head = e._turretHead;
           const hx = (typeof e._turretMuzzleX === 'number') ? e._turretMuzzleX : (head ? head.x : e.x);
           const hy = (typeof e._turretMuzzleY === 'number') ? e._turretMuzzleY : (head ? head.y : e.y);
-          let angShot = Math.atan2(this.player.y - hy, this.player.x - hx);
-          // Small random jitter to avoid perfect predictability
-          const jitter = Phaser.Math.DegToRad(4);
-          angShot += Phaser.Math.FloatBetween(-jitter, jitter);
-          const speed = 240; // slow turret bullets
+          // Precise aim: no spread for turret shots
+          const angShot = Math.atan2(this.player.y - hy, this.player.x - hx);
+          const speed = 320; // faster turret bullets
           const vx = Math.cos(angShot) * speed;
           const vy = Math.sin(angShot) * speed;
           const b = this.enemyBullets.get(hx, hy, 'bullet');
@@ -4741,7 +4854,14 @@ export default class CombatScene extends Phaser.Scene {
     bomb._bwTargetY = targetY;
     bomb._spawnAt = this.time.now;
     bomb._lifeMs = opts.lifeMs || 6000;
-    bomb.damage = (typeof opts.damage === 'number') ? opts.damage : (e?.damage || 14);
+    // Bombardment explosion base damage: 20 on Normal, scaled by difficulty
+    let bombDmg = 20;
+    try {
+      const mods = this.gs?.getDifficultyMods?.() || {};
+      const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
+      bombDmg = Math.max(1, Math.round(20 * mul));
+    } catch (_) {}
+    bomb.damage = (typeof opts.damage === 'number') ? opts.damage : bombDmg;
     bomb._blastRadius = opts.radius || 70; // match Bigwig's enhanced grenades
     bomb.update = () => {
       const now = this.time.now;
@@ -5094,7 +5214,7 @@ export default class CombatScene extends Phaser.Scene {
         } catch (_) {}
         if (turretCount < 5) {
           e._bwTurretState = 'turretChannel';
-          e._bwTurretUntil = now + 2000;
+          e._bwTurretUntil = now + 1000; // 1s setup/channel time
           e._bwTurretNextTime = now + 10000;
           try { e.body.setVelocity(0, 0); } catch (_) {}
           return;
