@@ -24,7 +24,7 @@ export default class UIScene extends Phaser.Scene {
     this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0 | Drone Cores: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     // Boss UI: centered top name + HP bar (white outline, red fill)
-    this.bossNameText = this.add.text(width / 2, 24, '', { fontFamily: 'monospace', fontSize: 22, color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5, 0.5);
+    this.bossNameText = this.add.text(width / 2, 34, '', { fontFamily: 'monospace', fontSize: 22, color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5, 0.5);
     try { this.bossNameText.setStroke('#000000', 3); } catch (_) {}
     this.bossBarG = this.add.graphics();
     this.bossNameText.setVisible(false);

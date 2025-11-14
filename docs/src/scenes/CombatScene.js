@@ -1401,8 +1401,9 @@ export default class CombatScene extends Phaser.Scene {
     // Exit appears when all enemies dead
     this.exitActive = false;
     this.exitG = this.add.graphics();
-    // Move in-game prompt down to avoid overlapping UI
-    this.prompt = this.add.text(width / 2, 40, 'Clear enemies', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+    // In-game prompt; hide default hint in boss rooms
+    const defaultPrompt = this._isBossRoom ? '' : 'Clear enemies';
+    this.prompt = this.add.text(width / 2, 40, defaultPrompt, { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
     // Keybinds hint (bottom-right, small font)
     const binds = [
   'W/A/S/D: Move',
