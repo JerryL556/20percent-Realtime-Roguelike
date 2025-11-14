@@ -713,7 +713,7 @@ export default class CombatScene extends Phaser.Scene {
         boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
         // visual comes from asset via createBoss catch (_) {} }
         boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
-        try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
+        // Visual scaling is handled by EnemyFactory helper; keep physics body at 12x12
         this.boss = boss; this.enemies.add(boss);
         try { this.registry.set('bossName', bossType); this.registry.set('bossHp', boss.hp); this.registry.set('bossHpMax', boss.maxHp); this.registry.set('bossActive', true); } catch (_) {}
         
@@ -1664,7 +1664,7 @@ export default class CombatScene extends Phaser.Scene {
       // visual comes from asset via createBoss catch (_) {} }
       // Initialize boss AI timers
       boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
-      try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
+        // Visual scaling is handled by EnemyFactory helper; keep physics body at 12x12
       this.boss = boss; this.enemies.add(boss);
       
       // Inform UI about boss
