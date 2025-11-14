@@ -351,6 +351,7 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    try { console.log('[Combat] create() enter'); } catch (_) {}
     // Fallback: if init() wasn't called with data, read from scene settings
     try {
       const d = this.scene?.settings?.data;
@@ -370,6 +371,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!this._bossId && typeof this.gs.chooseBossType === 'function') this._bossId = this.gs.chooseBossType();
       }
     } catch (_) {}
+    try { console.log('[Combat] flags:', { bossRoom: this._isBossRoom, bossId: this._bossId, mode: this.gs?.gameMode, next: this.gs?.nextScene }); } catch (_) {}
 
     // Debug overlay for boss-room state
     try {
@@ -695,9 +697,14 @@ export default class CombatScene extends Phaser.Scene {
 
     // Enemies (must be a physics group so overlaps work reliably)
     this.enemies = this.physics.add.group();
+    // Reset exit state at scene start
+    this.exitActive = false;
+    try { this.exitG?.clear?.(); } catch (_) {}
+    try { this.prompt?.setText?.(''); } catch (_) {}
     // If this is a boss room, spawn the boss ASAP so exit logic doesn't trigger prematurely
     try {
       if (this._isBossRoom && !this.boss) {
+        console.log('[Combat] early boss spawn path');
         const mods = this.gs?.getDifficultyMods?.() || {};
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
