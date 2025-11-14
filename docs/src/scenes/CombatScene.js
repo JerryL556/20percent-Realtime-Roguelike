@@ -1740,7 +1740,6 @@ export default class CombatScene extends Phaser.Scene {
       else if (t === 'hazel') nameTagTint = 0x000000;
     } catch (_) {}
     try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(nameTagTint, 1); } catch (_) {}
-    } catch (_) {}
     const nb = nameText.getBounds();
     const tagPadX = 18, tagPadY = 10; const nameTagW = Math.max(60, nb.width + tagPadX * 2); const nameTagH = Math.max(34, nb.height + tagPadY * 2);
     try { nameTag.fillRect(-nameTagW/2, -nameTagH/2, nameTagW, nameTagH); } catch (_) {}
