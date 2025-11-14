@@ -86,6 +86,8 @@ export default class UIScene extends Phaser.Scene {
   }
 
   update() {
+    // Recompute viewport metrics each frame for responsive UI
+    const { width, height } = this.scale;
     const gs = this.registry.get('gameState');
     if (gs) {
       const eff = getPlayerEffects(gs);
