@@ -708,12 +708,10 @@ export default class CombatScene extends Phaser.Scene {
                 const mods = this.gs?.getDifficultyMods?.() || {};
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
-        let boss = createBoss(this, cx, cy, 400, 10, 60);
+        let boss = createBoss(this, cx, cy, 400, 10, 60, bossType);
         boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
         boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
-        if (bossType === 'Dandelion') { try { boss.setTint(0xff4444); } catch (_) {} }
-        else if (bossType === 'Bigwig') { try { boss.setTint(0xffff66); } catch (_) {} }
-        else { try { boss.setTint(0x66ccff); } catch (_) {} }
+        // visual comes from asset via createBoss catch (_) {} }
         boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
         try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
         this.boss = boss; this.enemies.add(boss);
@@ -1659,13 +1657,11 @@ export default class CombatScene extends Phaser.Scene {
       // Default boss if not provided by caller
       let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
       // Create boss with standardized stats + shooter movement
-      let boss = createBoss(this, cx, cy, 400, 10, 60);
+      let boss = createBoss(this, cx, cy, 400, 10, 60, bossType);
       boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
       boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
       // Visual hint per boss type (tint)
-      if (bossType === 'Dandelion') { try { boss.setTint(0xff4444); } catch (_) {} }
-      else if (bossType === 'Bigwig') { try { boss.setTint(0xffff66); } catch (_) {} }
-      else { try { boss.setTint(0x66ccff); } catch (_) {} }
+      // visual comes from asset via createBoss catch (_) {} }
       // Initialize boss AI timers
       boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
       try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
@@ -5658,5 +5654,6 @@ export default class CombatScene extends Phaser.Scene {
 
 
     // Reset per-room boss reference to avoid stale state across restarts
+
 
 

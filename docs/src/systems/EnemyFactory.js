@@ -286,15 +286,20 @@ export function createRunnerEnemy(scene, x, y, hp = 60, damage = 10, speed = 120
   return r;
 }
 
-export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50) {
-  const b = scene.physics.add.sprite(x, y, 'enemy_square');
-  b.setSize(24, 24).setOffset(0, 0).setCollideWorldBounds(true);
+export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50, textureKey = null) {
+  const b = scene.physics.add.sprite(x, y, textureKey || 'enemy_square');
+  // Use the standard 12x12 hitbox like other enemies
+  b.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   b.hp = hp;
   b.maxHp = hp;
   b.damage = damage;
   b.speed = speed;
   b.isBoss = true;
-  b.setTint(0xaa00ff);
+  try {
+    // Attach visual sprite using the provided boss asset key and scale to fit the hitbox.
+    // ENEMY_SPRITE_VISUAL_MULT is 2.0, so pass visMult = 0.5 to net to 1.0x body height.
+    if (textureKey) _attachEnemyVisuals(b, textureKey, null, 12, 12, 0.5);
+  } catch (_) {}
   b.on('destroy', () => b._g?.destroy());
   return b;
 }
