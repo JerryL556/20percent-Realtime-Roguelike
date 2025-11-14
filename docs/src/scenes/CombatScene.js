@@ -5280,7 +5280,20 @@ export default class CombatScene extends Phaser.Scene {
         } catch (_) {}
       }
       // Standard enemy rect hit if not blocked closer
-      const rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 6, e.y - 6, 12, 12);
+      // For bosses, compute rect from physics body/hitbox so laser matches boss hit area
+      let rect;
+      if (e.isBoss) {
+        try {
+          const hb = (e._hitbox && e._hitbox.body) ? e._hitbox.body : e.body;
+          const w = Math.max(1, Math.floor((hb && hb.width) ? hb.width : 36));
+          const h = Math.max(1, Math.floor((hb && hb.height) ? hb.height : 36));
+          rect = new Phaser.Geom.Rectangle(Math.floor(e.x - w / 2), Math.floor(e.y - h / 2), w, h);
+        } catch (_) {
+          rect = new Phaser.Geom.Rectangle(e.x - 18, e.y - 18, 36, 36);
+        }
+      } else {
+        rect = e.getBounds?.() || new Phaser.Geom.Rectangle(e.x - 6, e.y - 6, 12, 12);
+      }
       const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, rect);
       if (pts && pts.length) {
         for (let k = 0; k < pts.length; k += 1) {
