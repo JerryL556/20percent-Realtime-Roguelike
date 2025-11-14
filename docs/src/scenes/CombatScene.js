@@ -359,6 +359,17 @@ export default class CombatScene extends Phaser.Scene {
         if (!this._bossId && d.bossId) this._bossId = String(d.bossId);
       }
     } catch (_) {}
+    // Infer boss room from GameState if not provided (robustness for chained transitions)
+    try {
+      if (!this._isBossRoom && this.gs?.gameMode === 'BossRush') {
+        this._isBossRoom = true;
+        if (!this._bossId && typeof this.gs.chooseBossType === 'function') this._bossId = this.gs.chooseBossType();
+      }
+      if (!this._isBossRoom && this.gs?.nextScene === 'Boss') {
+        this._isBossRoom = true;
+        if (!this._bossId && typeof this.gs.chooseBossType === 'function') this._bossId = this.gs.chooseBossType();
+      }
+    } catch (_) {}
 
     // Debug overlay for boss-room state
     try {
