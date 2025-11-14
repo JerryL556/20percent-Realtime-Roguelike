@@ -6,6 +6,7 @@ import { makeTextButton } from '../ui/Buttons.js';
 import { getPlayerEffects } from '../core/Loadout.js';
 import { fitImageHeight } from '../systems/WeaponVisuals.js';
 import { weaponDefs } from '../core/Weapons.js';
+import { Difficulty } from '../core/GameState.js';
 
 export default class HubScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Hub); }
@@ -154,6 +155,16 @@ export default class HubScene extends Phaser.Scene {
     this.bonusZone.body.setImmovable(true);
     this.bonusG = this.add.graphics();
     this.bonusG.fillStyle(0xff3333, 1).fillRect(this.bonusZone.x - 10, this.bonusZone.y - 10, 20, 20);
+
+    // Difficulty terminal (upper-left from screen center)
+    const termX = width / 2 - 140;
+    const termY = height / 2 - 80;
+    this.diffTerminalZone = this.add.zone(termX, termY, 32, 32);
+    this.physics.world.enable(this.diffTerminalZone);
+    this.diffTerminalZone.body.setAllowGravity(false);
+    this.diffTerminalZone.body.setImmovable(true);
+    this.diffTerminalG = this.add.graphics();
+    this.diffTerminalG.fillStyle(0x3366ff, 1).fillRect(this.diffTerminalZone.x - 12, this.diffTerminalZone.y - 12, 24, 24);
 
     // Overlap detection
     this.physics.add.overlap(this.player, this.npcZone);
@@ -410,6 +421,41 @@ export default class HubScene extends Phaser.Scene {
     this.panel._extra = [title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn];
   }
 
+  openDifficultyPanel() {
+    if (this.panel) return;
+    const { width } = this.scale;
+    const panelW = 320; const panelH = 260; const panelX = width / 2 - panelW / 2; const panelY = 90;
+    this.panel = drawPanel(this, panelX, panelY, panelW, panelH);
+    this.panel._type = 'difficultySelect';
+    const title = this.add.text(width / 2, panelY + 20, 'Select Difficulty', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
+
+    const cx = width / 2;
+    const y0 = panelY + 70;
+    const line = 32;
+    const opts = [Difficulty.Easy, Difficulty.Normal, Difficulty.Hard];
+    let current = this.gs?.difficulty || Difficulty.Normal;
+
+    const label = this.add.text(cx, panelY + panelH - 60, `Current: ${current}`, {
+      fontFamily: 'monospace', fontSize: 14, color: '#cccccc',
+    }).setOrigin(0.5);
+
+    const setDiff = (d) => {
+      current = d;
+      try { label.setText(`Current: ${current}`); } catch (_) {}
+      try { this.gs.difficulty = current; SaveManager.saveToLocal(this.gs); } catch (_) {}
+    };
+
+    const easyBtn = makeTextButton(this, cx, y0 + 0 * line, 'Easy', () => setDiff(Difficulty.Easy));
+    const normalBtn = makeTextButton(this, cx, y0 + 1 * line, 'Normal', () => setDiff(Difficulty.Normal));
+    const hardBtn = makeTextButton(this, cx, y0 + 2 * line, 'Hard', () => setDiff(Difficulty.Hard));
+
+    const closeBtn = makeTextButton(this, cx, panelY + panelH - 22, 'Close', () => {
+      this.closePanel([title, easyBtn, normalBtn, hardBtn, label, closeBtn]);
+    });
+
+    this.panel._extra = [title, easyBtn, normalBtn, hardBtn, label, closeBtn];
+  }
+
   openCampaignStageMenu() {
     // Close existing menu if any
     if (this.panel) this.closePanel();
@@ -516,9 +562,11 @@ export default class HubScene extends Phaser.Scene {
     const nearModeNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.modeNpcZone.getBounds());
     const nearPortal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.portalZone.getBounds());
     const nearBonus = this.bonusZone ? Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.bonusZone.getBounds()) : false;
+    const nearDiffTerminal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.diffTerminalZone.getBounds());
     if (nearBonus && !this.gs._bonusClaimed) this.prompt.setText('E: Claim Bonus');
     else if (nearNpc) this.prompt.setText('E: Shop');
     else if (nearModeNpc) this.prompt.setText('E: Select Mode');
+    else if (nearDiffTerminal) this.prompt.setText('E: Difficulty');
     else if (nearPortal) {
       if (this.gs?.gameMode === 'BossRush') this.prompt.setText('E: Enter Boss');
       else if (this.gs?.shootingRange) this.prompt.setText('E: Enter Range');
@@ -608,6 +656,7 @@ export default class HubScene extends Phaser.Scene {
       }
       if (nearNpc) this.openNpcPanel();
       if (nearModeNpc) this.openModePanel();
+      if (nearDiffTerminal) this.openDifficultyPanel();
       if (nearPortal) {
         let next = (this.gs?.gameMode === 'BossRush') ? SceneKeys.Combat : SceneKeys.Combat;
         // Ensure Boss Rush queue is ready when entering boss portal
