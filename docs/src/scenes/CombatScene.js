@@ -359,6 +359,15 @@ export default class CombatScene extends Phaser.Scene {
         if (!this._bossId && d.bossId) this._bossId = String(d.bossId);
       }
     } catch (_) {}
+
+    // Debug overlay for boss-room state
+    try {
+      const mk = (key, def='') => (this.registry.get(key) ?? def);
+      const txt = `BossRoom=${this._isBossRoom ? 'yes' : 'no'}  bossId=${this._bossId || '-'}\n` +
+                  `gs.mode=${this.gs?.gameMode || '-'} next=${this.gs?.nextScene || '-'}\n` +
+                  `enemies=${(this.enemies?.getChildren?.()||[]).length}`;
+      this._bossDbg = this.add.text(12, 56, txt, { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0,0).setDepth(9500);
+    } catch (_) {}
     // Ensure physics world bounds match the visible area so enemies can't leave the screen
     this.physics.world.setBounds(0, 0, width, height);
     try { this.physics.world.setBoundsCollision(true, true, true, true); } catch (_) {}
@@ -1623,6 +1632,7 @@ export default class CombatScene extends Phaser.Scene {
       boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
       try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
       this.boss = boss; this.enemies.add(boss);
+      try { console.log('[Combat] Boss spawned:', bossType); } catch (_) {}
       // Inform UI about boss
       try { this.registry.set('bossName', bossType); this.registry.set('bossHp', boss.hp); this.registry.set('bossHpMax', boss.maxHp); this.registry.set('bossActive', true); } catch (_) {}
       // Start intro cinematic and freeze gameplay
@@ -2517,6 +2527,17 @@ export default class CombatScene extends Phaser.Scene {
     this.registry.set('dashRegenProgress', prog);
     // Boss AI updates (attacks driven here; movement via shooter pathing)
     try { if (this.boss && this.boss.active && !this._cinematicActive) this.updateBossAI(); } catch (_) {}
+    // Update debug overlay
+    try {
+      if (this._bossDbg && this._bossDbg.active) {
+        const alive = (this.enemies?.getChildren?.() || []).filter((e) => e?.active && (typeof e.hp !== 'number' ? true : e.hp > 0)).length;
+        const b = this.boss;
+        const s = `BossRoom=${this._isBossRoom ? 'yes' : 'no'}  bossId=${this._bossId || '-'}\n` +
+                  `bossActive=${b?.active ? 'yes' : 'no'} hp=${(b&&typeof b.hp==='number')?b.hp:'-'}\n` +
+                  `enemiesAlive=${alive}`;
+        this._bossDbg.setText(s);
+      }
+    } catch (_) {}
 
     // Boss HUD sync
     if (this.boss && this.boss.active) {
