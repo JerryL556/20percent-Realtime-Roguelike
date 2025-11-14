@@ -351,7 +351,7 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
-    try {     // Fallback: if init() wasn't called with data, read from scene settings
+    // Fallback: if init() wasn't called with data, read from scene settings
     try {
       const d = this.scene?.settings?.data;
       if (d && typeof d === 'object') {
