@@ -4298,6 +4298,8 @@ export default class CombatScene extends Phaser.Scene {
             let bossId = 'Dandelion';
             try { if (typeof this.gs.chooseBossType === 'function') bossId = this.gs.chooseBossType(); } catch (_) {}
             this.scene.start(SceneKeys.Combat, { bossRoom: true, bossId });
+          } else if (this.gs.nextScene === 'Hub') {
+            this.scene.start(SceneKeys.Hub);
           } else {
             this.scene.start(SceneKeys.Combat);
           }
