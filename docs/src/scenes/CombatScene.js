@@ -1716,7 +1716,7 @@ export default class CombatScene extends Phaser.Scene {
     const nameText = this.add.text(-200, 60, bossId, {
       fontFamily: 'monospace',
       fontSize: 56,
-      color: '#ff3333'
+      color: '#ffffff'
     }).setOrigin(0.5, 0.5);
     try { nameText.setStroke('#000000', 6); } catch (_) {}
     // Depth ordering: background panels below their respective foregrounds
@@ -1731,7 +1731,15 @@ export default class CombatScene extends Phaser.Scene {
     try { assetBg.setPosition(width + 200, height / 2); } catch (_) {}
     // Opaque white name tag background that follows the name
     const nameTag = this.add.graphics();
-    try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(0xffffff, 1); } catch (_) {}
+    try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(_nameTagTint, 1); } catch (_) {}
+    // Name tag color mapped from boss type (matches scrap tint)
+    try {
+      const _t = String(bossId||'').toLowerCase();
+      var _nameTagTint = 0x888888;
+      if (_t === 'bigwig') _nameTagTint = 0x4a6b3a;
+      else if (_t === 'dandelion') _nameTagTint = 0x9a6c3a;
+      else if (_t === 'hazel') _nameTagTint = 0x000000;
+    } catch (_) {}
     const nb = nameText.getBounds();
     const tagPadX = 18, tagPadY = 10; const nameTagW = Math.max(60, nb.width + tagPadX * 2); const nameTagH = Math.max(34, nb.height + tagPadY * 2);
     try { nameTag.fillRect(-nameTagW/2, -nameTagH/2, nameTagW, nameTagH); } catch (_) {}
