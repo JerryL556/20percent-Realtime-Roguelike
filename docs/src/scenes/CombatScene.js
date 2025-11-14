@@ -1736,13 +1736,14 @@ export default class CombatScene extends Phaser.Scene {
     try {
       const halfWb = assetBgW / 2;
       const halfHb = assetBgH / 2;
-      // Use the same skew as the name tag for visual cohesion
-      const k = skewPx;
+      // Opposite direction and stronger skew than name tag
+      const k = Math.max(skewPx + 8, Math.min(Math.floor(assetBgH * 0.45), skewPx * 2));
       assetBg.beginPath();
-      assetBg.moveTo(-halfWb + k, -halfHb);
-      assetBg.lineTo( halfWb + k, -halfHb);
-      assetBg.lineTo( halfWb - k,  halfHb);
-      assetBg.lineTo(-halfWb - k,  halfHb);
+      // Top edge skewed left, bottom edge skewed right (opposite of name tag)
+      assetBg.moveTo(-halfWb - k, -halfHb);
+      assetBg.lineTo( halfWb - k, -halfHb);
+      assetBg.lineTo( halfWb + k,  halfHb);
+      assetBg.lineTo(-halfWb + k,  halfHb);
       assetBg.closePath();
       assetBg.fillPath();
     } catch (_) {}
