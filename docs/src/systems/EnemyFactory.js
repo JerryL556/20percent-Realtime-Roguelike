@@ -14,6 +14,8 @@ const ENEMY_TEXTURE_PATHS = {
   enemy_rook: 'assets/Rook.png',
   enemy_bombardier: 'assets/Bombardier.png',
   enemy_bombardier_special: 'assets/BombardierSpecial.png',
+  turret_base: 'assets/Turret Base.png',
+  turret_head: 'assets/Turret Head.png',
 };
 
 function _ensureEnemyTexture(scene, key, onLoaded) {
@@ -456,6 +458,76 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed =
   g.explosionRadius = 70;
   _attachEnemyVisuals(g, 'enemy_bombardier', 'enemy_bombardier_special', 12, 12, 1.2);
   return g;
+}
+
+// Stationary turret enemy: built by Bigwig, cannot move, fires continuous bursts at the player
+export function createTurretEnemy(scene, x, y, hp = 150, damage = 10) {
+  const t = scene.physics.add.sprite(x, y, 'enemy_square');
+  t.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
+  t.hp = hp;
+  t.maxHp = hp;
+  t.damage = damage;
+  t.speed = 0;
+  t.isEnemy = true;
+  t.isTurret = true;
+  // Stationary: never moves, even under repulsion
+  try {
+    t.body.setImmovable(true);
+    t.body.moves = false;
+  } catch (_) {}
+  try { t.setVisible(false); } catch (_) {}
+  // Visual base
+  try {
+    const base = scene.add.image(x, y, 'turret_base');
+    base.setOrigin(0.5, 0.5);
+    base.setDepth(8000);
+    // Scale base roughly to 12px body height
+    try {
+      const tex = scene.textures.get('turret_base');
+      const src = tex?.getSourceImage?.();
+      const h = (src && (src.naturalHeight || src.height)) || tex?.frames?.['__BASE']?.height || base.height || 1;
+      if (h > 0) {
+        const scale = (12 / h) * 1.6;
+        base.setScale(scale);
+      }
+    } catch (_) {}
+    t._turretBase = base;
+  } catch (_) {}
+  // Visual head
+  try {
+    const head = scene.add.image(x, y, 'turret_head');
+    head.setOrigin(0.5, 0.5);
+    head.setDepth(8005);
+    try {
+      const texH = scene.textures.get('turret_head');
+      const srcH = texH?.getSourceImage?.();
+      const h2 = (srcH && (srcH.naturalHeight || srcH.height)) || texH?.frames?.['__BASE']?.height || head.height || 1;
+      if (h2 > 0) {
+        const scaleH = (12 / h2) * 1.6;
+        head.setScale(scaleH);
+      }
+    } catch (_) {}
+    t._turretHead = head;
+    // Precompute muzzle offset based on head width
+    try {
+      const mw = head.displayWidth || head.width || 12;
+      t._turretMuzzleOffset = (mw / 2) * 0.9;
+    } catch (_) {
+      t._turretMuzzleOffset = 10;
+    }
+  } catch (_) {}
+  // Cleanup visuals when turret dies
+  try {
+    t.on('destroy', () => {
+      try { t._turretBase?.destroy(); } catch (_) {}
+      try { t._turretHead?.destroy(); } catch (_) {}
+      try { t._turretAimG?.destroy(); } catch (_) {}
+      t._turretBase = null;
+      t._turretHead = null;
+      t._turretAimG = null;
+    });
+  } catch (_) {}
+  return t;
 }
 
 

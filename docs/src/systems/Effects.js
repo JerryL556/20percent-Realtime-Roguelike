@@ -149,6 +149,159 @@ export function bitSpawnRing(scene, x, y, opts = {}) {
   } catch (_) {}
 }
 
+// Reusable teleport-style spawn VFX:
+// 1) a vertical additive line shoots down from above (same x),
+// 2) then the familiar spawn ring appears at the spawn point,
+// 3) and an optional onSpawn callback is invoked at the same time as the ring.
+export function teleportSpawnVfx(scene, x, y, opts = {}) {
+  try {
+    const color = opts.color ?? 0xaa66ff;
+    const lineDuration = Math.max(80, opts.lineDuration ?? 220);
+    const lineLength = Math.max(30, opts.lineLength ?? 80);
+    const ringOpts = opts.ringOpts || {};
+    const onSpawn = (typeof opts.onSpawn === 'function') ? opts.onSpawn : null;
+
+    const g = scene.add.graphics({ x, y });
+    try { g.setDepth?.(9999); } catch (_) {}
+    try { g.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+
+    // Animate a line revealing from top -> spawn point
+    const state = { t: 0 };
+    const drawLine = (t) => {
+      try {
+        g.clear();
+        const len = lineLength * t;
+        g.lineStyle(3, color, 0.95);
+        g.beginPath();
+        g.moveTo(0, -lineLength);
+        g.lineTo(0, -lineLength + len);
+        g.strokePath();
+      } catch (_) {}
+    };
+    drawLine(0);
+
+    scene.tweens.add({
+      targets: state,
+      t: 1,
+      duration: lineDuration,
+      ease: 'Cubic.Out',
+      onUpdate: () => { drawLine(state.t || 0); },
+      onComplete: () => {
+        try { g.destroy(); } catch (_) {}
+        // Spawn enemy (or other object) exactly when the ring appears
+        if (onSpawn) {
+          try { onSpawn(); } catch (_) {}
+        }
+        try {
+          bitSpawnRing(scene, x, y, {
+            color,
+            radius: (ringOpts.radius ?? 22),
+            lineWidth: (ringOpts.lineWidth ?? 3),
+            duration: (ringOpts.duration ?? 420),
+            scaleTarget: (ringOpts.scaleTarget ?? 2.1),
+          });
+        } catch (_) {}
+      },
+    });
+  } catch (_) {}
+}
+
+// Vertical boss signal beam: a purple line that travels upward off-screen over a fixed duration.
+export function bossSignalBeam(scene, x, y, opts = {}) {
+  try {
+    const color = opts.color ?? 0xaa66ff;
+    const duration = Math.max(100, opts.duration ?? 1000);
+    const lineLength = Math.max(40, opts.lineLength ?? (scene.scale?.height || 200));
+    const g = scene.add.graphics({ x, y });
+    try { g.setDepth?.(9999); } catch (_) {}
+    try { g.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+    // Draw a vertical line anchored at the boss and extending upward
+    g.lineStyle(3, color, 0.95);
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(0, -lineLength);
+    g.strokePath();
+    // Tween the beam upward so it exits the screen
+    const travel = (scene.scale?.height || 240) + lineLength;
+    scene.tweens.add({
+      targets: g,
+      y: y - travel,
+      alpha: 0.0,
+      duration,
+      ease: 'Cubic.Out',
+      onComplete: () => { try { g.destroy(); } catch (_) {} },
+    });
+  } catch (_) {}
+}
+
+// Glowing bombardment marker: small purple block with an animated antenna-like line on top.
+// Returns an object with a destroy() method so callers can clean it up.
+export function spawnBombardmentMarker(scene, x, y, opts = {}) {
+  const color = opts.color ?? 0xaa66ff;
+  const baseW = opts.baseWidth ?? 10;
+  const baseH = opts.baseHeight ?? 6;
+  const glowAlpha = opts.glowAlpha ?? 0.35;
+  const lineHeight = opts.lineHeight ?? 12;
+  const pulseDuration = Math.max(220, opts.pulseDuration ?? 420);
+  const objs = [];
+  try {
+    // Base block
+    const base = scene.add.rectangle(x, y, baseW, baseH, color, 1);
+    try { base.setDepth?.(9600); } catch (_) {}
+    objs.push(base);
+    // Soft glow around base
+    const glow = scene.add.rectangle(x, y, baseW + 6, baseH + 4, color, glowAlpha);
+    try {
+      glow.setDepth?.(9595);
+      glow.setBlendMode?.(Phaser.BlendModes.ADD);
+    } catch (_) {}
+    scene.tweens.add({
+      targets: glow,
+      alpha: { from: glowAlpha, to: glowAlpha * 0.15 },
+      duration: pulseDuration,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+    });
+    objs.push(glow);
+    // Antenna line on top of the block
+    const lineG = scene.add.graphics({ x, y: y - baseH / 2 });
+    try {
+      lineG.setDepth?.(9610);
+      lineG.setBlendMode?.(Phaser.BlendModes.ADD);
+    } catch (_) {}
+    const drawLine = (scale = 1) => {
+      try {
+        lineG.clear();
+        lineG.lineStyle(2, color, 0.95);
+        lineG.beginPath();
+        lineG.moveTo(0, 0);
+        lineG.lineTo(0, -lineHeight * scale);
+        lineG.strokePath();
+      } catch (_) {}
+    };
+    drawLine(1);
+    scene.tweens.add({
+      targets: { t: 1 },
+      t: 0.6,
+      duration: pulseDuration,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+      onUpdate(tw, target) { drawLine(target.t || 1); },
+    });
+    objs.push(lineG);
+  } catch (_) {}
+
+  return {
+    x,
+    y,
+    destroy() {
+      objs.forEach((o) => { try { o.destroy(); } catch (_) {} });
+    },
+  };
+}
+
 // Tiny additive spark used along Repulsion Pulse ring
 export function pulseSpark(scene, x, y, opts = {}) {
   try {

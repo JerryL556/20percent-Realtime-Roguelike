@@ -2,9 +2,9 @@
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
-import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy } from '../systems/EnemyFactory.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy, createTurretEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy, getScrapTintForEnemy } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy, getScrapTintForEnemy, teleportSpawnVfx, bossSignalBeam, spawnBombardmentMarker } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint, fitImageHeight } from '../systems/WeaponVisuals.js';
@@ -437,8 +437,21 @@ export default class CombatScene extends Phaser.Scene {
         this._bg = bg;
       }
     } catch (_) {}
+    // Pull latest GameState from registry (shared across scenes)
     this.gs = this.registry.get('gameState');
-    this.gs = this.registry.get('gameState');
+    // Guard against stale boss-room flags leaking from previous runs:
+    // if we're not about to play a boss encounter according to GameState,
+    // force this room to be treated as a normal combat room.
+    try {
+      const isBossMode = this.gs?.gameMode === 'BossRush' || this.gs?.nextScene === 'Boss';
+      if (!isBossMode) {
+        this._isBossRoom = false;
+        // Clear any leftover boss id unless the caller explicitly marked this room as a boss room
+        const d2 = this.scene?.settings?.data;
+        const explicitBoss = d2 && typeof d2 === 'object' && d2.bossRoom;
+        if (!explicitBoss) this._bossId = null;
+      }
+    } catch (_) {}
     // Ensure Deep Dive tracker text exists in UI scene (create deterministically)
     try {
       const ensureDeepDiveLabel = () => {
@@ -1353,6 +1366,12 @@ export default class CombatScene extends Phaser.Scene {
       maxSize: 24,
       runChildUpdate: true,
     });
+    // Boss bombardment bombs (Bigwig ability) - independent of barricades
+    this.bossBombs = this.physics.add.group({
+      classType: Phaser.Physics.Arcade.Image,
+      maxSize: 32,
+      runChildUpdate: true,
+    });
     // Grenades collide with barricades (respect cover)
     this.physics.add.collider(this.enemyGrenades, this.barricadesHard, (b, s) => this.onEnemyGrenadeHitBarricade(b, s));
     this.physics.add.collider(this.enemyGrenades, this.barricadesSoft, (b, s) => this.onEnemyGrenadeHitBarricade(b, s));
@@ -1476,6 +1495,17 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
     try { if (e._igniteIndicator) { e._igniteIndicator.destroy(); e._igniteIndicator = null; } } catch (_) {}
     try { if (e._toxinIndicator) { e._toxinIndicator.destroy(); e._toxinIndicator = null; } } catch (_) {}
+    // Bigwig: destroy all active turrets on boss death so player does not have to clear them
+    try {
+      if (e.isBoss && (e.bossType === 'Bigwig' || e._bossId === 'Bigwig')) {
+        const arr = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const t = arr[i];
+          if (!t?.active || !t.isTurret) continue;
+          try { t.destroy(); } catch (_) {}
+        }
+      }
+    } catch (_) {}
     // Grenadier: explode on death
     try {
       if (e.isGrenadier && !e._exploded) {
@@ -3263,6 +3293,8 @@ export default class CombatScene extends Phaser.Scene {
           const arrE = this.enemies?.getChildren?.() || [];
           for (let i = 0; i < arrE.length; i += 1) {
             const e = arrE[i]; if (!e?.active) continue;
+            // Turrets are anchored structures: do not push them with Repulsion
+            if (e.isTurret) continue;
             // If already pushed by this pulse, skip entirely; also skip while under any active knockback window
             const nowPush = this.time.now;
             if (rp._pushedSet.has(e)) continue;
@@ -3751,6 +3783,94 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isDummy) { try { e.body.setVelocity(0, 0); } catch (_) {} return; }
       const now = this.time.now;
       const dt = (this.game?.loop?.delta || 16.7) / 1000; // seconds
+      // Turrets: fully stationary enemies with custom firing + aim logic
+      if (e.isTurret) {
+        const nowT = this.time.now;
+        const dxT = this.player.x - e.x;
+        const dyT = this.player.y - e.y;
+        const ang = Math.atan2(dyT, dxT);
+        // Maintain visuals (base + head)
+        try {
+          const base = e._turretBase;
+          const head = e._turretHead;
+          if (base) {
+            base.x = e.x; base.y = e.y;
+          }
+          if (head) {
+            head.x = e.x; head.y = e.y - 2;
+          }
+          // Flip horizontally depending on player side (asset faces left by default)
+          const facingRight = this.player.x >= e.x;
+          const sx = facingRight ? -Math.abs(base?.scaleX || 1) : Math.abs(base?.scaleX || 1);
+          if (base) base.scaleX = sx;
+          if (head) head.scaleX = sx;
+          // Rotate head to face player exactly
+          if (head) head.rotation = ang;
+        } catch (_) {}
+        // Always-on sniper-style aim line from head tip
+        try {
+          if (!e._turretAimG) {
+            e._turretAimG = this.add.graphics();
+            try { e._turretAimG.setDepth?.(8610); } catch (_) {}
+          }
+          const g = e._turretAimG;
+          g.clear();
+          const head = e._turretHead;
+          const off = typeof e._turretMuzzleOffset === 'number' ? e._turretMuzzleOffset : 10;
+          const hx = head ? head.x + Math.cos(ang) * off : e.x;
+          const hy = head ? head.y + Math.sin(ang) * off : e.y;
+          g.lineStyle(1, 0xff2222, 1);
+          g.beginPath();
+          g.moveTo(hx, hy);
+          g.lineTo(this.player.x, this.player.y);
+          g.strokePath();
+          e._turretMuzzleX = hx;
+          e._turretMuzzleY = hy;
+        } catch (_) {}
+        // Firing: continuous 3-shot bursts, each burst ~0.75s, 0.75s between bursts
+        const burstShots = 3;
+        const burstDurationMs = 750;
+        const interBurstMs = 750;
+        const shotGapMs = Math.floor(burstDurationMs / Math.max(1, burstShots - 1)); // ~375ms
+        if (!e._tBurstLeft) e._tBurstLeft = 0;
+        if (!e._tBurstCooldownUntil) e._tBurstCooldownUntil = 0;
+        if (e._tBurstLeft <= 0 && nowT >= (e._tBurstCooldownUntil || 0)) {
+          e._tBurstLeft = burstShots;
+          e._tNextShotAt = nowT;
+          e._tBurstCooldownUntil = nowT + burstDurationMs + interBurstMs;
+        }
+        if (e._tBurstLeft > 0 && nowT >= (e._tNextShotAt || 0)) {
+          const head = e._turretHead;
+          const hx = (typeof e._turretMuzzleX === 'number') ? e._turretMuzzleX : (head ? head.x : e.x);
+          const hy = (typeof e._turretMuzzleY === 'number') ? e._turretMuzzleY : (head ? head.y : e.y);
+          let angShot = Math.atan2(this.player.y - hy, this.player.x - hx);
+          // Small random jitter to avoid perfect predictability
+          const jitter = Phaser.Math.DegToRad(4);
+          angShot += Phaser.Math.FloatBetween(-jitter, jitter);
+          const speed = 240; // slow turret bullets
+          const vx = Math.cos(angShot) * speed;
+          const vy = Math.sin(angShot) * speed;
+          const b = this.enemyBullets.get(hx, hy, 'bullet');
+          if (b) {
+            b.setActive(true).setVisible(true);
+            b.setCircle(2).setOffset(-2, -2);
+            b.setVelocity(vx, vy);
+            b.setTint(0xffff00); // same as shooter bullets
+            b.damage = e.damage; // same damage as shooter
+            b.update = () => {
+              const view = this.cameras?.main?.worldView;
+              if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} }
+            };
+          }
+          e._tBurstLeft -= 1;
+          if (e._tBurstLeft > 0) {
+            e._tNextShotAt = nowT + shotGapMs;
+          }
+        }
+        // Turrets never move
+        try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
+        return;
+      }
       // Stun: freeze movement and actions during stun window
       if (e._stunnedUntil && now < e._stunnedUntil) {
         try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
@@ -4218,10 +4338,25 @@ export default class CombatScene extends Phaser.Scene {
               else if (roll < 0.65) spawnFn = (sc, x, y) => createRocketeerEnemy(sc, x, y, Math.floor(80 * mods.enemyHp), Math.floor(12 * mods.enemyDamage), 40, 2000);
               else if (roll < 0.85) spawnFn = (sc, x, y) => { const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); return createRunnerEnemy(sc, x, y, Math.floor(60 * mods.enemyHp), meleeDmg, 120); };
               else spawnFn = (sc, x, y) => { const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); return createEnemy(sc, x, y, Math.floor(100 * mods.enemyHp), meleeDmg, 60); };
-              try { const ally = spawnFn(this, sx, sy); if (ally) this.enemies.add(ally); } catch (_) {}
-              // Teleport VFX for reinforcement spawn
-              try { bitSpawnRing(this, sx, sy, { radius: 22, lineWidth: 3, duration: 420, scaleTarget: 2.1, color: 0xaa66ff }); } catch (_) {}
-              try { impactBurst(this, sx, sy, { color: 0xaa66ff, size: 'small' }); } catch (_) {}
+              // Teleport-style spawn VFX: descending purple line, then ring + enemy spawn together
+              try {
+                teleportSpawnVfx(this, sx, sy, {
+                  color: 0xaa66ff,
+                  onSpawn: () => {
+                    try {
+                      const ally = spawnFn(this, sx, sy);
+                      if (ally) this.enemies.add(ally);
+                    } catch (_) {}
+                    try { impactBurst(this, sx, sy, { color: 0xaa66ff, size: 'small' }); } catch (_) {}
+                  },
+                });
+              } catch (_) {
+                // Fallback: spawn instantly if VFX fails for any reason
+                try {
+                  const ally = spawnFn(this, sx, sy);
+                  if (ally) this.enemies.add(ally);
+                } catch (_) {}
+              }
             }
           }
           // Shotgun: only when close
@@ -4574,6 +4709,98 @@ export default class CombatScene extends Phaser.Scene {
     };
   }
 
+  // Bigwig bombardment bomb: spawned off-screen and driven toward an impact point, ignoring barricades.
+  _spawnBigwigBomb(e, targetX, targetY, opts = {}) {
+    if (!this.bossBombs) return;
+    const bomb = this.bossBombs.get(targetX, targetY, 'bullet');
+    if (!bomb) return;
+    bomb.setActive(true).setVisible(true);
+    bomb.setCircle(4).setOffset(-4, -4);
+    try { bomb.setScale(1.3); } catch (_) {}
+    bomb.setTint(0xff8844);
+    // Start from off-screen top-left along a 45-degree style path toward target
+    const pad = Math.max(this.scale.width, this.scale.height) + 40;
+    const sx = targetX - pad;
+    const sy = targetY - pad;
+    bomb.setPosition(sx, sy);
+    const dx = targetX - sx;
+    const dy = targetY - sy;
+    const len = Math.max(1, Math.hypot(dx, dy));
+    const speed = opts.speed || 340;
+    const vx = (dx / len) * speed;
+    const vy = (dy / len) * speed;
+    bomb.setVelocity(vx, vy);
+    // Simple red tracer line to show incoming path
+    try {
+      const tracer = this.add.graphics();
+      try { tracer.setDepth?.(9550); tracer.setBlendMode?.(Phaser.BlendModes.ADD); } catch (_) {}
+      bomb._tracerG = tracer;
+    } catch (_) { bomb._tracerG = null; }
+    bomb._bwBomb = true;
+    bomb._bwTargetX = targetX;
+    bomb._bwTargetY = targetY;
+    bomb._spawnAt = this.time.now;
+    bomb._lifeMs = opts.lifeMs || 6000;
+    bomb.damage = (typeof opts.damage === 'number') ? opts.damage : (e?.damage || 14);
+    bomb._blastRadius = opts.radius || 70; // match Bigwig's enhanced grenades
+    bomb.update = () => {
+      const now = this.time.now;
+      if (!bomb.active) return;
+      const dx2 = bomb.x - bomb._bwTargetX;
+      const dy2 = bomb.y - bomb._bwTargetY;
+      const near = (dx2 * dx2 + dy2 * dy2) <= 18 * 18;
+      const expired = (now - (bomb._spawnAt || 0)) >= (bomb._lifeMs || 6000);
+      // Update tracer visual
+      if (bomb._tracerG) {
+        try {
+          const g = bomb._tracerG;
+          g.clear();
+          const lenSeg = 26;
+          const vxN = vx / Math.max(1, Math.hypot(vx, vy));
+          const vyN = vy / Math.max(1, Math.hypot(vx, vy));
+          g.lineStyle(2, 0xff3333, 0.9);
+          g.beginPath();
+          g.moveTo(bomb.x, bomb.y);
+          g.lineTo(bomb.x - vxN * lenSeg, bomb.y - vyN * lenSeg);
+          g.strokePath();
+        } catch (_) {}
+      }
+      if (near || expired) {
+        const ex = bomb.x; const ey = bomb.y;
+        const radius = bomb._blastRadius || 70;
+        try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
+        // Player damage in radius
+        try {
+          const r2 = radius * radius;
+          const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+          if ((pdx * pdx + pdy * pdy) <= r2) {
+            if (now >= (this.player.iframesUntil || 0)) {
+              let dmg = (typeof bomb.damage === 'number' && bomb.damage > 0) ? bomb.damage : 14;
+              try {
+                const eff = getPlayerEffects(this.gs) || {};
+                const mul = eff.enemyExplosionDmgMul || 1;
+                dmg = Math.ceil(dmg * mul);
+              } catch (_) {}
+              this.applyPlayerDamage(dmg);
+              this.player.iframesUntil = now + 600;
+              if (this.gs.hp <= 0) {
+                const eff = getPlayerEffects(this.gs);
+                this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                this.gs.nextScene = SceneKeys.Hub;
+                SaveManager.saveToLocal(this.gs);
+                this.scene.start(SceneKeys.Hub);
+              }
+            }
+          }
+        } catch (_) {}
+        // Also damage destructible barricades
+        try { this.damageSoftBarricadesInRadius(ex, ey, radius, (bomb.damage || 14)); } catch (_) {}
+        if (bomb._tracerG) { try { bomb._tracerG.destroy(); } catch (_) {} bomb._tracerG = null; }
+        try { bomb.destroy(); } catch (_) {}
+      }
+    };
+  }
+
   // Prism beam renderer: draws thick laser and applies damage to player
   renderPrismBeam(e, angle, dt, opts = {}) {
     const applyDamage = opts.applyDamage !== undefined ? opts.applyDamage : true;
@@ -4703,15 +4930,268 @@ export default class CombatScene extends Phaser.Scene {
       }
       if (e._dashing && now >= (e._dashUntil || 0)) { e._dashing = false; try { e.body.setVelocity(0, 0); } catch (_) {} }
     } else if (e.bossType === 'Bigwig') {
-      if (now >= (e._nextNormalAt || 0)) {
-        e._nextNormalAt = now + 900;
-        const degs = [-12, -6, 0, 6, 12];
-        for (let i = 0; i < degs.length; i += 1) fireBullet(angToPlayer + Phaser.Math.DegToRad(degs[i]), 270, e.damage - 1, 0xffff66, 2);
+      // Initialize Bigwig-specific attack and ability state
+      if (!e._bwInit) {
+        e._bwInit = true;
+        e._bwPhase = 'normal'; // 'normal' burst phase or 'special' grenade barrage
+        e._bwNormalBurstsRemaining = 3; // 3 normal bursts before each special
+        e._bwBurstLeft = 0;
+        e._bwNextBurstShotAt = 0;
+        e._bwNextAttackReadyAt = now + 400;
+        e._bwCastingGrenades = false;
+        e._bwSpecialStarted = false;
+        // Bombardment ability state
+        e._bwAbilityState = 'idle'; // 'idle' | 'channel' | 'postDelay'
+        e._bwAbilityNextTime = now + 12000; // first use after a short delay
+        e._bwAbilityUntil = 0;
+        e._bwAbilitySignalAt = 0;
+        e._bwBombardmentActive = false;
+        e._bwBombardmentUntil = 0;
+        e._bwBombardmentNextAt = 0;
+        e._bwBombardmentCenter = null;
+        e._bwBombardmentMarker = null;
+        // Turret build ability state
+        e._bwTurretState = 'idle'; // 'idle' | 'turretChannel'
+        e._bwTurretUntil = 0;
+        e._bwTurretNextTime = now + 8000;
       }
-      if (now >= (e._nextSpecialAt || 0)) {
-        e._nextSpecialAt = now + 6500;
-        const degs = [-10, 0, 10];
-        for (let i = 0; i < degs.length; i += 1) fireRocket(angToPlayer + Phaser.Math.DegToRad(degs[i]), 320, e.damage + 4, 70);
+
+      // Handle ongoing bombardment (bombs fall while Bigwig can act normally)
+      if (e._bwBombardmentActive) {
+        if (now >= (e._bwBombardmentUntil || 0)) {
+          e._bwBombardmentActive = false;
+          e._bwBombardmentCenter = null;
+          e._bwBombardmentUntil = 0;
+          e._bwBombardmentNextAt = 0;
+          if (e._bwBombardmentMarker && typeof e._bwBombardmentMarker.destroy === 'function') {
+            try { e._bwBombardmentMarker.destroy(); } catch (_) {}
+          }
+          e._bwBombardmentMarker = null;
+          if (e._bwBombardmentRing) {
+            try { e._bwBombardmentRing.destroy(); } catch (_) {}
+          }
+          e._bwBombardmentRing = null;
+        } else if (now >= (e._bwBombardmentNextAt || 0)) {
+          const center = e._bwBombardmentCenter;
+          if (center) {
+            const radius = e._bwBombardmentRadius || 260;
+            const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const r = Phaser.Math.FloatBetween(0, radius);
+            const tx = center.x + Math.cos(ang) * r;
+            const ty = center.y + Math.sin(ang) * r;
+            try { this._spawnBigwigBomb(e, tx, ty, { radius: 60 }); } catch (_) {}
+          }
+          // Next bomb spawn time (faster random cadence during bombardment)
+          e._bwBombardmentNextAt = now + Phaser.Math.Between(140, 320);
+        }
+      }
+
+      // Bombardment ability logic (channel + signal)
+      const abilityCdReady = now >= (e._bwAbilityNextTime || 0);
+      if (e._bwAbilityState === 'channel') {
+        // During channel: immobilize and suppress all attacks
+        try { e.body.setVelocity(0, 0); } catch (_) {}
+        if (now >= (e._bwAbilityUntil || 0)) {
+          e._bwAbilityState = 'postDelay';
+        } else {
+          return;
+        }
+      }
+      if (e._bwAbilityState === 'postDelay') {
+        if (now >= (e._bwAbilitySignalAt || 0)) {
+          const px = this.player.x;
+          const py = this.player.y;
+          e._bwBombardmentCenter = { x: px, y: py };
+          e._bwBombardmentRadius = 260; // fixed large radius around marker
+          e._bwBombardmentActive = true;
+          e._bwBombardmentUntil = now + 10000; // 10s bombardment
+          e._bwBombardmentNextAt = now + 200;
+          // Spawn marker with shared teleport-style spawn VFX
+          try {
+            teleportSpawnVfx(this, px, py, {
+              color: 0xaa66ff,
+              onSpawn: () => {
+                try { e._bwBombardmentMarker = spawnBombardmentMarker(this, px, py, {}); } catch (_) {}
+              },
+            });
+          } catch (_) {
+            try { e._bwBombardmentMarker = spawnBombardmentMarker(this, px, py, {}); } catch (_) {}
+          }
+          // Subtle purple ring telegraphing bombardment radius
+          try {
+            bitSpawnRing(this, px, py, {
+              color: 0xaa66ff,
+              radius: e._bwBombardmentRadius,
+              lineWidth: 2,
+              duration: 1600,
+              scaleTarget: 1.0,
+            });
+          } catch (_) {}
+          try {
+            const ringG = this.add.graphics();
+            try { ringG.setDepth?.(9590); } catch (_) {}
+            ringG.lineStyle(1, 0xaa66ff, 0.55);
+            ringG.strokeCircle(px, py, e._bwBombardmentRadius);
+            e._bwBombardmentRing = ringG;
+          } catch (_) {}
+          e._bwAbilityState = 'idle';
+        }
+      } else if (e._bwAbilityState === 'idle' && abilityCdReady && !e._bwCastingGrenades) {
+        // Start bombardment ability: 1s channel, then 0.5s wait, 45s cooldown
+        e._bwAbilityState = 'channel';
+        e._bwAbilityUntil = now + 1000;
+        e._bwAbilitySignalAt = now + 1500;
+        e._bwAbilityNextTime = now + 35000;
+        // Cancel any ongoing burst/special activity
+        e._bwBurstLeft = 0;
+        e._bwNormalBurstsRemaining = Math.max(0, e._bwNormalBurstsRemaining || 0);
+        e._bwCastingGrenades = false;
+        e._bwSpecialStarted = false;
+        // Visual: upward purple signal beam
+        try { bossSignalBeam(this, e.x, e.y, { duration: 1000 }); } catch (_) {}
+        // During the 1s channel, movement and attacks are blocked via early return above
+        return;
+      }
+
+      // Turret build ability: Bigwig channels for 2s, then spawns a stationary turret at its location
+      if (!e._bwTurretState) e._bwTurretState = 'idle';
+      const turretCdReady = now >= (e._bwTurretNextTime || 0);
+      if (e._bwTurretState === 'turretChannel') {
+        // During channel: immobilize and suppress all other actions
+        try { e.body.setVelocity(0, 0); } catch (_) {}
+        if (now >= (e._bwTurretUntil || 0)) {
+          // Channel complete: deploy turret if under cap
+          let turretCount = 0;
+          try {
+            const arr = this.enemies?.getChildren?.() || [];
+            for (let i = 0; i < arr.length; i += 1) {
+              const t = arr[i];
+              if (t?.active && t.isTurret) turretCount += 1;
+            }
+          } catch (_) {}
+          if (turretCount < 5) {
+            try {
+              const mods = this.gs?.getDifficultyMods?.() || {};
+              const hp = Math.max(1, Math.floor(150 * (mods.enemyHp || 1)));
+              const dmg = Math.max(1, Math.floor(10 * (mods.enemyDamage || 1)));
+              const turret = createTurretEnemy(this, e.x, e.y, hp, dmg);
+              if (turret) this.enemies.add(turret);
+            } catch (_) {}
+          }
+          e._bwTurretState = 'idle';
+        } else {
+          return;
+        }
+      } else if (e._bwTurretState === 'idle' && turretCdReady && e._bwAbilityState === 'idle' && !e._bwCastingGrenades) {
+        // Check current turret count before starting channel
+        let turretCount = 0;
+        try {
+          const arr = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const t = arr[i];
+            if (t?.active && t.isTurret) turretCount += 1;
+          }
+        } catch (_) {}
+        if (turretCount < 5) {
+          e._bwTurretState = 'turretChannel';
+          e._bwTurretUntil = now + 2000;
+          e._bwTurretNextTime = now + 10000;
+          try { e.body.setVelocity(0, 0); } catch (_) {}
+          return;
+        }
+      }
+
+      // While performing grenade barrage, Bigwig cannot fire normal bullets
+      if (e._bwCastingGrenades) return;
+
+      const canAct = now >= (e._bwNextAttackReadyAt || 0);
+
+      // Transition to special phase after finishing the configured number of bursts
+      if (e._bwPhase === 'normal') {
+        const burstsLeft = (typeof e._bwNormalBurstsRemaining === 'number') ? e._bwNormalBurstsRemaining : 0;
+        if (burstsLeft <= 0 && (!e._bwBurstLeft || e._bwBurstLeft <= 0) && !e._bwSpecialStarted && canAct) {
+          e._bwPhase = 'special';
+          e._bwNextAttackReadyAt = now + 150;
+        }
+      }
+
+      if (e._bwPhase === 'special') {
+        // Start grenade barrage: 3 waves, each wave throws 3 grenades in a fan (9 total)
+        if (!e._bwSpecialStarted && canAct) {
+          e._bwSpecialStarted = true;
+          e._bwCastingGrenades = true;
+          const waves = 3;
+          const waveDelay = e._bwGrenadeWaveDelayMs || 340;
+          const fanDeg = e._bwGrenadeFanDeg || 18;
+          const fanRad = Phaser.Math.DegToRad(fanDeg);
+          const range = e._bwGrenadeTargetRange || 220;
+          for (let i = 0; i < waves; i += 1) {
+            this.time.delayedCall(i * waveDelay, () => {
+              if (!e.active) return;
+              const px = this.player.x; const py = this.player.y;
+              const baseAng = Math.atan2(py - e.y, px - e.x);
+              const offsets = [-1, 0, 1];
+              for (let j = 0; j < offsets.length; j += 1) {
+                const ang = baseAng + fanRad * offsets[j];
+                const tx = e.x + Math.cos(ang) * range;
+                const ty = e.y + Math.sin(ang) * range;
+                try { this.throwEnemyGrenade(e, tx, ty); } catch (_) {}
+              }
+              // After final wave, reset back to normal-burst phase
+              if (i === waves - 1) {
+                e._bwCastingGrenades = false;
+                e._bwSpecialStarted = false;
+                e._bwPhase = 'normal';
+                e._bwNormalBurstsRemaining = 3;
+                e._bwBurstLeft = 0;
+                e._bwNextBurstShotAt = 0;
+                e._bwNextAttackReadyAt = this.time.now + 700;
+              }
+            });
+          }
+        }
+        return;
+      }
+
+      // Normal phase: Bigwig acts like a stationary machine-gunner with 20-round bursts
+      if (e._bwPhase === 'normal' && canAct) {
+        const totalBullets = 20;
+        const spreadDeg = e._bwSpreadDeg || 36;
+        const spreadRad = Phaser.Math.DegToRad(spreadDeg);
+        const bulletSpeed = e._bwBulletSpeed || 360;
+        const burstGap = e._bwBurstGapMs || 55;
+
+        // Start a new burst if not currently bursting
+        if (!e._bwBurstLeft || e._bwBurstLeft <= 0) {
+          e._bwBurstLeft = totalBullets;
+          e._bwNextBurstShotAt = now;
+          e._bwBurstBaseAng = angToPlayer;
+        }
+
+        // Fire bullets in the current burst
+        if (e._bwBurstLeft && now >= (e._bwNextBurstShotAt || 0)) {
+          const firedSoFar = totalBullets - e._bwBurstLeft;
+          const t = (totalBullets === 1) ? 0 : (firedSoFar / (totalBullets - 1) - 0.5);
+          let ang = (e._bwBurstBaseAng || angToPlayer) + t * spreadRad;
+          // Slight random jitter and toxin chaos
+          const jitterScale = 0.18;
+          ang += Phaser.Math.FloatBetween(-jitterScale, jitterScale) * spreadRad;
+          if (e._toxinedUntil && now < e._toxinedUntil) {
+            const extra = Phaser.Math.DegToRad(50);
+            ang += Phaser.Math.FloatBetween(-extra / 2, extra / 2);
+          }
+
+          fireBullet(ang, bulletSpeed, e.damage - 1, 0xffee88, 2);
+
+          e._bwBurstLeft -= 1;
+          if (e._bwBurstLeft <= 0) {
+            // End of one 20-bullet burst
+            e._bwNormalBurstsRemaining = Math.max(0, (e._bwNormalBurstsRemaining || 0) - 1);
+            e._bwNextAttackReadyAt = now + (e._bwInterBurstDelayMs || 420);
+          } else {
+            e._bwNextBurstShotAt = now + burstGap;
+          }
+        }
       }
     } else { // Hazel
       if (!e._hzState || e._hzState === 'sweep') {

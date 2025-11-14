@@ -369,11 +369,19 @@ export default class HubScene extends Phaser.Scene {
       try { this.openCampaignStageMenu(); } catch (_) {}
     });
     const bossRushBtn = makeTextButton(this, cx, y0 + 1 * line, 'Boss Rush', () => {
-      try { this.gs.setGameMode('BossRush'); SaveManager.saveToLocal(this.gs); } catch (_) {}
+      try {
+        this.gs.shootingRange = false;
+        this.gs.setGameMode('BossRush');
+        SaveManager.saveToLocal(this.gs);
+      } catch (_) {}
       this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
     const deepDiveBtn = makeTextButton(this, cx, y0 + 2 * line, 'Deep Dive', () => {
-      try { this.gs.setGameMode('DeepDive'); SaveManager.saveToLocal(this.gs); } catch (_) {}
+      try {
+        this.gs.shootingRange = false;
+        this.gs.setGameMode('DeepDive');
+        SaveManager.saveToLocal(this.gs);
+      } catch (_) {}
       this.closePanel([title, campaignBtn, bossRushBtn, deepDiveBtn, rangeBtn, desc, closeBtn]);
     });
     const rangeBtn = makeTextButton(this, cx, y0 + 3 * line, 'Shooting Range', () => {
