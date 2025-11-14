@@ -252,7 +252,7 @@ function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH
       try { e._g?.destroy(); } catch (_) {}
       try { e._igniteIndicator?.destroy(); e._igniteIndicator = null; } catch (_) {}
       try { e._toxinIndicator?.destroy(); e._toxinIndicator = null; } catch (_) {}
-      // If running in BossScene, also clear any dash hint graphics stored on the scene
+      // If in a boss room, also clear any dash hint graphics stored on the scene
       try { const sc = e.scene; if (sc && sc._dashSeq) { sc._dashSeq._hintG?.destroy?.(); sc._dashSeq = null; } } catch (_) {}
     });
   } catch (_) {}

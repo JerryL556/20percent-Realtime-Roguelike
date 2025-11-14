@@ -602,7 +602,7 @@ export default class HubScene extends Phaser.Scene {
         let next = (this.gs?.gameMode === 'BossRush') ? SceneKeys.Combat : SceneKeys.Combat;
         // Ensure Boss Rush queue is ready when entering boss portal
         try {
-          if (next === SceneKeys.Boss && this.gs && (!Array.isArray(this.gs.bossRushQueue) || this.gs.bossRushQueue.length === 0)) {
+          if (this.gs?.gameMode === 'BossRush' && (!Array.isArray(this.gs.bossRushQueue) || this.gs.bossRushQueue.length === 0)) {
             this.gs.setGameMode('BossRush');
           }
         } catch (_) {}
