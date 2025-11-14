@@ -1719,15 +1719,33 @@ export default class CombatScene extends Phaser.Scene {
       color: '#ffffff'
     }).setOrigin(0.5, 0.5);
     try { nameText.setStroke('#000000', 6); } catch (_) {}
+    // Precompute name tag metrics and a shared skew to use for both name tag and asset background
+    const nb = nameText.getBounds();
+    const tagPadX = 18, tagPadY = 10;
+    const nameTagW = Math.max(60, nb.width + tagPadX * 2);
+    const nameTagH = Math.max(34, nb.height + tagPadY * 2);
+    const skewPx = Math.max(6, Math.min(14, Math.floor(nameTagH * 0.35)));
     // Depth ordering: background panels below their respective foregrounds
     // Asset BG < Asset < Name Tag < Name
     const zBgAsset = 8990, zAsset = 9000, zNameTag = 9005, zName = 9010;
     try { art?.setDepth(zAsset); nameText.setDepth(zName); } catch (_) {}
-    // Half-transparent black background that travels with the asset
+    // Half-transparent black background that travels with the asset (parallelogram)
     const assetBg = this.add.graphics();
     try { assetBg.setDepth(zBgAsset); assetBg.clear(); assetBg.fillStyle(0x000000, 0.5); } catch (_) {}
     const assetBgW = width, assetBgH = height; // full-screen overlay behind art
-    try { assetBg.fillRect(-assetBgW/2, -assetBgH/2, assetBgW, assetBgH); } catch (_) {}
+    try {
+      const halfWb = assetBgW / 2;
+      const halfHb = assetBgH / 2;
+      // Use the same skew as the name tag for visual cohesion
+      const k = skewPx;
+      assetBg.beginPath();
+      assetBg.moveTo(-halfWb + k, -halfHb);
+      assetBg.lineTo( halfWb + k, -halfHb);
+      assetBg.lineTo( halfWb - k,  halfHb);
+      assetBg.lineTo(-halfWb - k,  halfHb);
+      assetBg.closePath();
+      assetBg.fillPath();
+    } catch (_) {}
     try { assetBg.setPosition(width + 200, height / 2); } catch (_) {}
     // Opaque name tag background that follows the name
     const nameTag = this.add.graphics();
@@ -1735,19 +1753,16 @@ export default class CombatScene extends Phaser.Scene {
     let nameTagTint = 0x888888;
     try { nameTagTint = getScrapTintForEnemy({ isBoss: true, bossType: bossId }); } catch (_) {}
     try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(nameTagTint, 1); } catch (_) {}
-    const nb = nameText.getBounds();
-    const tagPadX = 18, tagPadY = 10; const nameTagW = Math.max(60, nb.width + tagPadX * 2); const nameTagH = Math.max(34, nb.height + tagPadY * 2);
     // Draw a parallelogram (same height) instead of a rectangle
     try {
       const halfW = nameTagW / 2;
       const halfH = nameTagH / 2;
-      // Subtle skew: base on height, capped to keep the shape readable
-      const skew = Math.max(6, Math.min(14, Math.floor(nameTagH * 0.35)));
+      const k = skewPx; // use same skew as asset background
       nameTag.beginPath();
-      nameTag.moveTo(-halfW + skew, -halfH);   // top-left skewed right
-      nameTag.lineTo( halfW + skew, -halfH);   // top-right skewed right
-      nameTag.lineTo( halfW - skew,  halfH);   // bottom-right skewed left
-      nameTag.lineTo(-halfW - skew,  halfH);   // bottom-left skewed left
+      nameTag.moveTo(-halfW + k, -halfH);   // top-left skewed right
+      nameTag.lineTo( halfW + k, -halfH);   // top-right skewed right
+      nameTag.lineTo( halfW - k,  halfH);   // bottom-right skewed left
+      nameTag.lineTo(-halfW - k,  halfH);   // bottom-left skewed left
       nameTag.closePath();
       nameTag.fillPath();
     } catch (_) {}
