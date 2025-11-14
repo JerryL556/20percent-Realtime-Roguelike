@@ -1731,6 +1731,14 @@ export default class CombatScene extends Phaser.Scene {
     try { assetBg.setPosition(width + 200, height / 2); } catch (_) {}
     // Opaque white name tag background that follows the name
     const nameTag = this.add.graphics();
+    // Map boss name to scrap tint for name tag
+    let nameTagTint = 0x888888;
+    try {
+      const t = String(bossId || '').toLowerCase();
+      if (t === 'bigwig') nameTagTint = 0x4a6b3a;
+      else if (t === 'dandelion') nameTagTint = 0x9a6c3a;
+      else if (t === 'hazel') nameTagTint = 0x000000;
+    } catch (_) {}
     try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(_nameTagTint, 1); } catch (_) {}
     // Name tag color mapped from boss type (matches scrap tint)
     try {
