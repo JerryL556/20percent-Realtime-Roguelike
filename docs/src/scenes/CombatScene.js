@@ -735,23 +735,51 @@ export default class CombatScene extends Phaser.Scene {
     this.barricadesHard = this.physics.add.staticGroup();
     this.barricadesSoft = this.physics.add.staticGroup();
     if (!this.gs?.shootingRange) {
-      // Choose a barricade variant for normal rooms
-      const brRoll = this.gs.rng.next();
-      const variant = (brRoll < 0.34) ? 'normal' : (brRoll < 0.67) ? 'soft_many' : 'hard_sparse';
-      const barricades = generateBarricades(this.gs.rng, this.arenaRect, variant);
-      barricades.forEach((b) => {
-        if (b.kind === 'hard') {
-          const s = this.physics.add.staticImage(b.x, b.y, 'barricade_hard');
-          s.setData('destructible', false);
-          this.barricadesHard.add(s);
-        } else {
+      if (this._isBossRoom) {
+        // Boss rooms: only soft barricades, and fewer than the normal-room 'soft_many' variant.
+        const rng = this.gs.rng;
+        const all = generateBarricades(rng, this.arenaRect, 'soft_many') || [];
+        const softOnly = all.filter((b) => b && b.kind === 'soft');
+        // Reduce count to ~50% of soft_many (at least 4 for some cover)
+        const target = Math.max(4, Math.floor(softOnly.length * 0.5));
+        const used = new Set();
+        const picks = [];
+        for (let i = 0; i < target && softOnly.length > 0; i += 1) {
+          let idx = rng.int(0, Math.max(0, softOnly.length - 1));
+          // Ensure unique picks; fallback to sequential if too many collisions
+          let guard = 0;
+          while (used.has(idx) && guard < 10) { idx = rng.int(0, Math.max(0, softOnly.length - 1)); guard += 1; }
+          if (used.has(idx)) { // fallback
+            for (let j = 0; j < softOnly.length; j += 1) { if (!used.has(j)) { idx = j; break; } }
+          }
+          used.add(idx);
+          picks.push(softOnly[idx]);
+        }
+        picks.forEach((b) => {
           const s = this.physics.add.staticImage(b.x, b.y, 'barricade_soft');
           s.setData('destructible', true);
-          // Base HP for destructible tiles
           s.setData('hp', 20);
           this.barricadesSoft.add(s);
-        }
-      });
+        });
+      } else {
+        // Normal rooms: preserve existing variant selection logic
+        const brRoll = this.gs.rng.next();
+        const variant = (brRoll < 0.34) ? 'normal' : (brRoll < 0.67) ? 'soft_many' : 'hard_sparse';
+        const barricades = generateBarricades(this.gs.rng, this.arenaRect, variant);
+        barricades.forEach((b) => {
+          if (b.kind === 'hard') {
+            const s = this.physics.add.staticImage(b.x, b.y, 'barricade_hard');
+            s.setData('destructible', false);
+            this.barricadesHard.add(s);
+          } else {
+            const s = this.physics.add.staticImage(b.x, b.y, 'barricade_soft');
+            s.setData('destructible', true);
+            // Base HP for destructible tiles
+            s.setData('hp', 20);
+            this.barricadesSoft.add(s);
+          }
+        });
+      }
     }
     // Helper: pick a spawn on screen edges/corners, far from player
     const pickEdgeSpawn = () => {
@@ -1684,20 +1712,43 @@ export default class CombatScene extends Phaser.Scene {
     const artKey = bossId;
     let art = null;
     try { if (this.textures?.exists(artKey)) art = this.add.image(width + 200, height / 2, artKey); } catch (_) {}
-    const nameText = this.add.text(-200, 60, bossId, { fontFamily: 'monospace', fontSize: 24, color: '#ff3333' }).setOrigin(0.5, 0.5);
-    try { art?.setDepth(9000); nameText.setDepth(9001); } catch (_) {}
+    // Large, outlined boss name (pixel-style: simple stroke outline)
+    const nameText = this.add.text(-200, 60, bossId, {
+      fontFamily: 'monospace',
+      fontSize: 56,
+      color: '#ff3333'
+    }).setOrigin(0.5, 0.5);
+    try { nameText.setStroke('#000000', 6); } catch (_) {}
+    // Depth ordering: background panels below their respective foregrounds
+    // Asset BG < Asset < Name Tag < Name
+    const zBgAsset = 8990, zAsset = 9000, zNameTag = 9005, zName = 9010;
+    try { art?.setDepth(zAsset); nameText.setDepth(zName); } catch (_) {}
+    // Half-transparent black background that travels with the asset
+    const assetBg = this.add.graphics();
+    try { assetBg.setDepth(zBgAsset); assetBg.clear(); assetBg.fillStyle(0x000000, 0.5); } catch (_) {}
+    const assetBgW = width, assetBgH = height; // full-screen overlay behind art
+    try { assetBg.fillRect(-assetBgW/2, -assetBgH/2, assetBgW, assetBgH); } catch (_) {}
+    try { assetBg.setPosition(width + 200, height / 2); } catch (_) {}
+    // Opaque white name tag background that follows the name
+    const nameTag = this.add.graphics();
+    try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(0xffffff, 1); } catch (_) {}
+    const nb = nameText.getBounds();
+    const tagPadX = 18, tagPadY = 10; const nameTagW = Math.max(60, nb.width + tagPadX * 2); const nameTagH = Math.max(34, nb.height + tagPadY * 2);
+    try { nameTag.fillRect(-nameTagW/2, -nameTagH/2, nameTagW, nameTagH); } catch (_) {}
+    try { nameTag.setPosition(-200, 60); } catch (_) {}
     // Slide in
-    try { this.tweens.add({ targets: art, x: width / 2 + 140, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
-    try { this.tweens.add({ targets: nameText, x: width / 2, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
+    try { this.tweens.add({ targets: [assetBg, art], x: width / 2 + 140, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
+    try { this.tweens.add({ targets: [nameTag, nameText], x: width / 2, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
     // Hold then slide out
     this.time.delayedCall(600 + 800, () => {
-      try { this.tweens.add({ targets: art, x: width + 200, duration: 600, ease: 'Cubic.easeIn' }); } catch (_) {}
-      try { this.tweens.add({ targets: nameText, x: -200, duration: 600, ease: 'Cubic.easeIn', onComplete: () => { try { nameText.destroy(); } catch (_) {} } }); } catch (_) {}
+      try { this.tweens.add({ targets: [assetBg, art], x: width + 200, duration: 600, ease: 'Cubic.easeIn' }); } catch (_) {}
+      try { this.tweens.add({ targets: [nameTag, nameText], x: -200, duration: 600, ease: 'Cubic.easeIn', onComplete: () => { try { nameText.destroy(); } catch (_) {} try { nameTag.destroy(); } catch (_) {} } }); } catch (_) {}
     });
     // Unfreeze after 2s
     this.time.delayedCall(2000, () => {
       this._cinematicActive = false; this._cinematicUntil = 0; try { this.physics.world.resume(); } catch (_) {}
       try { if (art) art.destroy(); } catch (_) {}
+      try { assetBg.destroy(); } catch (_) {}
     });
   }
 
@@ -5654,6 +5705,7 @@ export default class CombatScene extends Phaser.Scene {
 
 
     // Reset per-room boss reference to avoid stale state across restarts
+
 
 
 
