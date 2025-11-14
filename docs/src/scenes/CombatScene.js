@@ -5671,4 +5671,3 @@ export default class CombatScene extends Phaser.Scene {
 
 
     // Reset per-room boss reference to avoid stale state across restarts
-    this.boss = null;
