@@ -4,7 +4,7 @@ import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
 import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
-import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy } from '../systems/Effects.js';
+import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy, getScrapTintForEnemy } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
 import { buildNavGrid, worldToGrid, findPath } from '../systems/Pathfinding.js';
 import { preloadWeaponAssets, createPlayerWeaponSprite, syncWeaponTexture, updateWeaponSprite, createFittedImage, getWeaponMuzzleWorld, getWeaponBarrelPoint, fitImageHeight } from '../systems/WeaponVisuals.js';
@@ -1729,20 +1729,28 @@ export default class CombatScene extends Phaser.Scene {
     const assetBgW = width, assetBgH = height; // full-screen overlay behind art
     try { assetBg.fillRect(-assetBgW/2, -assetBgH/2, assetBgW, assetBgH); } catch (_) {}
     try { assetBg.setPosition(width + 200, height / 2); } catch (_) {}
-    // Opaque white name tag background that follows the name
+    // Opaque name tag background that follows the name
     const nameTag = this.add.graphics();
-    // Map boss name to scrap tint for name tag
+    // Use the same tint as debris/scrap on boss death for consistency
     let nameTagTint = 0x888888;
-    try {
-      const t = String(bossId || '').toLowerCase();
-      if (t === 'bigwig') nameTagTint = 0x4a6b3a;
-      else if (t === 'dandelion') nameTagTint = 0x9a6c3a;
-      else if (t === 'hazel') nameTagTint = 0x000000;
-    } catch (_) {}
+    try { nameTagTint = getScrapTintForEnemy({ isBoss: true, bossType: bossId }); } catch (_) {}
     try { nameTag.setDepth(zNameTag); nameTag.clear(); nameTag.fillStyle(nameTagTint, 1); } catch (_) {}
     const nb = nameText.getBounds();
     const tagPadX = 18, tagPadY = 10; const nameTagW = Math.max(60, nb.width + tagPadX * 2); const nameTagH = Math.max(34, nb.height + tagPadY * 2);
-    try { nameTag.fillRect(-nameTagW/2, -nameTagH/2, nameTagW, nameTagH); } catch (_) {}
+    // Draw a parallelogram (same height) instead of a rectangle
+    try {
+      const halfW = nameTagW / 2;
+      const halfH = nameTagH / 2;
+      const maxSkew = Math.max(12, Math.floor(nameTagH * 0.6));
+      const skew = Math.min(maxSkew, Math.max(12, Math.floor(halfW - 6)));
+      nameTag.beginPath();
+      nameTag.moveTo(-halfW + skew, -halfH);   // top-left skewed right
+      nameTag.lineTo( halfW + skew, -halfH);   // top-right skewed right
+      nameTag.lineTo( halfW - skew,  halfH);   // bottom-right skewed left
+      nameTag.lineTo(-halfW - skew,  halfH);   // bottom-left skewed left
+      nameTag.closePath();
+      nameTag.fillPath();
+    } catch (_) {}
     try { nameTag.setPosition(-200, 60); } catch (_) {}
     // Slide in
     try { this.tweens.add({ targets: [assetBg, art], x: width / 2 + 140, duration: 600, ease: 'Cubic.easeOut' }); } catch (_) {}
