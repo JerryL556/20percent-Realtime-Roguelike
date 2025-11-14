@@ -698,6 +698,12 @@ export default class CombatScene extends Phaser.Scene {
 
     // Enemies (must be a physics group so overlaps work reliably)
     this.enemies = this.physics.add.group();
+    // Ensure boss HUD is cleared when this scene shuts down (e.g., player death -> Hub)
+    try {
+      this.events.once('shutdown', () => {
+        try { this.registry.set('bossActive', false); this.registry.set('bossName', ''); this.registry.set('bossHp', 0); this.registry.set('bossHpMax', 0); this.registry.set('cinematicActive', false); } catch (_) {}
+      });
+    } catch (_) {}
     // Reset exit state at scene start
     this.exitActive = false;
     try { this.exitG?.clear?.(); } catch (_) {}

@@ -14,6 +14,8 @@ export default class HubScene extends Phaser.Scene {
     const { width, height } = this.scale;
     // Launch UI overlay for gameplay scenes
     this.scene.launch(SceneKeys.UI);
+    // Ensure boss HUD is hidden when entering Hub
+    try { this.registry.set('bossActive', false); this.registry.set('bossName', ''); this.registry.set('bossHp', 0); this.registry.set('bossHpMax', 0); this.registry.set('cinematicActive', false); } catch (_) {}
     this.gs = this.registry.get('gameState');
     this.inputMgr = new InputManager(this);
     // Deep Dive indicator in Hub when DeepDive mode is selected (mirror CombatScene behavior with retries)
