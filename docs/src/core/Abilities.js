@@ -29,7 +29,7 @@ export const abilityDefs = [
     name: 'Landmine Dispenser',
     desc: [
       'Deploys a dispenser that releases 10 landmines around itself in a circle.',
-      'Mines are green blocks, persist until triggered, and detonate for 30 dmg and 20 stun (60px radius) when an enemy enters 30px.',
+      'Mines are green blocks, persist until triggered, and detonate for 30 dmg and 20 stun (60px radius) when an enemy enters 40px.',
     ].join('\n'),
   },
 ];

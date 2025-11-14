@@ -219,7 +219,7 @@ export default class BossScene extends Phaser.Scene {
                   m._armed = true;
                 }
               } else {
-                const r = m._detRadius || 30; const boss = this.boss; if (boss?.active) {
+                const r = m._detRadius || 40; const boss = this.boss; if (boss?.active) {
                   const dx = boss.x - m.x; const dy = boss.y - m.y; if ((dx * dx + dy * dy) <= (r * r)) { m._explodeFn?.(m); }
                 }
               }
@@ -2404,7 +2404,7 @@ export default class BossScene extends Phaser.Scene {
       try { mine.setTint(0x33ff66); } catch (_) {}
       try { mine.setScale(1.1); } catch (_) {}
       try { mine.body.setSize(6, 6, true); } catch (_) {}
-      mine.setVelocity(vx, vy); mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; mine._ang = ang; mine._speed = spd; const stopR = 100; mine._travelMax2 = stopR * stopR;
+      mine.setVelocity(vx, vy); mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 40; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; mine._ang = ang; mine._speed = spd; const stopR = 100; mine._travelMax2 = stopR * stopR;
       const armMine = () => { if (mine._armed) return; mine._armed = true; try { mine.setVelocity(0, 0); } catch (_) {} try { mine.body.setVelocity(0, 0); mine.body.moves = false; mine.body.setImmovable(true); } catch (_) {} };
       try { if (this.walls) this.physics.add.collider(mine, this.walls, () => armMine()); } catch (_) {}
       try { if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => armMine()); } catch (_) {}
@@ -2412,7 +2412,7 @@ export default class BossScene extends Phaser.Scene {
       mine.update = () => {
         try {
           if (!mine.active || !mine._armed) return;
-          const r = mine._detRadius || 30; const r2 = r * r;
+          const r = mine._detRadius || 40; const r2 = r * r;
           const boss = this.boss; if (boss?.active) { const dx = boss.x - mine.x; const dy = boss.y - mine.y; if ((dx * dx + dy * dy) <= r2) { mine._explodeFn?.(mine); return; } }
         } catch (_) {}
       };

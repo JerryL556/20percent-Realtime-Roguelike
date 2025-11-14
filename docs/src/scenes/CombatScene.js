@@ -611,7 +611,7 @@ export default class CombatScene extends Phaser.Scene {
                 }
               } else {
                 // Armed: trigger when enemy enters detection radius (skip dummy)
-                const r = m._detRadius || 30; const r2 = r * r;
+                const r = m._detRadius || 40; const r2 = r * r;
                 for (let k = 0; k < enemies.length; k += 1) {
                   const e = enemies[k]; if (!e?.active || e.isDummy) continue;
                   const dx = e.x - m.x; const dy = e.y - m.y;
@@ -5288,7 +5288,7 @@ export default class CombatScene extends Phaser.Scene {
       // Keep square hitbox; slightly larger for stable collisions
       try { mine.body.setSize(6, 6, true); } catch (_) {}
       mine.setVelocity(vx, vy);
-      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 30; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; mine._ang = ang; mine._speed = spd; const stopR = 100; mine._travelMax2 = stopR * stopR;
+      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 40; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; mine._ang = ang; mine._speed = spd; const stopR = 100; mine._travelMax2 = stopR * stopR;
       // Colliders: stop on enemies, barricades, walls (become armed). No friendly fire.
       const armMine = () => {
         if (mine._armed) return; mine._armed = true;
@@ -5307,7 +5307,7 @@ export default class CombatScene extends Phaser.Scene {
         try {
           if (!mine.active) return;
           if (!mine._armed) return; // only trigger after stopping
-          const r = mine._detRadius || 30; const r2 = r * r;
+          const r = mine._detRadius || 40; const r2 = r * r;
           const arr = this.enemies?.getChildren?.() || [];
           for (let k = 0; k < arr.length; k += 1) {
             const e = arr[k]; if (!e?.active || e?.isDummy) continue;
