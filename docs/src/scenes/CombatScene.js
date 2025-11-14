@@ -372,6 +372,8 @@ export default class CombatScene extends Phaser.Scene {
       }
     } catch (_) {}
     try { console.log('[Combat] flags:', { bossRoom: this._isBossRoom, bossId: this._bossId, mode: this.gs?.gameMode, next: this.gs?.nextScene }); } catch (_) {}
+    // Ensure no stale boss reference carries over between boss rooms
+    this.boss = null;
 
     // Debug overlay for boss-room state
     try {
