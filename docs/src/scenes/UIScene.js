@@ -24,7 +24,8 @@ export default class UIScene extends Phaser.Scene {
     this.hpBar = new HpBar(this, 16, uiHpY, 180, 16);
     this.goldText = this.add.text(210, 8, 'Gold: 0 | Drone Cores: 0', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' });
     // Boss UI: centered top name + HP bar (white outline, red fill)
-    this.bossNameText = this.add.text(width / 2, 24, '', { fontFamily: 'monospace', fontSize: 22, color: '#ff3333' }).setOrigin(0.5, 0.5);
+    this.bossNameText = this.add.text(width / 2, 24, '', { fontFamily: 'monospace', fontSize: 22, color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5, 0.5);
+    try { this.bossNameText.setStroke('#000000', 3); } catch (_) {}
     this.bossBarG = this.add.graphics();
     this.bossNameText.setVisible(false);
     this.dashBar = new DashBar(this, dashXStart, uiDashY, 14, 4);
@@ -134,7 +135,8 @@ export default class UIScene extends Phaser.Scene {
       // Boss UI draw
       try {
         const active = !!this.registry.get('bossActive');
-        if (active) {
+        const inCinematic = !!this.registry.get('cinematicActive');
+        if (active && !inCinematic) {
           const name = this.registry.get('bossName') || '';
           const cur = Math.max(0, this.registry.get('bossHp') || 0);
           const max = Math.max(1, this.registry.get('bossHpMax') || 1);

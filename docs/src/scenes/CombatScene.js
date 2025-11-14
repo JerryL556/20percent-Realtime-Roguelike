@@ -1708,6 +1708,7 @@ export default class CombatScene extends Phaser.Scene {
     try { this.physics.world.pause(); } catch (_) {}
     this._cinematicUntil = this.time.now + 2000;
     this._cinematicActive = true;
+    try { this.registry.set('cinematicActive', true); } catch (_) {}
     // Create visuals
     const artKey = bossId;
     let art = null;
@@ -1781,6 +1782,7 @@ export default class CombatScene extends Phaser.Scene {
       this._cinematicActive = false; this._cinematicUntil = 0; try { this.physics.world.resume(); } catch (_) {}
       try { if (art) art.destroy(); } catch (_) {}
       try { assetBg.destroy(); } catch (_) {}
+      try { this.registry.set('cinematicActive', false); } catch (_) {}
     });
   }
 
