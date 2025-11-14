@@ -703,6 +703,7 @@ export default class CombatScene extends Phaser.Scene {
     try { this.prompt?.setText?.(''); } catch (_) {}
     // If this is a boss room, spawn the boss ASAP so exit logic doesn't trigger prematurely
     try {
+      console.log('[Combat] early spawn check:', this._isBossRoom, !!this.boss);
       if (this._isBossRoom && !this.boss) {
         console.log('[Combat] early boss spawn path');
         const mods = this.gs?.getDifficultyMods?.() || {};
@@ -721,7 +722,7 @@ export default class CombatScene extends Phaser.Scene {
         try { console.log('[Combat] Boss spawned (early):', bossType); } catch (_) {}
         try { this.startBossIntro?.(bossType); } catch (_) {}
       }
-    } catch (_) {}
+    } catch (err) { try { console.error('[Combat] early boss spawn exception', err); } catch (_) {} }
     const mods = this.gs.getDifficultyMods();
     const room = generateRoom(this.gs.rng, this.gs.currentDepth);
     this.room = room;
@@ -5669,3 +5670,5 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
+    // Reset per-room boss reference to avoid stale state across restarts
+    this.boss = null;
