@@ -105,6 +105,39 @@ export default class CombatScene extends Phaser.Scene {
     });
     nodes.push(bClear);
 
+    // Prototype Drones (Bosses) — allow spawning bosses in training ground (no cutscene)
+    if (this.gs?.shootingRange) {
+      const protoY = r0 + rLine * (miscRow + r + 1.0);
+      const protoHeader = this.add.text(col3X, protoY, 'Prototype Drones', headerStyle).setOrigin(0.5, 0);
+      nodes.push(protoHeader);
+      const spawnBossAt = (bossId) => {
+        try {
+          // Prevent multiple bosses at once
+          if (this.boss && this.boss.active) return;
+          const anyBoss = (this.enemies?.getChildren?.() || []).some((e) => e?.active && e.isBoss);
+          if (anyBoss) return;
+          const { width } = this.scale;
+          const mods = this.gs?.getDifficultyMods?.() || {};
+          const cx = Math.floor(width / 2); const cy = 100;
+          const boss = createBoss(this, cx, cy, 400, 10, 60, bossId);
+          boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossId;
+          boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
+          this.boss = boss; this.enemies.add(boss);
+          // No cutscene in training ground; ensure HUD shows
+          try {
+            this.registry.set('bossName', bossId);
+            this.registry.set('bossHp', boss.hp);
+            this.registry.set('bossHpMax', boss.maxHp);
+            this.registry.set('bossActive', true);
+            this.registry.set('cinematicActive', false);
+          } catch (_) {}
+        } catch (_) {}
+      };
+      nodes.push(addBtnAt(col3X, protoY + rLine * 1.2, 'Bigwig (Boss)', () => spawnBossAt('Bigwig')));
+      nodes.push(addBtnAt(col3X, protoY + rLine * 2.2, 'Dandelion (Boss)', () => spawnBossAt('Dandelion')));
+      nodes.push(addBtnAt(col3X, protoY + rLine * 3.2, 'Hazel (Boss)', () => spawnBossAt('Hazel')));
+    }
+
     // Close button at the very bottom
     const close = makeTextButton(this, width / 2, panelY + panelH - 20, 'Close', () => this.closePanel([...nodes, close]));
     this.panel._extra = [...nodes, close];
