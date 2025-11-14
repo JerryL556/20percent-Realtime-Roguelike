@@ -430,19 +430,39 @@ export default class HubScene extends Phaser.Scene {
     const title = this.add.text(width / 2, panelY + 20, 'Select Difficulty', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5);
 
     const cx = width / 2;
-    const y0 = panelY + 70;
+    const y0 = panelY + 90;
     const line = 32;
-    const opts = [Difficulty.Easy, Difficulty.Normal, Difficulty.Hard];
     let current = this.gs?.difficulty || Difficulty.Normal;
 
-    const label = this.add.text(cx, panelY + panelH - 60, `Current: ${current}`, {
-      fontFamily: 'monospace', fontSize: 14, color: '#cccccc',
+    // Current difficulty hint between title and Easy button
+    const midY = (panelY + 20 + y0) / 2;
+    const currentLabel = this.add.text(cx, midY, `Current: ${current}`, {
+      fontFamily: 'monospace', fontSize: 14, color: '#ffffff',
     }).setOrigin(0.5);
+
+    // Description of how difficulty changes enemy stats (Normal as standard)
+    const descLabel = this.add.text(cx, panelY + panelH - 64, '', {
+      fontFamily: 'monospace', fontSize: 12, color: '#cccccc', wordWrap: { width: panelW - 40 }, align: 'center', lineSpacing: 2,
+    }).setOrigin(0.5, 0.5);
+
+    const applyDesc = () => {
+      let text;
+      if (current === Difficulty.Easy) {
+        text = 'Easy: Enemies have 20% less HP and 50% damage.';
+      } else if (current === Difficulty.Hard) {
+        text = 'Hard: Enemies have 40% more HP and 2x damage.';
+      } else {
+        text = 'Normal: Standard enemy HP and damage.';
+      }
+      try { descLabel.setText(text); } catch (_) {}
+    };
+    applyDesc();
 
     const setDiff = (d) => {
       current = d;
-      try { label.setText(`Current: ${current}`); } catch (_) {}
+      try { currentLabel.setText(`Current: ${current}`); } catch (_) {}
       try { this.gs.difficulty = current; SaveManager.saveToLocal(this.gs); } catch (_) {}
+      applyDesc();
     };
 
     const easyBtn = makeTextButton(this, cx, y0 + 0 * line, 'Easy', () => setDiff(Difficulty.Easy));
@@ -450,10 +470,10 @@ export default class HubScene extends Phaser.Scene {
     const hardBtn = makeTextButton(this, cx, y0 + 2 * line, 'Hard', () => setDiff(Difficulty.Hard));
 
     const closeBtn = makeTextButton(this, cx, panelY + panelH - 22, 'Close', () => {
-      this.closePanel([title, easyBtn, normalBtn, hardBtn, label, closeBtn]);
+      this.closePanel([title, easyBtn, normalBtn, hardBtn, currentLabel, descLabel, closeBtn]);
     });
 
-    this.panel._extra = [title, easyBtn, normalBtn, hardBtn, label, closeBtn];
+    this.panel._extra = [title, easyBtn, normalBtn, hardBtn, currentLabel, descLabel, closeBtn];
   }
 
   openCampaignStageMenu() {

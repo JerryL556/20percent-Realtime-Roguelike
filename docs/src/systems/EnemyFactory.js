@@ -481,13 +481,13 @@ export function createTurretEnemy(scene, x, y, hp = 150, damage = 10) {
     const base = scene.add.image(x, y, 'turret_base');
     base.setOrigin(0.5, 0.5);
     base.setDepth(8000);
-    // Scale base roughly to 12px body height
+    // Scale base roughly to 12px body height, but keep sprite visually taller than the hitbox
     try {
       const tex = scene.textures.get('turret_base');
       const src = tex?.getSourceImage?.();
       const h = (src && (src.naturalHeight || src.height)) || tex?.frames?.['__BASE']?.height || base.height || 1;
       if (h > 0) {
-        const scale = (12 / h) * 1.6;
+        const scale = (12 / h) * 2.4;
         base.setScale(scale);
       }
     } catch (_) {}
@@ -496,14 +496,16 @@ export function createTurretEnemy(scene, x, y, hp = 150, damage = 10) {
   // Visual head
   try {
     const head = scene.add.image(x, y, 'turret_head');
-    head.setOrigin(0.5, 0.5);
+    // Slightly forward origin (to the right) so rotation pivots a bit behind the barrel
+    head.setOrigin(0.6, 0.5);
     head.setDepth(8005);
     try {
       const texH = scene.textures.get('turret_head');
       const srcH = texH?.getSourceImage?.();
       const h2 = (srcH && (srcH.naturalHeight || srcH.height)) || texH?.frames?.['__BASE']?.height || head.height || 1;
       if (h2 > 0) {
-        const scaleH = (12 / h2) * 1.6;
+        // Head is even smaller than before but keeps its proportions
+        const scaleH = (12 / h2) * 0.8;
         head.setScale(scaleH);
       }
     } catch (_) {}
