@@ -1,4 +1,4 @@
-// Global visual scale for enemy textures (keeps physics bodies unchanged)
+﻿// Global visual scale for enemy textures (keeps physics bodies unchanged)
 const ENEMY_SPRITE_VISUAL_MULT = 2.0; // 200% of body height visually
 
 // Known enemy texture paths for lazy loading if scene enters directly (skips BootScene)
@@ -298,7 +298,7 @@ export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50, textu
   try {
     // Attach visual sprite using the provided boss asset key and scale to fit the hitbox.
     // ENEMY_SPRITE_VISUAL_MULT is 2.0, so pass visMult = 0.5 to net to 1.0x body height.
-    if (textureKey) _attachEnemyVisuals(b, textureKey, null, 12, 12, 0.5);
+    if (textureKey) _attachEnemyVisuals(b, textureKey, null, 12, 12, 1.0);
   } catch (_) {}
   b.on('destroy', () => b._g?.destroy());
   return b;
@@ -457,3 +457,4 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed =
   _attachEnemyVisuals(g, 'enemy_bombardier', 'enemy_bombardier_special', 12, 12, 1.2);
   return g;
 }
+
