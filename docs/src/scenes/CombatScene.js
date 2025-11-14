@@ -2565,18 +2565,6 @@ export default class CombatScene extends Phaser.Scene {
     this.registry.set('dashRegenProgress', prog);
     // Boss AI updates (attacks driven here; movement via shooter pathing)
     try { if (this.boss && this.boss.active && !this._cinematicActive) this.updateBossAI(); } catch (_) {}
-    // Update debug overlay
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    } catch (_) {}
-
     // Boss HUD sync
     if (this.boss && this.boss.active) {
       try { this.registry.set('bossHp', this.boss.hp); this.registry.set('bossHpMax', this.boss.maxHp); this.registry.set('bossActive', true); this.registry.set('bossName', this.boss.bossType || this._bossId || ''); } catch (_) {}
