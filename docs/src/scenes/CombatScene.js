@@ -684,6 +684,26 @@ export default class CombatScene extends Phaser.Scene {
 
     // Enemies (must be a physics group so overlaps work reliably)
     this.enemies = this.physics.add.group();
+    // If this is a boss room, spawn the boss ASAP so exit logic doesn't trigger prematurely
+    try {
+      if (this._isBossRoom && !this.boss) {
+        const mods = this.gs?.getDifficultyMods?.() || {};
+        const cx = width / 2; const cy = 100;
+        let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
+        let boss = createBoss(this, cx, cy, 400, 10, 60);
+        boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
+        boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
+        if (bossType === 'Dandelion') { try { boss.setTint(0xff4444); } catch (_) {} }
+        else if (bossType === 'Bigwig') { try { boss.setTint(0xffff66); } catch (_) {} }
+        else { try { boss.setTint(0x66ccff); } catch (_) {} }
+        boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
+        try { boss.setScale(1.5); const bw = Math.max(1, Math.round(boss.displayWidth)); const bh = Math.max(1, Math.round(boss.displayHeight)); boss.setSize(bw, bh).setOffset(0, 0); } catch (_) {}
+        this.boss = boss; this.enemies.add(boss);
+        try { this.registry.set('bossName', bossType); this.registry.set('bossHp', boss.hp); this.registry.set('bossHpMax', boss.maxHp); this.registry.set('bossActive', true); } catch (_) {}
+        try { console.log('[Combat] Boss spawned (early):', bossType); } catch (_) {}
+        try { this.startBossIntro?.(bossType); } catch (_) {}
+      }
+    } catch (_) {}
     const mods = this.gs.getDifficultyMods();
     const room = generateRoom(this.gs.rng, this.gs.currentDepth);
     this.room = room;
@@ -1615,7 +1635,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // If boss room: spawn exactly one boss at center-top and set up intro/UI hooks
-    if (this._isBossRoom) {
+    if (this._isBossRoom && !this.boss) {
       const mods = this.gs.getDifficultyMods?.() || {};
       const cx = width / 2; const cy = 100;
       // Default boss if not provided by caller
