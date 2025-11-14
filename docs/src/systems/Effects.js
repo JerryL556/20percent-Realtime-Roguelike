@@ -293,7 +293,7 @@ export function pixelSparks(scene, x, y, opts = {}) {
 // Pick a scrap tint based on enemy type flags
 export function getScrapTintForEnemy(e) {
   try {
-    if (e?.isBoss) { const t=(e.bossType||'').toLowerCase(); if(t==='bigwig') return 0x4a6b3a; if(t==='dandelion') return 0x9a6c3a; if(t==='hazel') return 0x000000; return 0x888888; }
+    if (e?.isBoss) return 0xcc3333; // bosses: red (original)
     // Dark tan group: Prism, Shredder (base melee), Charger (runner), Rook
     if (e?.isPrism || (e?.isMelee && !e?.isRunner && !e?.isRook) || e?.isRunner || e?.isRook) return 0x9a6c3a;
     // Military green group: Bombardier (Grenadier), Shooter (generic), MachineGunner, Rocketeer
@@ -414,3 +414,4 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
     }
   } catch (_) {}
 }
+
