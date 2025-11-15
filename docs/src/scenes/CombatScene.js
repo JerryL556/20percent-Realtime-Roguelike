@@ -99,7 +99,7 @@ export default class CombatScene extends Phaser.Scene {
         x,
         y,
         Math.floor(140 * (mods.enemyHp || 1)),
-        Math.floor(7 * (mods.enemyDamage || 1)),
+        Math.floor(5 * (mods.enemyDamage || 1)),
         35,
         1100,
         12,
@@ -135,7 +135,7 @@ export default class CombatScene extends Phaser.Scene {
         x,
         y,
         Math.floor(260 * (mods.enemyHp || 1)),
-        Math.floor(14 * (mods.enemyDamage || 1)),
+        Math.floor(10 * (mods.enemyDamage || 1)),
         48,
         2000,
       )));
@@ -959,7 +959,7 @@ export default class CombatScene extends Phaser.Scene {
       } else if (roll < 0.30) {
         e = createShooterEnemy(this, sp.x, sp.y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
       } else if (roll < 0.40) {
-        e = createMachineGunnerEnemy(this, sp.x, sp.y, Math.floor(140 * mods.enemyHp), Math.floor(7 * mods.enemyDamage), 35, 1100, 12, 24);
+        e = createMachineGunnerEnemy(this, sp.x, sp.y, Math.floor(140 * mods.enemyHp), Math.floor(5 * mods.enemyDamage), 35, 1100, 12, 24);
       } else if (roll < 0.50) {
         e = createRocketeerEnemy(this, sp.x, sp.y, Math.floor(80 * mods.enemyHp), Math.floor(12 * mods.enemyDamage), 40, 2000);
       } else if (roll < 0.70) {
@@ -975,7 +975,7 @@ export default class CombatScene extends Phaser.Scene {
       const spE = pickEdgeSpawn();
       const pick = Math.random();
       if (pick < (1/4)) {
-        this.enemies.add(createGrenadierEnemy(this, spE.x, spE.y, Math.floor(260 * mods.enemyHp), Math.floor(14 * mods.enemyDamage), 48, 2000));
+        this.enemies.add(createGrenadierEnemy(this, spE.x, spE.y, Math.floor(260 * mods.enemyHp), Math.floor(10 * mods.enemyDamage), 48, 2000));
       } else if (pick < (2/4)) {
         this.enemies.add(createPrismEnemy(this, spE.x, spE.y, Math.floor(180 * mods.enemyHp), Math.floor(16 * mods.enemyDamage), 46));
       } else if (pick < (3/4)) {
@@ -1427,21 +1427,9 @@ export default class CombatScene extends Phaser.Scene {
 
     const overlapPlayerRef = this.playerCollider || this.player;
     this.physics.add.overlap(overlapPlayerRef, this.enemies, (p, e) => {
-      // Ignore dummy collisions for player damage
-      if (e?.isDummy) return;
-      // Melee enemies do not apply touch damage; only their cone hit can damage
-      if (e?.isMelee) return;
-      if (this.time.now < this.player.iframesUntil) return;
-      this.applyPlayerDamage(e.damage);
-      this.player.iframesUntil = this.time.now + 600;
-      if (this.gs.hp <= 0) {
-        // For framework: respawn at hub
-        const eff = getPlayerEffects(this.gs);
-        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
-        this.gs.nextScene = SceneKeys.Hub;
-        SaveManager.saveToLocal(this.gs);
-        this.scene.start(SceneKeys.Hub);
-      }
+      // Touching enemies (including bosses/elites) no longer deals damage;
+      // all enemy damage must come from explicit attacks (bullets, grenades, beams, melee cones, etc.).
+      return;
     });
 
     // Enemy bullets (for shooters)
@@ -1473,7 +1461,8 @@ export default class CombatScene extends Phaser.Scene {
         const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2 && !inIframes) {
           let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
-          this.player.iframesUntil = this.time.now + 600;
+          // Short i-frames vs explosive rockets
+          this.player.iframesUntil = this.time.now + 50;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
             this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -1491,7 +1480,8 @@ export default class CombatScene extends Phaser.Scene {
       if (!inIframes) {
         const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; // default shooter damage
         this.applyPlayerDamage(dmg);
-        this.player.iframesUntil = this.time.now + 600;
+        // Short i-frames vs enemy bullets
+        this.player.iframesUntil = this.time.now + 50;
         if (this.gs.hp <= 0) {
           const eff = getPlayerEffects(this.gs);
           this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -1511,7 +1501,8 @@ export default class CombatScene extends Phaser.Scene {
         const pdx = this.player.x - ex; const pdy = this.player.y - ey;
         if ((pdx * pdx + pdy * pdy) <= r2 && !inIframes) {
           let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
-          this.player.iframesUntil = this.time.now + 600;
+          // Short i-frames vs explosive rockets
+          this.player.iframesUntil = this.time.now + 50;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
             this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -1528,7 +1519,8 @@ export default class CombatScene extends Phaser.Scene {
       if (!inIframes) {
         const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
         this.applyPlayerDamage(dmg);
-        this.player.iframesUntil = this.time.now + 600;
+        // Short i-frames vs enemy bullets
+        this.player.iframesUntil = this.time.now + 50;
         if (this.gs.hp <= 0) {
           const eff = getPlayerEffects(this.gs);
           this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -1588,11 +1580,11 @@ export default class CombatScene extends Phaser.Scene {
       const r2 = radius * radius;
       const pdx = this.player.x - ex; const pdy = this.player.y - ey;
       if ((pdx * pdx + pdy * pdy) <= r2) {
-        let dmg = 20;
+        let dmg = 15;
         try {
           const mods = this.gs?.getDifficultyMods?.() || {};
           const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
-          dmg = Math.max(1, Math.round(20 * mul));
+          dmg = Math.max(1, Math.round(15 * mul));
         } catch (_) {}
         const now = this.time.now;
         if (now >= (this.player.iframesUntil || 0)) {
@@ -1605,7 +1597,8 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
             this.applyPlayerDamage(finalDmg);
           } catch (_) {}
-          this.player.iframesUntil = now + 600;
+          // Short i-frames vs Hazel missiles (explosives)
+          this.player.iframesUntil = now + 50;
           if (this.gs && this.gs.hp <= 0) {
             try {
               const eff = getPlayerEffects(this.gs);
@@ -1620,7 +1613,7 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
     // Also damage soft (destructible) barricades in radius
     try {
-      this.damageSoftBarricadesInRadius(ex, ey, radius, 20);
+      this.damageSoftBarricadesInRadius(ex, ey, radius, 15);
     } catch (_) {}
     // Cleanup visuals and destroy missile
     try { m._vis?.destroy(); } catch (_) {}
@@ -1644,8 +1637,11 @@ export default class CombatScene extends Phaser.Scene {
     m.maxHp = 20;
     m.isEnemy = true;
     m.isHazelMissile = true;
-    m._hzSpawnAt = this.time.now;
+    const now = this.time.now;
+    m._hzSpawnAt = now;
+    // Initial facing is random; missile will fly straight along this angle for a short time before homing
     m._angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    m._hzStraightUntil = now + 300; // ms of straight travel before enabling turn
     m._speed = 230; // px/s
     m._maxTurn = Phaser.Math.DegToRad(2); // further reduced turn rate (~2°/frame baseline, time-scaled)
     this.enemies.add(m);
@@ -1708,8 +1704,21 @@ export default class CombatScene extends Phaser.Scene {
         if ((pdx * pdx + pdy * pdy) <= r2) {
           const now = this.time.now;
           if (now >= (this.player.iframesUntil || 0)) {
-            { let dmg=(e?.damage||14); try{ const eff=getPlayerEffects(this.gs)||{}; const mul=eff.enemyExplosionDmgMul||1; dmg=Math.ceil(dmg*mul);}catch(_){} this.applyPlayerDamage(dmg); }
-            this.player.iframesUntil = now + 600;
+            // Grenadier death explosion: fixed 15 base damage (scaled by difficulty + explosion mul)
+            let dmg = 15;
+            try {
+              const mods = this.gs?.getDifficultyMods?.() || {};
+              const mulD = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
+              dmg = Math.max(1, Math.round(15 * mulD));
+            } catch (_) {}
+            try {
+              const eff = getPlayerEffects(this.gs) || {};
+              const mul = eff.enemyExplosionDmgMul || 1;
+              dmg = Math.ceil(dmg * mul);
+            } catch (_) {}
+            this.applyPlayerDamage(dmg);
+            // Short i-frames vs Grenadier death explosion
+            this.player.iframesUntil = now + 50;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
               this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -1720,7 +1729,7 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
         // Also chip destructible barricades
-        this.damageSoftBarricadesInRadius(ex, ey, radius, (e.damage || 14));
+        this.damageSoftBarricadesInRadius(ex, ey, radius, (e.damage || 10));
         e._exploded = true;
       }
     } catch (_) {}
@@ -1825,7 +1834,8 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
             this.applyPlayerDamage(finalDmg);
           } catch (_) {}
-          this.player.iframesUntil = now + 600;
+          // Short i-frames vs Hazel Phase Bomb explosions
+          this.player.iframesUntil = now + 50;
           if (this.gs && this.gs.hp <= 0) {
             try {
               const eff = getPlayerEffects(this.gs);
@@ -1999,7 +2009,8 @@ export default class CombatScene extends Phaser.Scene {
         const now = this.time.now;
         if (now >= (this.player.iframesUntil || 0)) {
           let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 14; try { const eff = getPlayerEffects(this.gs) || {}; const mul = eff.enemyExplosionDmgMul || 1; dmg = Math.ceil(dmg * mul); } catch (_) {} this.applyPlayerDamage(dmg);
-          this.player.iframesUntil = now + 600;
+          // Short i-frames vs enemy grenade explosions
+          this.player.iframesUntil = now + 50;
           if (this.gs.hp <= 0) {
             const eff = getPlayerEffects(this.gs);
             this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -2011,7 +2022,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     } catch (_) {}
     // Damage soft barricades
-    try { this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 14)); } catch (_) {}
+    try { this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10)); } catch (_) {}
     try { b.destroy(); } catch (_) {}
   }
 
@@ -2212,6 +2223,8 @@ export default class CombatScene extends Phaser.Scene {
         // Slightly increase Smart HMG homing: ~0.75锟斤拷/frame (~45锟斤拷/s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
         b._noTurnUntil = this.time.now + 120; // brief straight launch
+        // Override: interpret _maxTurn as deg/s for time-based turn; 0.75 deg/frame @60 FPS ≈ 45 deg/s
+        b._maxTurn = Phaser.Math.DegToRad(45);
 
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
 
@@ -2233,7 +2246,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._target && b._target.active) { desired = Phaser.Math.Angle.Between(b.x, b.y, b._target.x, b._target.y); }
             }
             const dtHmg = (this.game?.loop?.delta || 16.7) / 1000;
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * (60 * dtHmg));
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * dtHmg);
             const vx = Math.cos(b._angle) * b._speed; const vy = Math.sin(b._angle) * b._speed; b.setVelocity(vx, vy);
           } catch (_) {}
           try {
@@ -2283,10 +2296,13 @@ export default class CombatScene extends Phaser.Scene {
           b._maxTurn = b._maxTurn * mult; // e.g., 1锟?frame
           b._fov = Phaser.Math.DegToRad(90); // 90锟?cone total
         }
-        // Preserve Smart Core homing equal to old behavior: 2 deg/frame scaled by mult
+        // Preserve Smart Core homing but treat as time-based: fixed 120 deg/s, scaled by smartTurnMult if provided
         if (b._smart) {
-          const mult2 = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = Phaser.Math.DegToRad(2) * mult2;
+          const mult2 = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 1;
+          b._maxTurn = Phaser.Math.DegToRad(120) * mult2; // radians per second
+        } else {
+          // Non-smart guided missiles: keep existing high turn rate baseline converted to rad/s
+          b._maxTurn = (b._maxTurn || 0) * 60;
         }
         // Initial straight flight window (no steering)
         b._noTurnUntil = this.time.now + 200; // ms
@@ -2350,7 +2366,7 @@ export default class CombatScene extends Phaser.Scene {
               }
             } // else: within straight-flight window; keep current desired (= b._angle)
             const dt = (this.game?.loop?.delta || 16.7) / 1000;
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * (60 * dt));
+            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * dt);
             const vx = Math.cos(b._angle) * b._speed;
             const vy = Math.sin(b._angle) * b._speed;
             b.setVelocity(vx, vy);
@@ -4233,13 +4249,25 @@ export default class CombatScene extends Phaser.Scene {
         try {
           const dtMs = (this.game?.loop?.delta || 16.7);
           const dtHz = dtMs / 1000;
-          const dxm = this.player.x - e.x;
-          const dym = this.player.y - e.y;
-          const desired = Math.atan2(dym, dxm);
-          const maxTurn = (e._maxTurn || 0) * (60 * dtHz);
-          e._angle = (typeof e._angle === 'number')
-            ? Phaser.Math.Angle.RotateTo(e._angle, desired, maxTurn)
-            : desired;
+          const nowHz = this.time.now;
+          const straightUntil = e._hzStraightUntil || 0;
+          // During initial straight phase, keep current angle; afterwards, enable homing turn toward player
+          if (!straightUntil || nowHz >= straightUntil) {
+            const dxm = this.player.x - e.x;
+            const dym = this.player.y - e.y;
+            const desired = Math.atan2(dym, dxm);
+            // Hazel missile turn rate: fixed 100 deg/s (time-based)
+            const baseTurn = Phaser.Math.DegToRad(100);
+            const maxTurn = baseTurn * dtHz; // time-based turn step
+            e._angle = (typeof e._angle === 'number')
+              ? Phaser.Math.Angle.RotateTo(e._angle, desired, maxTurn)
+              : desired;
+          } else if (typeof e._angle !== 'number') {
+            // Failsafe: ensure we have some angle even during straight phase
+            const dxm = this.player.x - e.x;
+            const dym = this.player.y - e.y;
+            e._angle = Math.atan2(dym, dxm);
+          }
           const vx = Math.cos(e._angle) * (e._speed || 160);
           const vy = Math.sin(e._angle) * (e._speed || 160);
           try { e.body?.setVelocity?.(vx, vy); } catch (_) { try { e.setVelocity(vx, vy); } catch (_) {} }
@@ -4530,7 +4558,8 @@ export default class CombatScene extends Phaser.Scene {
                 const diff = Math.abs(Phaser.Math.Angle.Wrap(angP - (e._meleeFacing || 0)));
                 if (dd <= cfg.range && diff <= cfg.half && !e._meleeDidHit) {
                   this.applyPlayerDamage((e.damage || 10));
-                  this.player.iframesUntil = this.time.now + 600;
+                  // Short melee-specific i-frames so multiple melee hits don't stack instantly
+                  this.player.iframesUntil = this.time.now + 75;
                   try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
                   e._meleeDidHit = true;
                   if (this.gs && this.gs.hp <= 0) {
@@ -4788,12 +4817,12 @@ export default class CombatScene extends Phaser.Scene {
           }
           // Trigger special ability after 3 completed sweeps (not time-based)
           if (e._prismState !== 'aim' && e._prismState !== 'beam') {
-            if ((e._sweepsSinceAbility || 0) >= 3 && !e._sweepActive) {
+              if ((e._sweepsSinceAbility || 0) >= 3 && !e._sweepActive) {
               // Cancel any ongoing sweep when starting aim
               if (e._sweepActive) { e._sweepActive = false; try { e._laserG?.clear(); } catch (_) {} }
               e._sweepsSinceAbility = 0;
               e._prismState = 'aim';
-              e._aimUntil = nowT + 800; // lock for 0.8s
+              e._aimUntil = nowT + 1750; // lock for 1.75s
               if (!e._aimG) e._aimG = this.add.graphics();
               try { e._aimG.clear(); } catch (_) {}
               e._aimG.lineStyle(1, 0xff2222, 1);
@@ -4808,16 +4837,22 @@ export default class CombatScene extends Phaser.Scene {
           }
           // Draw and apply beam damage (beam follows player during fire)
           if (e._prismState === 'beam') {
-            // Continuously track player while firing
+            // Continuous narrow beam (aimed at player)
             e._beamAngle = Math.atan2((this.player.y - e.y), (this.player.x - e.x));
-            this.renderPrismBeam(e, e._beamAngle, (this.game?.loop?.delta || 16.7)/1000, { applyDamage: true, damagePlayer: true, dps: 50, tick: 0.05 });
+            this.renderPrismBeam(e, e._beamAngle, (this.game?.loop?.delta || 16.7) / 1000, {
+              applyDamage: true,
+              damagePlayer: true,
+              // Focused beam: lower DPS
+              dps: 5,
+              tick: 0.05,
+            });
           }
           // Sweeping laser while idle
           if (e._prismState === 'idle' || !e._prismState) {
             if (!e._sweepActive && nowT >= (e._nextSweepAt || 0)) {
               e._sweepActive = true;
               const base = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-              // Narrower sweep: 80 degrees total, slower
+              // Sweeping beam: 80 degrees total, slower
               e._sweepFrom = base - Phaser.Math.DegToRad(40);
               e._sweepTo = base + Phaser.Math.DegToRad(40);
               e._sweepT = 0; e._sweepDuration = 1500; // ms
@@ -4832,8 +4867,14 @@ export default class CombatScene extends Phaser.Scene {
               const t = Phaser.Math.Clamp(e._sweepT / (e._sweepDuration || 900), 0, 1);
               const tt = (e._sweepDir === -1) ? (1 - t) : t;
               const ang = e._sweepFrom + (e._sweepTo - e._sweepFrom) * tt;
-              // Sweeping beam now damages player; reduce DPS by 50%
-              this.renderPrismBeam(e, ang, dtMs / 1000, { applyDamage: true, damagePlayer: true, dps: 50 * 27 * 0.5 });
+              // Sweeping beam: lower DPS than narrow beam
+              this.renderPrismBeam(e, ang, dtMs / 1000, {
+                applyDamage: true,
+                damagePlayer: true,
+                // Sweeping beam: higher DPS
+                dps: 40,
+                tick: 0.05,
+              });
               if (t >= 1) {
                 e._sweepActive = false; try { e._laserG?.clear(); } catch (_) {}
                 // Count completed sweep and schedule next unless ability will fire immediately
@@ -4866,7 +4907,7 @@ export default class CombatScene extends Phaser.Scene {
               let spawnFn;
               if (roll < 0.15) spawnFn = (sc, x, y) => createSniperEnemy(sc, x, y, Math.floor(80 * mods.enemyHp), Math.floor(18 * mods.enemyDamage), 40);
               else if (roll < 0.35) spawnFn = (sc, x, y) => createShooterEnemy(sc, x, y, Math.floor(90 * mods.enemyHp), Math.floor(8 * mods.enemyDamage), 50, 900);
-              else if (roll < 0.50) spawnFn = (sc, x, y) => createMachineGunnerEnemy(sc, x, y, Math.floor(140 * mods.enemyHp), Math.floor(7 * mods.enemyDamage), 35, 1100, 12, 24);
+              else if (roll < 0.50) spawnFn = (sc, x, y) => createMachineGunnerEnemy(sc, x, y, Math.floor(140 * mods.enemyHp), Math.floor(5 * mods.enemyDamage), 35, 1100, 12, 24);
               else if (roll < 0.65) spawnFn = (sc, x, y) => createRocketeerEnemy(sc, x, y, Math.floor(80 * mods.enemyHp), Math.floor(12 * mods.enemyDamage), 40, 2000);
               else if (roll < 0.85) spawnFn = (sc, x, y) => { const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); return createRunnerEnemy(sc, x, y, Math.floor(60 * mods.enemyHp), meleeDmg, 120); };
               else spawnFn = (sc, x, y) => { const meleeDmg = Math.floor(Math.floor(10 * mods.enemyDamage) * 1.5); return createEnemy(sc, x, y, Math.floor(100 * mods.enemyHp), meleeDmg, 60); };
@@ -4980,24 +5021,75 @@ export default class CombatScene extends Phaser.Scene {
             let ang = Math.atan2(dy, dx);
             if (e._toxinedUntil && nowT < e._toxinedUntil) {
               const extra = Phaser.Math.DegToRad(50);
-              ang += Phaser.Math.FloatBetween(-extra/2, extra/2);
+              ang += Phaser.Math.FloatBetween(-extra / 2, extra / 2);
             }
             const speed = 300;
             const vx = Math.cos(ang) * speed;
             const vy = Math.sin(ang) * speed;
-            const b = this.enemyBullets.get(e.x, e.y, 'bullet');
+            const b = this.enemyGrenades?.get(e.x, e.y, 'bullet');
             if (b) {
               b.setActive(true).setVisible(true);
+              // Use a slightly larger body like before
               b.setCircle(6).setOffset(-6, -6);
               try { b.setScale(1.4); } catch (_) {}
               b.setVelocity(vx, vy);
               b.setTint(0xff8844);
+              // Treat Rocketeer rockets as long-range grenades
               b.damage = e.damage;
-              b._rocket = true;
-              b._blastRadius = 70;
+              b._grenade = true;
+              b._grenadeRadius = 70; // keep previous rocket blast radius
+              b._spawnAt = nowT;
+              // Much longer lifetime than regular grenades so they effectively have map-wide range
+              b._lifeMs = 6000;
               b.update = () => {
+                if (!b.active) return;
+                const now = this.time.now;
+                const ex = b.x; const ey = b.y;
+                const radius = b._grenadeRadius || 70;
+                const r2 = radius * radius;
+                // Check proximity to player
+                let explode = false;
+                try {
+                  const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+                  if ((pdx * pdx + pdy * pdy) <= r2) explode = true;
+                } catch (_) {}
+                // Expire off-screen or after long lifetime
                 const view = this.cameras?.main?.worldView;
-                if (view && !view.contains(b.x, b.y)) { b.destroy(); }
+                const off = view && !view.contains(ex, ey);
+                if (!explode) {
+                  const expired = (now - (b._spawnAt || 0)) >= (b._lifeMs || 6000);
+                  if (off || expired) explode = true;
+                }
+                if (!explode) return;
+                try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
+                // Apply player damage in radius
+                try {
+                  const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+                  if ((pdx * pdx + pdy * pdy) <= r2) {
+                    const inIframes = now < (this.player.iframesUntil || 0);
+                    if (!inIframes) {
+                      let dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 12;
+                      try {
+                        const eff = getPlayerEffects(this.gs) || {};
+                        const mul = eff.enemyExplosionDmgMul || 1;
+                        dmg = Math.ceil(dmg * mul);
+                      } catch (_) {}
+                      this.applyPlayerDamage(dmg);
+                      // Short i-frames vs Rocketeer rockets (now grenades)
+                      this.player.iframesUntil = now + 50;
+                      if (this.gs.hp <= 0) {
+                        const eff = getPlayerEffects(this.gs);
+                        this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                        this.gs.nextScene = SceneKeys.Hub;
+                        SaveManager.saveToLocal(this.gs);
+                        this.scene.start(SceneKeys.Hub);
+                      }
+                    }
+                  }
+                } catch (_) {}
+                // Also chip destructible barricades
+                try { this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12)); } catch (_) {}
+                try { b.destroy(); } catch (_) {}
               };
             }
           }
@@ -5084,7 +5176,8 @@ export default class CombatScene extends Phaser.Scene {
                     if (!inIframes) {
                       const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
                       this.applyPlayerDamage(dmg);
-                      this.player.iframesUntil = this.time.now + 600;
+                      // Short i-frames vs high-speed enemy bullets
+                      this.player.iframesUntil = this.time.now + 50;
                       if (this.gs.hp <= 0) {
                         const eff = getPlayerEffects(this.gs);
                         this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -5209,7 +5302,7 @@ export default class CombatScene extends Phaser.Scene {
     b._spawnAt = this.time.now;
     b._lifeMs = 1200; // longer flight lifetime for greater range
     b._targetX = targetX; b._targetY = targetY;
-    b._grenade = true; b._grenadeRadius = 60; b.damage = (e?.damage || 14);
+    b._grenade = true; b._grenadeRadius = 60; b.damage = (e?.damage || 10);
     b.update = () => {
       const now = this.time.now;
       const dx = b.x - b._targetX; const dy = b.y - b._targetY;
@@ -5221,10 +5314,11 @@ export default class CombatScene extends Phaser.Scene {
         try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
         // Player damage if within radius
         const r2 = radius * radius; const pdx = this.player.x - ex; const pdy = this.player.y - ey;
-        if ((pdx * pdx + pdy * pdy) <= r2) {
-          if (now >= (this.player.iframesUntil || 0)) {
-            { let dmg=(e?.damage||14); try{ const eff=getPlayerEffects(this.gs)||{}; const mul=eff.enemyExplosionDmgMul||1; dmg=Math.ceil(dmg*mul);}catch(_){} this.applyPlayerDamage(dmg); }
-            this.player.iframesUntil = now + 600;
+          if ((pdx * pdx + pdy * pdy) <= r2) {
+        if (now >= (this.player.iframesUntil || 0)) {
+            { let dmg=(e?.damage||10); try{ const eff=getPlayerEffects(this.gs)||{}; const mul=eff.enemyExplosionDmgMul||1; dmg=Math.ceil(dmg*mul);}catch(_){} this.applyPlayerDamage(dmg); }
+            // Short i-frames vs enemy grenades (Grenadier/Bigwig special)
+            this.player.iframesUntil = now + 50;
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
               this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -5235,7 +5329,7 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
         // Also damage destructible barricades
-        this.damageSoftBarricadesInRadius(ex, ey, radius, (e.damage || 14));
+        this.damageSoftBarricadesInRadius(ex, ey, radius, (e.damage || 10));
         try { b.destroy(); } catch (_) {}
       }
     };
@@ -5258,7 +5352,7 @@ export default class CombatScene extends Phaser.Scene {
     const dx = targetX - sx;
     const dy = targetY - sy;
     const len = Math.max(1, Math.hypot(dx, dy));
-    const speed = opts.speed || 340;
+    const speed = opts.speed || 420;
     const vx = (dx / len) * speed;
     const vy = (dy / len) * speed;
     bomb.setVelocity(vx, vy);
@@ -5273,15 +5367,15 @@ export default class CombatScene extends Phaser.Scene {
     bomb._bwTargetY = targetY;
     bomb._spawnAt = this.time.now;
     bomb._lifeMs = opts.lifeMs || 6000;
-    // Bombardment explosion base damage: 20 on Normal, scaled by difficulty
-    let bombDmg = 20;
+    // Bombardment explosion base damage: 40 on Normal, scaled by difficulty
+    let bombDmg = 40;
     try {
       const mods = this.gs?.getDifficultyMods?.() || {};
       const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
-      bombDmg = Math.max(1, Math.round(20 * mul));
+      bombDmg = Math.max(1, Math.round(40 * mul));
     } catch (_) {}
     bomb.damage = (typeof opts.damage === 'number') ? opts.damage : bombDmg;
-    bomb._blastRadius = opts.radius || 70; // match Bigwig's enhanced grenades
+    bomb._blastRadius = opts.radius || 80; // match Bigwig's enhanced grenades
     bomb.update = () => {
       const now = this.time.now;
       if (!bomb.active) return;
@@ -5321,7 +5415,8 @@ export default class CombatScene extends Phaser.Scene {
                 dmg = Math.ceil(dmg * mul);
               } catch (_) {}
               this.applyPlayerDamage(dmg);
-              this.player.iframesUntil = now + 600;
+              // Short i-frames vs Bigwig bombardment explosions
+              this.player.iframesUntil = now + 50;
               if (this.gs.hp <= 0) {
                 const eff = getPlayerEffects(this.gs);
                 this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -5333,7 +5428,7 @@ export default class CombatScene extends Phaser.Scene {
           }
         } catch (_) {}
         // Also damage destructible barricades
-        try { this.damageSoftBarricadesInRadius(ex, ey, radius, (bomb.damage || 14)); } catch (_) {}
+        try { this.damageSoftBarricadesInRadius(ex, ey, radius, (bomb.damage || 40)); } catch (_) {}
         if (bomb._tracerG) { try { bomb._tracerG.destroy(); } catch (_) {} bomb._tracerG = null; }
         try { bomb.destroy(); } catch (_) {}
       }
@@ -5367,10 +5462,10 @@ export default class CombatScene extends Phaser.Scene {
         const line = new Phaser.Geom.Line(e.x, e.y, ex, ey);
         const rect = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
         if (damagePlayer && Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
-          if (this.time.now >= (this.player.iframesUntil || 0)) {
+            if (this.time.now >= (this.player.iframesUntil || 0)) {
             const dmg = Math.max(1, Math.round(dps * tick));
             this.applyPlayerDamage(dmg);
-            this.player.iframesUntil = this.time.now + 250; // brief i-frames vs continuous laser
+            this.player.iframesUntil = this.time.now; // no extra i-frames vs continuous laser
             if (this.gs.hp <= 0) {
               const eff = getPlayerEffects(this.gs);
               this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
@@ -5389,7 +5484,10 @@ export default class CombatScene extends Phaser.Scene {
             const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
             if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
               const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
-              const dmg = Math.max(1, Math.round(dps * tick));
+              // Prism lasers do reduced damage to barricades (50% of player DPS);
+              // other beams using this helper keep full DPS.
+              const barricadeMul = (e && e.isPrism) ? 0.5 : 1;
+              const dmg = Math.max(1, Math.round(dps * tick * barricadeMul));
               const hp1 = hp0 - dmg;
               if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
               else s.setData('hp', hp1);
@@ -5462,7 +5560,12 @@ export default class CombatScene extends Phaser.Scene {
           const dur = 1400;
           const t = (Math.sin((e._dnSweepT / dur) * Math.PI * 2) * 0.5 + 0.5);
           const ang = base - span / 2 + span * t;
-          this.renderPrismBeam(e, ang, dtMs / 1000, { applyDamage: true, damagePlayer: true, dps: 40, tick: 0.05 });
+          this.renderPrismBeam(e, ang, dtMs / 1000, {
+            applyDamage: true,
+            damagePlayer: true,
+            dps: 10,
+            tick: 0.05,
+          });
         }
       }
       // Retain Dandelion's dash special
@@ -5532,10 +5635,10 @@ export default class CombatScene extends Phaser.Scene {
             const r = Phaser.Math.FloatBetween(0, radius);
             const tx = center.x + Math.cos(ang) * r;
             const ty = center.y + Math.sin(ang) * r;
-            try { this._spawnBigwigBomb(e, tx, ty, { radius: 60 }); } catch (_) {}
+            try { this._spawnBigwigBomb(e, tx, ty, { radius: 80 }); } catch (_) {}
           }
           // Next bomb spawn time (faster random cadence during bombardment)
-          e._bwBombardmentNextAt = now + Phaser.Math.Between(140, 320);
+          e._bwBombardmentNextAt = now + Phaser.Math.Between(80, 220);
         }
       }
 
@@ -5734,7 +5837,8 @@ export default class CombatScene extends Phaser.Scene {
             ang += Phaser.Math.FloatBetween(-extra / 2, extra / 2);
           }
 
-          fireBullet(ang, bulletSpeed, e.damage - 1, 0xffee88, 2);
+          // Bigwig normal machine-gun bullets: fixed 6 damage per hit
+          fireBullet(ang, bulletSpeed, 6, 0xffee88, 2);
 
           e._bwBurstLeft -= 1;
           if (e._bwBurstLeft <= 0) {
@@ -5757,6 +5861,7 @@ export default class CombatScene extends Phaser.Scene {
         e._hzMissilesSpawned = 0;
         e._hzNextMissileAt = 0;
         e._hzBaseSpeed = e.speed || 60;
+        e._hzAfterSpecialUntil = 0;
         // Teleport-away mechanic state (15s internal cooldown)
         e._hzTpNextAt = now + 8000;
         e._hzTpCloseSince = null;
@@ -5770,6 +5875,7 @@ export default class CombatScene extends Phaser.Scene {
       const dtMsHz = (this.game?.loop?.delta || 16.7);
       const phaseReady = now >= (e._hzPhaseNextAt || 0);
       const tpReady = now >= (e._hzTpNextAt || 0);
+      const afterSpecialBlock = now < (e._hzAfterSpecialUntil || 0);
 
       // Teleport-away mechanic: if player stays within radius for 1s and Hazel is not using specials
       if (!e._hzSpecialActive && e._hzPhaseState !== 'channel' && tpReady) {
@@ -5821,10 +5927,10 @@ export default class CombatScene extends Phaser.Scene {
         if (e._hzSpecialState === 'deploying') {
           // Slow Hazel while deploying missiles
           e.speed = e._hzBaseSpeed * 0.5;
-        if (e._hzMissilesSpawned < 6 && now >= (e._hzNextMissileAt || 0)) {
-          try { this._spawnHazelMissile(e); } catch (_) {}
-          e._hzMissilesSpawned += 1;
-          e._hzNextMissileAt = now + 500; // 0.5s between missiles
+          if (e._hzMissilesSpawned < 6 && now >= (e._hzNextMissileAt || 0)) {
+            try { this._spawnHazelMissile(e); } catch (_) {}
+            e._hzMissilesSpawned += 1;
+            e._hzNextMissileAt = now + 500; // 0.5s between missiles
           }
           // After last missile scheduled, end special after final gap
           if (e._hzMissilesSpawned >= 6 && now >= (e._hzNextMissileAt || 0)) {
@@ -5832,14 +5938,16 @@ export default class CombatScene extends Phaser.Scene {
             e._hzSpecialState = 'idle';
             e.speed = e._hzBaseSpeed;
             e._hzShotsSinceSpecial = 0;
-            e._hzNextShotAt = now + 750; // short delay before resuming shotgun
+            // Recovery window after special: 1.5s with no attacks
+            e._hzAfterSpecialUntil = now + 1500;
+            e._hzNextShotAt = e._hzAfterSpecialUntil + 750; // first volley 0.75s after recovery
           }
         }
         return;
       }
 
       // Regular attack: 5-pellet shotgun volley toward player every 0.75s
-      if (now >= (e._hzNextShotAt || 0)) {
+      if (!afterSpecialBlock && now >= (e._hzNextShotAt || 0)) {
         e._hzNextShotAt = now + 750; // 0.75s between volleys
         const pellets = 5;
         const totalSpreadDeg = 60;
@@ -5850,10 +5958,11 @@ export default class CombatScene extends Phaser.Scene {
         for (let i = 0; i < pellets; i += 1) {
           const offset = -half + step * i;
           const ang = base + offset;
-          fireBullet(ang, speed, 10, 0xffeeff, 2);
+          // Hazel shotgun pellets: 8 damage each
+          fireBullet(ang, speed, 8, 0xffeeff, 2);
         }
         e._hzShotsSinceSpecial = (e._hzShotsSinceSpecial || 0) + 1;
-        if (e._hzShotsSinceSpecial >= 8) {
+        if (!afterSpecialBlock && e._hzShotsSinceSpecial >= 8) {
           // Begin missile special
           e._hzSpecialActive = true;
           e._hzSpecialState = 'deploying';

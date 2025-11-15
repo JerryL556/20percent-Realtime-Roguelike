@@ -307,7 +307,7 @@ export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50, textu
 }
 
 // Ranged shooter enemy: fires single bullets at intervals
-export function createShooterEnemy(scene, x, y, hp = 90, damage = 10, speed = 45, fireRateMs = 900) {
+export function createShooterEnemy(scene, x, y, hp = 90, damage = 8, speed = 45, fireRateMs = 900) {
   const s = scene.physics.add.sprite(x, y, 'enemy_square');
   s.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   s.hp = hp;
@@ -345,7 +345,7 @@ export function createMachineGunnerEnemy(
   x,
   y,
   hp = 140,
-  damage = 7,
+  damage = 5,
   speed = 35,
   fireRateMs = 1100,
   burstCount = 15,
@@ -439,7 +439,7 @@ export function createRookEnemy(scene, x, y, hp = 300, damage = 25, speed = 35) 
 }
 
 // Grenadier (elite): lobs grenades in 3-round volleys, slightly larger body
-export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 14, speed = 48, burstCooldownMs = 2000) {
+export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 10, speed = 48, burstCooldownMs = 2000) {
   const g = scene.physics.add.sprite(x, y, 'enemy_square');
   g.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   g.hp = hp;

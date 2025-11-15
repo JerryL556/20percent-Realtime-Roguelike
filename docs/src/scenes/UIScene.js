@@ -535,20 +535,24 @@ export default class UIScene extends Phaser.Scene {
         try {
           const id = gs.armour.id;
           if (id === 'exp_shield') {
-            gs.maxHp = 40; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 30; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            // Experimental Shield Generator: 50 HP, 50 Shield
+            gs.maxHp = 50; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 50; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else if (id === 'proto_thrusters') {
-            gs.maxHp = 80; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 10; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            // Prototype Thrusters: 90 HP, 15 Shield
+            gs.maxHp = 90; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else if (id === 'wasp_bits') {
-            gs.maxHp = 70; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            // BIT Carrier: 80 HP, 20 Shield
+            gs.maxHp = 80; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else {
-            gs.maxHp = 85; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            // Standard Issue: 100 HP, 20 Shield
+            gs.maxHp = 100; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           }
         } catch (_) {}

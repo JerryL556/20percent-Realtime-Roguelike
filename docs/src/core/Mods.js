@@ -425,8 +425,8 @@ export const armourDefs = [
     id: null,
     name: 'Standard Issue',
     desc: [
-      'HP: 85',
-      'Shield: 15',
+      'HP: 100',
+      'Shield: 20',
       // No special features
     ].join('\n'),
   },
@@ -434,8 +434,8 @@ export const armourDefs = [
     id: 'proto_thrusters',
     name: 'Prototype Thrusters',
     desc: [
-      'HP: 80',
-      'Shield: 10',
+      'HP: 90',
+      'Shield: 15',
       '+30% move speed; -30% dash cooldown',
     ].join('\n'),
   },
@@ -443,16 +443,16 @@ export const armourDefs = [
     id: 'exp_shield',
     name: 'Experimental Shield Generator',
     desc: [
-      'HP: 40',
-      'Shield: 30',
+      'HP: 50',
+      'Shield: 50',
     ].join('\n'),
   },
   {
     id: 'wasp_bits',
     name: 'BIT Carrier',
     desc: [
-      'HP: 70',
-      'Shield: 15',
+      'HP: 80',
+      'Shield: 20',
       '+ Spawns two WASP BITs that attack and stun nearby enemies',
     ].join('\n'),
   },
