@@ -1576,8 +1576,105 @@ export default class CombatScene extends Phaser.Scene {
     
   }
 
+  _explodeHazelMissile(m) {
+    if (!m || !m.active || m._hzExploded) return;
+    m._hzExploded = true;
+    const ex = m.x; const ey = m.y;
+    const radius = 40;
+    // Explosion VFX (purple tone)
+    try { impactBurst(this, ex, ey, { color: 0xaa66ff, size: 'large', radius }); } catch (_) {}
+    // Damage player within radius (no enemy damage; only player + soft barricades)
+    try {
+      const r2 = radius * radius;
+      const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+      if ((pdx * pdx + pdy * pdy) <= r2) {
+        let dmg = 20;
+        try {
+          const mods = this.gs?.getDifficultyMods?.() || {};
+          const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
+          dmg = Math.max(1, Math.round(20 * mul));
+        } catch (_) {}
+        const now = this.time.now;
+        if (now >= (this.player.iframesUntil || 0)) {
+          try {
+            let finalDmg = dmg;
+            try {
+              const eff = getPlayerEffects(this.gs) || {};
+              const mul2 = eff.enemyExplosionDmgMul || 1;
+              finalDmg = Math.ceil(finalDmg * mul2);
+            } catch (_) {}
+            this.applyPlayerDamage(finalDmg);
+          } catch (_) {}
+          this.player.iframesUntil = now + 600;
+          if (this.gs && this.gs.hp <= 0) {
+            try {
+              const eff = getPlayerEffects(this.gs);
+              this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+              this.gs.nextScene = SceneKeys.Hub;
+              SaveManager.saveToLocal(this.gs);
+              this.scene.start(SceneKeys.Hub);
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    // Also damage soft (destructible) barricades in radius
+    try {
+      this.damageSoftBarricadesInRadius(ex, ey, radius, 20);
+    } catch (_) {}
+    // Cleanup visuals and destroy missile
+    try { m._vis?.destroy(); } catch (_) {}
+    try { m._trailG?.destroy(); } catch (_) {}
+    try { m.destroy(); } catch (_) {}
+  }
+
+  _spawnHazelMissile(boss) {
+    if (!this.enemies) return;
+    const m = this.physics.add.sprite(boss.x, boss.y, 'bullet');
+    // Spawn at a random position in a small ring around Hazel (360°)
+    try {
+      const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const dist = Phaser.Math.Between(10, 26);
+      m.setPosition(boss.x + Math.cos(ang) * dist, boss.y + Math.sin(ang) * dist);
+    } catch (_) {}
+    m.setActive(true).setVisible(true);
+    m.setCircle(4).setOffset(-4, -4); // 8x8 hitbox
+    try { m.setTint(0xaa66ff); m.setScale(2); } catch (_) {} // visually match 8x8
+    m.hp = 20;
+    m.maxHp = 20;
+    m.isEnemy = true;
+    m.isHazelMissile = true;
+    m._hzSpawnAt = this.time.now;
+    m._angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    m._speed = 160; // px/s
+    m._maxTurn = Phaser.Math.DegToRad(2); // further reduced turn rate (~2°/frame baseline, time-scaled)
+    this.enemies.add(m);
+    // Purple guided-missile-style tracer
+    try {
+      const trail = this.add.graphics();
+      try { trail.setDepth(8790); trail.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+      m._trailG = trail;
+    } catch (_) {}
+    // Collide with barricades: explode on impact
+    try {
+      if (this.barricadesHard) {
+        this.physics.add.collider(m, this.barricadesHard, (missile, s) => { this._explodeHazelMissile(missile); });
+      }
+      if (this.barricadesSoft) {
+        this.physics.add.collider(m, this.barricadesSoft, (missile, s) => { this._explodeHazelMissile(missile); });
+      }
+    } catch (_) {}
+  }
+
   // Centralized enemy death handler to keep removal tied to HP system
   killEnemy(e) {
+    // Hazel missiles: custom explosion and no drops
+    try {
+      if (e?.isHazelMissile) {
+        this._explodeHazelMissile(e);
+        return;
+      }
+    } catch (_) {}
     if (!e || !e.active) return;
     try {
       // Ensure HP reflects death for any downstream logic
@@ -1647,6 +1744,59 @@ export default class CombatScene extends Phaser.Scene {
     try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
     // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
+  }
+
+  _spawnHazelPhaseBomb(x, y) {
+    if (!this._hzPhaseBombs) this._hzPhaseBombs = [];
+    const g = this.add.graphics({ x, y });
+    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    const bomb = { x, y, spawnedAt: this.time.now, g };
+    this._hzPhaseBombs.push(bomb);
+  }
+
+  _explodeHazelPhaseBomb(bomb) {
+    if (!bomb) return;
+    const ex = bomb.x; const ey = bomb.y;
+    const radius = 70;
+    // Visual explosion
+    try { impactBurst(this, ex, ey, { color: 0xaa66ff, size: 'large', radius }); } catch (_) {}
+    // Damage only the player within radius
+    try {
+      const r2 = radius * radius;
+      const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+      if ((pdx * pdx + pdy * pdy) <= r2) {
+        let dmg = 20;
+        try {
+          const mods = this.gs?.getDifficultyMods?.() || {};
+          const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
+          dmg = Math.max(1, Math.round(20 * mul));
+        } catch (_) {}
+        const now = this.time.now;
+        if (now >= (this.player.iframesUntil || 0)) {
+          try {
+            let finalDmg = dmg;
+            try {
+              const eff = getPlayerEffects(this.gs) || {};
+              const mul2 = eff.enemyExplosionDmgMul || 1;
+              finalDmg = Math.ceil(finalDmg * mul2);
+            } catch (_) {}
+            this.applyPlayerDamage(finalDmg);
+          } catch (_) {}
+          this.player.iframesUntil = now + 600;
+          if (this.gs && this.gs.hp <= 0) {
+            try {
+              const eff = getPlayerEffects(this.gs);
+              this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+              this.gs.nextScene = SceneKeys.Hub;
+              SaveManager.saveToLocal(this.gs);
+              this.scene.start(SceneKeys.Hub);
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    // Cleanup graphics
+    try { bomb.g?.destroy(); } catch (_) {}
   }
 
   // Player bullet hits a barricade (hard or soft)
@@ -3872,6 +4022,99 @@ export default class CombatScene extends Phaser.Scene {
       } catch (_) {}
     }
 
+    // Hazel Phase Bomb ability: player-following line + timed bombs
+    try {
+      const plan = this._hzPhasePlan;
+      if (plan && plan.active) {
+        const now = this.time.now;
+        // Ensure player-following purple line appears after 0.5s
+        if (!this._hzPhasePlayerLine && now >= (plan.startedAt || 0) + 500) {
+          const g = this.add.graphics();
+          try { g.setDepth(9600); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+          this._hzPhasePlayerLine = g;
+        }
+        // Update player line to follow the player from top of screen
+        if (this._hzPhasePlayerLine) {
+          try {
+            const g = this._hzPhasePlayerLine;
+            const x = this.player.x;
+            const rect = this.arenaRect || new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
+            g.clear();
+            const segTop = Math.max(rect.top + 4, this.player.y - 32);
+            const segBottom = Math.max(segTop, this.player.y - 8);
+            g.lineStyle(2, 0xaa66ff, 0.9);
+            g.beginPath();
+            g.moveTo(x, segTop);
+            g.lineTo(x, segBottom);
+            g.strokePath();
+          } catch (_) {}
+        }
+        // Spawn up to 20 bombs around the player
+        if (plan.bombsSpawned < 20 && now >= (plan.nextBombAt || 0)) {
+          const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+          const r = Phaser.Math.Between(60, 140);
+          let px = this.player.x + Math.cos(ang) * r;
+          let py = this.player.y + Math.sin(ang) * r;
+          try {
+            const rect = this.arenaRect || new Phaser.Geom.Rectangle(16, 16, this.scale.width - 32, this.scale.height - 32);
+            px = Phaser.Math.Clamp(px, rect.left + 8, rect.right - 8);
+            py = Phaser.Math.Clamp(py, rect.top + 8, rect.bottom - 8);
+          } catch (_) {}
+          try {
+            teleportSpawnVfx(this, px, py, {
+              color: 0xaa66ff,
+              onSpawn: () => { try { this._spawnHazelPhaseBomb(px, py); } catch (_) {} },
+            });
+          } catch (_) {
+            try { this._spawnHazelPhaseBomb(px, py); } catch (_) {}
+          }
+          plan.bombsSpawned += 1;
+          plan.nextBombAt = now + 375; // 0.375s between bombs
+        }
+        // End plan after final bomb's gap; clear player line
+        if (plan.bombsSpawned >= 20 && now >= (plan.nextBombAt || 0)) {
+          plan.active = false;
+          try { this._hzPhasePlayerLine?.destroy(); } catch (_) {}
+          this._hzPhasePlayerLine = null;
+        }
+      }
+    } catch (_) {}
+
+    // Update Hazel Phase Bomb instances (visuals + timed explosions)
+    if (this._hzPhaseBombs && this._hzPhaseBombs.length) {
+      const now = this.time.now;
+      this._hzPhaseBombs = this._hzPhaseBombs.filter((bomb) => {
+        if (!bomb || !bomb.g) return false;
+        const age = now - (bomb.spawnedAt || 0);
+        if (age >= 1500) {
+          this._explodeHazelPhaseBomb(bomb);
+          try { bomb.g?.destroy(); } catch (_) {}
+          return false;
+        }
+        const g = bomb.g;
+        try {
+          g.clear();
+          const baseSize = 12;
+          if (age < 1000) {
+            // First 1s: darker purple, slower glow
+            const t = age / 1000;
+            const pulse = 1.0 + 0.18 * Math.sin(t * Math.PI * 2.0);
+            const size = baseSize * pulse;
+            g.fillStyle(0xaa66ff, 0.9);
+            g.fillRect(-size / 2, -size / 2, size, size);
+          } else {
+            // Last 0.5s: lighter purple, faster glow
+            const t = (age - 1000) / 500;
+            const pulse = 1.0 + 0.35 * Math.sin(t * Math.PI * 6.0);
+            const size = baseSize * (1.1 + 0.3 * t) * pulse;
+            g.fillStyle(0xddaaff, 0.95);
+            g.fillRect(-size / 2, -size / 2, size, size);
+          }
+        } catch (_) {}
+        return true;
+      });
+    }
+
     // Update enemies: melee chase; shooters chase gently and fire at intervals; snipers aim then fire
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
@@ -3887,6 +4130,84 @@ export default class CombatScene extends Phaser.Scene {
           return;
         }
       } catch (_) {}
+      // Hazel missiles: custom homing behavior, no nav/pathfinding
+      if (e.isHazelMissile) {
+        try {
+          const dtMs = (this.game?.loop?.delta || 16.7);
+          const dtHz = dtMs / 1000;
+          const dxm = this.player.x - e.x;
+          const dym = this.player.y - e.y;
+          const desired = Math.atan2(dym, dxm);
+          const maxTurn = (e._maxTurn || 0) * (60 * dtHz);
+          e._angle = (typeof e._angle === 'number')
+            ? Phaser.Math.Angle.RotateTo(e._angle, desired, maxTurn)
+            : desired;
+          const vx = Math.cos(e._angle) * (e._speed || 160);
+          const vy = Math.sin(e._angle) * (e._speed || 160);
+          try { e.body?.setVelocity?.(vx, vy); } catch (_) { try { e.setVelocity(vx, vy); } catch (_) {} }
+          // Barricade collision: explode on contact (fallback in case collider misses)
+          try {
+            let collideBarr = false;
+            const circle = new Phaser.Geom.Circle(e.x, e.y, 4);
+            const scanBarr = (grp) => {
+              const arr = grp?.getChildren?.() || [];
+              for (let i = 0; i < arr.length && !collideBarr; i += 1) {
+                const s = arr[i]; if (!s?.active) continue;
+                const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+                if (Phaser.Geom.Intersects.CircleToRectangle(circle, rect)) { collideBarr = true; break; }
+              }
+            };
+            scanBarr(this.barricadesHard);
+            scanBarr(this.barricadesSoft);
+            if (collideBarr) {
+              this._explodeHazelMissile(e);
+              return;
+            }
+          } catch (_) {}
+          // Lifetime cap: explode after 10s
+          if (this.time.now - (e._hzSpawnAt || 0) >= 10000) {
+            this._explodeHazelMissile(e);
+            return;
+          }
+          // Proximity detonation: 15px sensor radius
+          const rSense = 15; const rSense2 = rSense * rSense;
+          const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
+          if ((pdx * pdx + pdy * pdy) <= rSense2) {
+            this._explodeHazelMissile(e);
+            return;
+          }
+          // Update visuals: glowing square + particle-based tracer
+          try {
+            // Subtle glow pulse on the missile sprite itself
+            try {
+              const tGlow = ((this.time?.now || 0) % 600) / 600;
+              const pulse = 1.0 + 0.15 * Math.sin(tGlow * Math.PI * 2);
+              e.setScale(2 * pulse);
+              e.setDepth(8800);
+              e.setBlendMode(Phaser.BlendModes.ADD);
+            } catch (_) {}
+            // Particle exhaust only (no static line)
+            const back = e._angle + Math.PI;
+            const tail = 6;
+            const tx = e.x + Math.cos(back) * tail;
+            const ty = e.y + Math.sin(back) * tail;
+            try {
+              pixelSparks(this, tx, ty, {
+                angleRad: back,
+                count: 2,
+                spreadDeg: 26,
+                speedMin: 70,
+                speedMax: 150,
+                lifeMs: 180,
+                color: 0xaa66ff,
+                size: 3,
+                alpha: 0.95,
+              });
+            } catch (_) {}
+          } catch (_) {}
+        } catch (_) {}
+        return;
+      }
       // Turrets: fully stationary enemies with custom firing + aim logic
       if (e.isTurret) {
         const nowT = this.time.now;
@@ -5032,7 +5353,21 @@ export default class CombatScene extends Phaser.Scene {
     };
 
     if (e.bossType === 'Dandelion') {
-      if (now >= (e._nextNormalAt || 0)) { e._nextNormalAt = now + 450; fireBullet(angToPlayer, 300, e.damage, 0xff5555, 2); }
+      // Continuous prism beam sweep (similar to Hazel's default attack)
+      if (!e._dashing) {
+        if (!e._dnState || e._dnState === 'sweep') {
+          e._dnState = 'sweep';
+          const dtMs = (this.game?.loop?.delta || 16.7);
+          e._dnSweepT = (e._dnSweepT || 0) + dtMs;
+          const base = angToPlayer;
+          const span = Phaser.Math.DegToRad(80);
+          const dur = 1400;
+          const t = (Math.sin((e._dnSweepT / dur) * Math.PI * 2) * 0.5 + 0.5);
+          const ang = base - span / 2 + span * t;
+          this.renderPrismBeam(e, ang, dtMs / 1000, { applyDamage: true, damagePlayer: true, dps: 40, tick: 0.05 });
+        }
+      }
+      // Retain Dandelion's dash special
       if (!e._dashing && now >= (e._nextSpecialAt || 0)) {
         e._dashing = true; e._dashUntil = now + 300; e._nextSpecialAt = now + 6000;
         const spd = 360; const vx = Math.cos(angToPlayer) * spd; const vy = Math.sin(angToPlayer) * spd;
@@ -5314,25 +5649,96 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     } else { // Hazel
-      if (!e._hzState || e._hzState === 'sweep') {
-        e._hzState = 'sweep';
-        e._sweepT = (e._sweepT || 0) + (this.game?.loop?.delta || 16.7);
-        const base = angToPlayer; const span = Phaser.Math.DegToRad(80); const dur = 1400;
-        const t = (Math.sin((e._sweepT / dur) * Math.PI * 2) * 0.5 + 0.5);
-        const ang = base - span/2 + span * t;
-        this.renderPrismBeam(e, ang, (this.game?.loop?.delta || 16.7)/1000, { applyDamage: true, damagePlayer: true, dps: 40, tick: 0.05 });
+      // Initialize Hazel state once
+      if (!e._hzInit) {
+        e._hzInit = true;
+        e._hzShotsSinceSpecial = 0;
+        e._hzNextShotAt = now + 600;
+        e._hzSpecialActive = false;
+        e._hzSpecialState = 'idle'; // 'idle' | 'deploying'
+        e._hzMissilesSpawned = 0;
+        e._hzNextMissileAt = 0;
+        e._hzBaseSpeed = e.speed || 60;
+        // Phase Bomb ability (25s CD, initial delay similar to Bigwig)
+        e._hzPhaseState = 'idle'; // 'idle' | 'channel'
+        e._hzPhaseChannelUntil = 0;
+        e._hzPhaseStartAt = 0;
+        e._hzPhaseNextAt = now + 12000;
       }
-      if (!e._hzSpecial && now >= (e._nextSpecialAt || 0)) {
-        e._hzSpecial = true; e._hzState = 'aim'; e._aimUntil = now + 700; e._beamUntil = 0; e._nextSpecialAt = now + 7000;
-        if (!e._aimG) e._aimG = this.add.graphics();
+
+      const dtMsHz = (this.game?.loop?.delta || 16.7);
+      const phaseReady = now >= (e._hzPhaseNextAt || 0);
+
+      // Phase Bomb ability: 1s channel (freeze + upward beam), then bombs around player
+      if (e._hzPhaseState === 'channel') {
+        try { e.body.setVelocity(0, 0); } catch (_) {}
+        // During channel, Hazel does nothing else
+        if (now >= (e._hzPhaseChannelUntil || 0)) {
+          e._hzPhaseState = 'idle';
+        } else {
+          return;
+        }
+      } else if (phaseReady && !e._hzSpecialActive) {
+        // Start Phase Bomb ability: 1s channel with upward beam, bombs begin after 0.5s
+        e._hzPhaseState = 'channel';
+        e._hzPhaseStartAt = now;
+        e._hzPhaseChannelUntil = now + 1000;
+        e._hzPhaseNextAt = now + 25000; // 25s cooldown
+        // Initialize global plan for bombs
+        if (!this._hzPhasePlan) this._hzPhasePlan = { active: false, startedAt: 0, bombsSpawned: 0, nextBombAt: 0 };
+        this._hzPhasePlan.active = true;
+        this._hzPhasePlan.startedAt = now;
+        this._hzPhasePlan.bombsSpawned = 0;
+        this._hzPhasePlan.nextBombAt = now + 500; // first bomb 0.5s after start
+        // Upward purple signal beam from Hazel
+        try { bossSignalBeam(this, e.x, e.y, { color: 0xaa66ff, duration: 1000 }); } catch (_) {}
+        return;
       }
-      if (e._hzSpecial && e._hzState === 'aim') {
-        try { e._aimG.clear(); e._aimG.lineStyle(1, 0xff2222, 1); e._aimG.beginPath(); e._aimG.moveTo(e.x, e.y); e._aimG.lineTo(this.player.x, this.player.y); e._aimG.strokePath(); } catch (_) {}
-        if (now >= (e._aimUntil || 0)) { e._hzState = 'beam'; e._beamUntil = now + 1100; try { e._aimG.clear(); } catch (_) {} }
-      } else if (e._hzSpecial && e._hzState === 'beam') {
-        const dtMs = (this.game?.loop?.delta || 16.7);
-        this.renderPrismBeam(e, angToPlayer, dtMs/1000, { applyDamage: true, damagePlayer: true, dps: 65, tick: 0.05 });
-        if (now >= (e._beamUntil || 0)) { e._hzSpecial = false; e._hzState = 'sweep'; try { e._laserG?.clear(); } catch (_) {} }
+
+      // Special: deploy 6 guided Hazel missiles after 8 shotgun volleys
+      if (e._hzSpecialActive) {
+        if (e._hzSpecialState === 'deploying') {
+          // Slow Hazel while deploying missiles
+          e.speed = e._hzBaseSpeed * 0.5;
+          if (e._hzMissilesSpawned < 6 && now >= (e._hzNextMissileAt || 0)) {
+            try { this._spawnHazelMissile(e); } catch (_) {}
+            e._hzMissilesSpawned += 1;
+            e._hzNextMissileAt = now + 300; // 0.3s between missiles
+          }
+          // After last missile scheduled, end special after final gap
+          if (e._hzMissilesSpawned >= 6 && now >= (e._hzNextMissileAt || 0)) {
+            e._hzSpecialActive = false;
+            e._hzSpecialState = 'idle';
+            e.speed = e._hzBaseSpeed;
+            e._hzShotsSinceSpecial = 0;
+            e._hzNextShotAt = now + 750; // short delay before resuming shotgun
+          }
+        }
+        return;
+      }
+
+      // Regular attack: 7-pellet shotgun volley toward player every 0.75s
+      if (now >= (e._hzNextShotAt || 0)) {
+        e._hzNextShotAt = now + 750; // 0.75s between volleys
+        const pellets = 7;
+        const totalSpreadDeg = 60;
+        const half = Phaser.Math.DegToRad(totalSpreadDeg / 2);
+        const step = pellets > 1 ? (2 * half) / (pellets - 1) : 0;
+        const base = angToPlayer;
+        const speed = 260;
+        for (let i = 0; i < pellets; i += 1) {
+          const offset = -half + step * i;
+          const ang = base + offset;
+          fireBullet(ang, speed, 10, 0xffeeff, 2);
+        }
+        e._hzShotsSinceSpecial = (e._hzShotsSinceSpecial || 0) + 1;
+        if (e._hzShotsSinceSpecial >= 8) {
+          // Begin missile special
+          e._hzSpecialActive = true;
+          e._hzSpecialState = 'deploying';
+          e._hzMissilesSpawned = 0;
+          e._hzNextMissileAt = now; // start immediately
+        }
       }
     }
   }
