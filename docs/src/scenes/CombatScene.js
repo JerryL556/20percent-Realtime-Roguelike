@@ -1646,7 +1646,7 @@ export default class CombatScene extends Phaser.Scene {
     m.isHazelMissile = true;
     m._hzSpawnAt = this.time.now;
     m._angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    m._speed = 160; // px/s
+    m._speed = 230; // px/s
     m._maxTurn = Phaser.Math.DegToRad(2); // further reduced turn rate (~2°/frame baseline, time-scaled)
     this.enemies.add(m);
     // Purple guided-missile-style tracer
@@ -1744,6 +1744,49 @@ export default class CombatScene extends Phaser.Scene {
     try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
     // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
+  }
+
+  _spawnHazelPulse(x, y) {
+    if (!this._hzPulses) this._hzPulses = [];
+    const g = this.add.graphics({ x, y });
+    try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+    const pulse = { x, y, r: 0, maxR: 200, band: 12, speed: 200, g, atMaxSince: null };
+    this._hzPulses.push(pulse);
+  }
+
+  _hazelTeleportAway(e) {
+    try {
+      const rect = this.arenaRect || new Phaser.Geom.Rectangle(16, 16, this.scale.width - 32, this.scale.height - 32);
+      const px = this.player.x; const py = this.player.y;
+      let tx = e.x; let ty = e.y;
+      let found = false;
+      const minDist = 360;
+      for (let i = 0; i < 18; i += 1) {
+        let candX = Phaser.Math.Between(rect.left + 24, rect.right - 24);
+        let candY = Phaser.Math.Between(rect.top + 24, rect.bottom - 24);
+        const dxp = candX - px; const dyp = candY - py;
+        const d = Math.hypot(dxp, dyp) || 0;
+        if (d >= minDist) { tx = candX; ty = candY; found = true; break; }
+      }
+      if (!found) {
+        const dx0 = e.x - px; const dy0 = e.y - py;
+        const len0 = Math.hypot(dx0, dy0) || 1;
+        const ux = -dx0 / len0; const uy = -dy0 / len0;
+        const r = minDist;
+        tx = px + ux * r; ty = py + uy * r;
+        tx = Phaser.Math.Clamp(tx, rect.left + 24, rect.right - 24);
+        ty = Phaser.Math.Clamp(ty, rect.top + 24, rect.bottom - 24);
+      }
+      try {
+        if (e.body && e.body.reset) e.body.reset(tx, ty);
+        else e.setPosition(tx, ty);
+      } catch (_) {
+        try { e.setPosition(tx, ty); } catch (_) {}
+      }
+      e.x = tx; e.y = ty;
+      try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
+      try { this._spawnHazelPulse(tx, ty); } catch (_) {}
+    } catch (_) {}
   }
 
   _spawnHazelPhaseBomb(x, y) {
@@ -4115,6 +4158,61 @@ export default class CombatScene extends Phaser.Scene {
       });
     }
 
+    // Update Hazel teleport pulses (expanding shield-like rings)
+    if (this._hzPulses && this._hzPulses.length) {
+      const dt = (this.game?.loop?.delta || 16.7) / 1000;
+      const bullets = this.bullets?.getChildren?.() || [];
+      this._hzPulses = this._hzPulses.filter((p) => {
+        if (!p || !p.g) return false;
+        const maxR = p.maxR || 100;
+        // Grow until max radius, then persist for a short duration before disappearing
+        if (p.r < maxR) {
+          p.r += (p.speed || 300) * dt;
+          if (p.r >= maxR) {
+            p.r = maxR;
+            p.atMaxSince = p.atMaxSince || this.time.now;
+          }
+        } else {
+          p.r = maxR;
+          p.atMaxSince = p.atMaxSince || this.time.now;
+        }
+        if (p.atMaxSince && (this.time.now - p.atMaxSince) >= 5000) {
+          try { p.g.destroy(); } catch (_) {}
+          return false;
+        }
+        const g = p.g;
+        try {
+          g.clear();
+          const band = p.band || 12;
+          const inner = Math.max(4, p.r - band);
+          const outer = p.r;
+          // Hollow ring similar to player pulse, but purple
+          g.lineStyle(3, 0xaa66ff, 0.85).strokeCircle(0, 0, outer);
+          g.lineStyle(1, 0xddaaff, 0.9).strokeCircle(0, 0, inner);
+        } catch (_) {}
+        // Block player bullets in the band, like a 360° Rook shield (skip railgun)
+        try {
+          const cx = p.x; const cy = p.y;
+          const band = p.band || 12;
+          const rInner2 = Math.max(0, (p.r - band) * (p.r - band));
+          const rOuter2 = p.r * p.r;
+          for (let i = 0; i < bullets.length; i += 1) {
+            const b = bullets[i]; if (!b?.active || b._rail) continue;
+            const dx = b.x - cx; const dy = b.y - cy;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= rInner2 && d2 <= rOuter2) {
+              // Small spark where the bullet hits the ring
+              try { impactBurst(this, b.x, b.y, { color: 0xaa66ff, size: 'small' }); } catch (_) {}
+              try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
+              try { b.setActive(false).setVisible(false); } catch (_) {}
+              try { this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} }); } catch (_) {}
+            }
+          }
+        } catch (_) {}
+        return true;
+      });
+    }
+
     // Update enemies: melee chase; shooters chase gently and fire at intervals; snipers aim then fire
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
@@ -4164,8 +4262,8 @@ export default class CombatScene extends Phaser.Scene {
               return;
             }
           } catch (_) {}
-          // Lifetime cap: explode after 10s
-          if (this.time.now - (e._hzSpawnAt || 0) >= 10000) {
+          // Lifetime cap: explode after 6s
+          if (this.time.now - (e._hzSpawnAt || 0) >= 6000) {
             this._explodeHazelMissile(e);
             return;
           }
@@ -5659,6 +5757,9 @@ export default class CombatScene extends Phaser.Scene {
         e._hzMissilesSpawned = 0;
         e._hzNextMissileAt = 0;
         e._hzBaseSpeed = e.speed || 60;
+        // Teleport-away mechanic state (15s internal cooldown)
+        e._hzTpNextAt = now + 8000;
+        e._hzTpCloseSince = null;
         // Phase Bomb ability (25s CD, initial delay similar to Bigwig)
         e._hzPhaseState = 'idle'; // 'idle' | 'channel'
         e._hzPhaseChannelUntil = 0;
@@ -5668,6 +5769,26 @@ export default class CombatScene extends Phaser.Scene {
 
       const dtMsHz = (this.game?.loop?.delta || 16.7);
       const phaseReady = now >= (e._hzPhaseNextAt || 0);
+      const tpReady = now >= (e._hzTpNextAt || 0);
+
+      // Teleport-away mechanic: if player stays within radius for 1s and Hazel is not using specials
+      if (!e._hzSpecialActive && e._hzPhaseState !== 'channel' && tpReady) {
+        const dxp = this.player.x - e.x;
+        const dyp = this.player.y - e.y;
+        const distToPlayer = Math.hypot(dxp, dyp) || 0;
+        if (distToPlayer <= 180) {
+          if (!e._hzTpCloseSince) e._hzTpCloseSince = now;
+          if (now - (e._hzTpCloseSince || 0) >= 1000) {
+            try { this._hazelTeleportAway(e); } catch (_) {}
+            e._hzTpNextAt = now + 15000; // 15s cooldown
+            e._hzTpCloseSince = null;
+          }
+        } else {
+          e._hzTpCloseSince = null;
+        }
+      } else if (e._hzPhaseState === 'channel' || e._hzSpecialActive) {
+        e._hzTpCloseSince = null;
+      }
 
       // Phase Bomb ability: 1s channel (freeze + upward beam), then bombs around player
       if (e._hzPhaseState === 'channel') {
@@ -5700,10 +5821,10 @@ export default class CombatScene extends Phaser.Scene {
         if (e._hzSpecialState === 'deploying') {
           // Slow Hazel while deploying missiles
           e.speed = e._hzBaseSpeed * 0.5;
-          if (e._hzMissilesSpawned < 6 && now >= (e._hzNextMissileAt || 0)) {
-            try { this._spawnHazelMissile(e); } catch (_) {}
-            e._hzMissilesSpawned += 1;
-            e._hzNextMissileAt = now + 300; // 0.3s between missiles
+        if (e._hzMissilesSpawned < 6 && now >= (e._hzNextMissileAt || 0)) {
+          try { this._spawnHazelMissile(e); } catch (_) {}
+          e._hzMissilesSpawned += 1;
+          e._hzNextMissileAt = now + 500; // 0.5s between missiles
           }
           // After last missile scheduled, end special after final gap
           if (e._hzMissilesSpawned >= 6 && now >= (e._hzNextMissileAt || 0)) {
@@ -5717,10 +5838,10 @@ export default class CombatScene extends Phaser.Scene {
         return;
       }
 
-      // Regular attack: 7-pellet shotgun volley toward player every 0.75s
+      // Regular attack: 5-pellet shotgun volley toward player every 0.75s
       if (now >= (e._hzNextShotAt || 0)) {
         e._hzNextShotAt = now + 750; // 0.75s between volleys
-        const pellets = 7;
+        const pellets = 5;
         const totalSpreadDeg = 60;
         const half = Phaser.Math.DegToRad(totalSpreadDeg / 2);
         const step = pellets > 1 ? (2 * half) / (pellets - 1) : 0;
@@ -6179,11 +6300,12 @@ export default class CombatScene extends Phaser.Scene {
         lz.mg.fillStyle(0xffffff, 0.5).fillCircle(sx, sy, 1.5);
       } catch (_) {}
 
-      // Shield block spark for laser (if recently blocked by a Rook)
+      // Shield block spark for laser (if recently blocked by a shield / pulse)
       try {
         const lb = this._lastLaserBlockedAt;
         if (lb && (now - lb.t) <= 50) {
-          impactBurst(this, lb.x, lb.y, { color: 0xff3333, size: 'small' });
+          const col = (typeof lb.color === 'number') ? lb.color : 0xff3333;
+          impactBurst(this, lb.x, lb.y, { color: col, size: 'small' });
           this._lastLaserBlockedAt = null;
         }
       } catch (_) {}
@@ -6277,6 +6399,35 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     }
+    // Hazel teleport pulses: treat as circular blockers like moving shields (360°)
+    try {
+      const pulses = this._hzPulses || [];
+      const dxr = Math.cos(angle), dyr = Math.sin(angle);
+      for (let i = 0; i < pulses.length; i += 1) {
+        const p = pulses[i]; if (!p || !p.g) continue;
+        const cx = p.x, cy = p.y; const r = p.r || 0;
+        if (r <= 0) continue;
+        const fx = sx - cx, fy = sy - cy; // ray origin relative to pulse center
+        const a = dxr * dxr + dyr * dyr;
+        const bq = 2 * (fx * dxr + fy * dyr);
+        const c = fx * fx + fy * fy - r * r;
+        const disc = bq * bq - 4 * a * c;
+        if (disc >= 0) {
+          const sqrtD = Math.sqrt(disc);
+          const t1 = (-bq - sqrtD) / (2 * a);
+          const t2 = (-bq + sqrtD) / (2 * a);
+          const t = (t1 > 0) ? t1 : ((t2 > 0) ? t2 : null);
+          if (t != null) {
+            const bx = sx + dxr * t; const by = sy + dyr * t;
+            const ddx = bx - sx; const ddy = by - sy; const d2 = ddx * ddx + ddy * ddy;
+            if (d2 < bestD2) {
+              bestD2 = d2; ex = bx; ey = by; hitEnemy = null; hitKind = 'rook'; hitBarricade = null;
+              this._lastLaserBlockedAt = { x: ex, y: ey, t: this.time.now, color: 0xaa66ff };
+            }
+          }
+        }
+      }
+    } catch (_) {}
     // Also stop at first enemy before barricade; handle Rook shield as a blocker
     const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
@@ -6311,7 +6462,7 @@ export default class CombatScene extends Phaser.Scene {
                 const ddx = bx - sx; const ddy = by - sy; const d2 = ddx * ddx + ddy * ddy;
                 if (d2 < bestD2) {
                   bestD2 = d2; ex = bx; ey = by; hitEnemy = null; hitKind = 'rook'; hitBarricade = null;
-                  this._lastLaserBlockedAt = { x: ex, y: ey, t: this.time.now };
+                  this._lastLaserBlockedAt = { x: ex, y: ey, t: this.time.now, color: 0xff3333 };
                 }
               }
             }
