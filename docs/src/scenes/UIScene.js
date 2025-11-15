@@ -53,22 +53,45 @@ export default class UIScene extends Phaser.Scene {
     this.loadoutHint = this.add.text(12, 12, 'Loadout (TAB)', { fontFamily: 'monospace', fontSize: 12, color: '#cccccc' }).setOrigin(0, 0).setAlpha(0.9);
     
 
-    let x = width - 240;
-    makeTextButton(this, x, 16, 'Save', () => {
+    const saveBaseX = width - 240;
+    this._saveButtons = [];
+    const registerSaveButton = (label, handler, offset) => {
+      const btn = makeTextButton(this, saveBaseX + offset, 16, label, handler).setOrigin(0, 0);
+      if (typeof btn.setButtonVisible === 'function') btn.setButtonVisible(false); else btn.setVisible(false);
+      this._saveButtons.push(btn);
+      return btn;
+    };
+    registerSaveButton('Save', () => {
       const gs = this.registry.get('gameState');
       if (gs) SaveManager.saveToLocal(gs);
-    }).setOrigin(0, 0);
-    makeTextButton(this, x + 70, 16, 'Download', () => {
+    }, 0);
+    registerSaveButton('Download', () => {
       const gs = this.registry.get('gameState');
       if (gs) SaveManager.download(gs);
-    }).setOrigin(0, 0);
-    makeTextButton(this, x + 170, 16, 'Load', async () => {
+    }, 70);
+    registerSaveButton('Load', async () => {
       const gs = await SaveManager.uploadFromFile();
       if (gs) {
         this.registry.set('gameState', gs);
         SaveManager.saveToLocal(gs);
       }
-    }).setOrigin(0, 0);
+    }, 170);
+    this._saveButtonsVisible = null;
+    this._refreshSaveButtons = () => {
+      const shouldShow = this.scene.isActive(SceneKeys.Hub);
+      if (shouldShow === this._saveButtonsVisible) return;
+      this._saveButtonsVisible = shouldShow;
+      (this._saveButtons || []).forEach((btn) => {
+        if (typeof btn.setButtonVisible === 'function') btn.setButtonVisible(shouldShow);
+        else {
+          btn.setVisible(shouldShow);
+          if (shouldShow) btn.setInteractive({ useHandCursor: true }); else btn.disableInteractive();
+          if (btn.buttonFrame) btn.buttonFrame.setVisible(shouldShow);
+        }
+      });
+    };
+    this._refreshSaveButtons();
+    this.events.on('update', this._refreshSaveButtons);
 
     // Loadout overlay state and keybind
     this.loadout = { panel: null, nodes: [] };
@@ -83,6 +106,10 @@ export default class UIScene extends Phaser.Scene {
       this.closeLoadout();
       this.closeChoicePopup();
       try { (this._resourceToasts || []).forEach((t) => t?.destroy?.()); this._resourceToasts = []; } catch (_) {}
+      if (this._refreshSaveButtons) {
+        this.events.off('update', this._refreshSaveButtons);
+        this._refreshSaveButtons = null;
+      }
     });
   }
 

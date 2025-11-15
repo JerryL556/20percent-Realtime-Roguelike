@@ -41,5 +41,25 @@ export default class StartScene extends Phaser.Scene {
     makeTextButton(this, width / 2, height / 2 + 80, 'Menu', () => {
       this.scene.start(SceneKeys.Menu);
     });
+
+    // Manual save management at title screen
+    const baseX = width - 240;
+    const topY = 20;
+    const getState = () => this.registry.get('gameState') || SaveManager.loadFromLocal();
+    makeTextButton(this, baseX, topY, 'Save', () => {
+      const gs = this.registry.get('gameState');
+      if (gs) SaveManager.saveToLocal(gs);
+    }).setOrigin(0, 0);
+    makeTextButton(this, baseX + 70, topY, 'Download', () => {
+      const gs = getState();
+      if (gs) SaveManager.download(gs);
+    }).setOrigin(0, 0);
+    makeTextButton(this, baseX + 170, topY, 'Load', async () => {
+      const gs = await SaveManager.uploadFromFile();
+      if (gs) {
+        this.registry.set('gameState', gs);
+        SaveManager.saveToLocal(gs);
+      }
+    }).setOrigin(0, 0);
   }
 }

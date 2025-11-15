@@ -1,8 +1,9 @@
 export function makeTextButton(scene, x, y, label, onClick) {
+  const interactiveConfig = { useHandCursor: true };
   const text = scene.add.text(x, y, label, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' })
     .setOrigin(0.5)
     .setPadding(6, 4)
-    .setInteractive({ useHandCursor: true })
+    .setInteractive(interactiveConfig)
     .on('pointerover', () => { text.setStyle({ color: '#ffff66' }); refreshBorder(); })
     .on('pointerout', () => { text.setStyle({ color: '#ffffff' }); refreshBorder(); })
     .on('pointerdown', () => onClick?.());
@@ -24,5 +25,12 @@ export function makeTextButton(scene, x, y, label, onClick) {
   refreshBorder();
   scene.time.delayedCall(0, refreshBorder);
   text.on('destroy', () => g.destroy());
+  text.buttonFrame = g;
+  text.setButtonVisible = (visible) => {
+    text.setVisible(visible);
+    g.setVisible(visible);
+    if (visible) text.setInteractive(interactiveConfig); else text.disableInteractive();
+    return text;
+  };
   return text;
 }
