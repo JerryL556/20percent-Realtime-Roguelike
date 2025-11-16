@@ -209,9 +209,21 @@ export default class CombatScene extends Phaser.Scene {
           const { width } = this.scale;
           const mods = this.gs?.getDifficultyMods?.() || {};
           const cx = Math.floor(width / 2); const cy = 100;
-          const boss = createBoss(this, cx, cy, 400, 10, 60, bossId);
+          // Match real boss-room stats: 600 base HP, 80 base speed, difficulty-scaled
+          const baseBossHp = 600;
+          const baseBossSpeed = 80;
+          const hpScaled = Math.floor(baseBossHp * (mods.enemyHp || 1));
+          const dmgScaled = Math.floor(10 * (mods.enemyDamage || 1));
+          const boss = createBoss(this, cx, cy, hpScaled, dmgScaled, baseBossSpeed, bossId);
           boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossId;
-          boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
+          boss.maxHp = hpScaled;
+          boss.hp = hpScaled;
+          // Dandelion gets higher base speed; other bosses use baseBossSpeed
+          boss.speed = (bossId === 'Dandelion') ? 120 : baseBossSpeed;
+          boss.damage = dmgScaled;
+          boss._nextNormalAt = 0;
+          boss._nextSpecialAt = this.time.now + 2500;
+          boss._state = 'idle';
           this.boss = boss; this.enemies.add(boss);
           // No cutscene in training ground; ensure HUD shows
           try {
@@ -1090,9 +1102,44 @@ export default class CombatScene extends Phaser.Scene {
       this.physics.add.collider(pCol, this.barricadesHard);
       this.physics.add.collider(pCol, this.barricadesSoft);
     }
-    this.physics.add.collider(this.enemies, this.barricadesHard);
-    this.physics.add.collider(this.enemies, this.barricadesSoft);
-    // Enemies can break destructible barricades by pushing into them
+    this.physics.add.collider(
+      this.enemies,
+      this.barricadesHard,
+      undefined,
+      (e, s) => {
+        // Let Dandelion ignore hard barricade collision response while dashing/assaulting
+        try {
+          if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
+            const st = e._dnAssaultState || 'idle';
+            const assaultDash = st === 'dashIn' || st === 'dashOut';
+            const normalDash = e._dnDashState === 'dashing';
+            if (assaultDash || normalDash) return false;
+          }
+        } catch (_) {}
+        return true;
+      },
+      this,
+    );
+    this.physics.add.collider(
+      this.enemies,
+      this.barricadesSoft,
+      undefined,
+      (e, s) => {
+        // Let Dandelion ignore barricade collision response while dashing/assaulting;
+        // soft barricades it touches are explicitly destroyed in _dandelionBreakSoftBarricades.
+        try {
+          if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
+            const st = e._dnAssaultState || 'idle';
+            const assaultDash = st === 'dashIn' || st === 'dashOut';
+            const normalDash = e._dnDashState === 'dashing';
+            if (assaultDash || normalDash) return false;
+          }
+        } catch (_) {}
+        return true;
+      },
+      this,
+    );
+    // Enemies can break destructible barricades by pushing into them (non-Dandelion enemies)
     this.physics.add.collider(this.enemies, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
     // For rail bullets, skip physics separation so they don't get stuck
     this.physics.add.collider(
@@ -1689,6 +1736,11 @@ export default class CombatScene extends Phaser.Scene {
     try {
       if (e?.isHazelMissile) {
         this._explodeHazelMissile(e);
+        return;
+      }
+      // Dandelion mines: explode via custom handler when destroyed by player
+      if (e?.isDnMine) {
+        try { e._explodeFn?.(e); } catch (_) {}
         return;
       }
     } catch (_) {}
@@ -3667,15 +3719,17 @@ export default class CombatScene extends Phaser.Scene {
             }
           }
         } catch (_) {}
-        // Push enemies and apply 5 dmg once per enemy per pulse
-        try {
-          if (!rp._hitSet) rp._hitSet = new Set();
-          if (!rp._pushedSet) rp._pushedSet = new Set();
-          const arrE = this.enemies?.getChildren?.() || [];
-          for (let i = 0; i < arrE.length; i += 1) {
-            const e = arrE[i]; if (!e?.active) continue;
-            // Turrets are anchored structures: do not push them with Repulsion
-            if (e.isTurret) continue;
+          // Push enemies and apply 5 dmg once per enemy per pulse
+          try {
+            if (!rp._hitSet) rp._hitSet = new Set();
+            if (!rp._pushedSet) rp._pushedSet = new Set();
+            const arrE = this.enemies?.getChildren?.() || [];
+            for (let i = 0; i < arrE.length; i += 1) {
+              const e = arrE[i]; if (!e?.active) continue;
+              // Turrets are anchored structures: do not push them with Repulsion
+              if (e.isTurret) continue;
+              // Dandelion mines are stationary hazards: do not push them either
+              if (e.isDnMine) continue;
             // If already pushed by this pulse, skip entirely; also skip while under any active knockback window
             const nowPush = this.time.now;
             if (rp._pushedSet.has(e)) continue;
@@ -4251,6 +4305,56 @@ export default class CombatScene extends Phaser.Scene {
       });
     }
 
+    // Update Dandelion mines (player-triggered red mines laid during assault dash-out)
+    if (this._dnMines && this._dnMines.length) {
+      const now = this.time.now;
+      const px = this.player?.x || 0;
+      const py = this.player?.y || 0;
+      this._dnMines = this._dnMines.filter((m) => m && m.active);
+      for (let i = 0; i < this._dnMines.length; i += 1) {
+        const m = this._dnMines[i]; if (!m?.active) continue;
+        const dx = px - m.x; const dy = py - m.y;
+        const r = m._sensorRadius || 50; const r2 = r * r;
+        const dist2 = (dx * dx + dy * dy);
+        // Handle sensor trigger
+        if (!m._sensorTriggered && dist2 <= r2) {
+          m._sensorTriggered = true;
+          m._sensorTriggerAt = now;
+        }
+        // Update glow graphics
+        try {
+          if (!m._g) {
+            const g = this.add.graphics({ x: m.x, y: m.y });
+            g.setDepth(9000);
+            g.setBlendMode(Phaser.BlendModes.ADD);
+            m._g = g;
+          }
+          const g = m._g;
+          g.clear();
+          g.setPosition(m.x, m.y);
+          const baseSize = 12;
+          if (m._sensorTriggered) {
+            const age = now - (m._sensorTriggerAt || 0);
+            const t = Phaser.Math.Clamp(age / 200, 0, 1);
+            const pulse = 1.0 + 0.6 * Math.sin(t * Math.PI * 8.0);
+            const size = baseSize * (1.0 + 0.4 * t) * pulse;
+            g.fillStyle(0xff6666, 0.95);
+            g.fillRect(-size / 2, -size / 2, size, size);
+          } else {
+            const t = (now % 400) / 400;
+            const pulse = 1.0 + 0.2 * Math.sin(t * Math.PI * 2.0);
+            const size = baseSize * pulse;
+            g.fillStyle(0xff3333, 0.9);
+            g.fillRect(-size / 2, -size / 2, size, size);
+          }
+        } catch (_) {}
+        // Explosion timing for sensor-triggered mines
+        if (m._sensorTriggered && now >= (m._sensorTriggerAt || 0) + 200) {
+          if (typeof m._explodeFn === 'function') m._explodeFn(m);
+        }
+      }
+    }
+
     // Update Hazel teleport pulses (expanding shield-like rings)
     if (this._hzPulses && this._hzPulses.length) {
       const dt = (this.game?.loop?.delta || 16.7) / 1000;
@@ -4311,6 +4415,8 @@ export default class CombatScene extends Phaser.Scene {
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
       if (e.isDummy) { try { e.body.setVelocity(0, 0); } catch (_) {} return; }
+      // Dandelion mines: completely stationary hazards (no movement or AI)
+      if (e.isDnMine) { try { e.body?.setVelocity?.(0, 0); } catch (_) {} return; }
       const now = this.time.now;
       const dt = (this.game?.loop?.delta || 16.7) / 1000; // seconds
       // Bigwig/Dandelion/Hazel: freeze completely during certain boss abilities (movement handled in boss AI)
@@ -4319,6 +4425,12 @@ export default class CombatScene extends Phaser.Scene {
         const channelingBigwig = isBigwig && ((e._bwAbilityState === 'channel') || (e._bwTurretState === 'turretChannel'));
         const isDandelion = e.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion');
         const usingDnSpecial = isDandelion && (e._dnSpecialState === 'aim' || e._dnSpecialState === 'burst');
+        // Treat Dandelion assault as movement-owned only during windup/dashIn/melee/dashOut.
+        // During 'recover', allow generic movement to resume (attacks are still gated in boss AI).
+        const dnAssaultActive = isDandelion
+          && e._dnAssaultState
+          && e._dnAssaultState !== 'idle'
+          && e._dnAssaultState !== 'recover';
         const isHazel = e.isBoss && (e.bossType === 'Hazel' || e._bossId === 'Hazel');
         // Hazel: freeze only during Phase Bomb channel; allow movement during missile special
         const channelingHazel = isHazel && (e._hzPhaseState === 'channel');
@@ -4328,8 +4440,8 @@ export default class CombatScene extends Phaser.Scene {
           e.body?.setVelocity?.(0, 0);
           return;
         }
-        // Dandelion dash: let updateBossAI control velocity; just skip generic movement
-        if (dandelionDashing) {
+        // Dandelion dash/assault: let updateBossAI control velocity; just skip generic movement
+        if (dandelionDashing || dnAssaultActive) {
           return;
         }
       } catch (_) {}
@@ -4423,21 +4535,21 @@ export default class CombatScene extends Phaser.Scene {
         } catch (_) {}
         return;
       }
-      // Turrets: fully stationary enemies with custom firing + aim logic
-      if (e.isTurret) {
+        // Turrets: fully stationary enemies with custom firing + aim logic
+        if (e.isTurret) {
         const nowT = this.time.now;
         const dxT = this.player.x - e.x;
         const dyT = this.player.y - e.y;
         const distT = Math.hypot(dxT, dyT) || 1;
         const fwdX = dxT / distT;
         const fwdY = dyT / distT;
-        const angToPlayer = Math.atan2(dyT, dxT);
+          const angToPlayer = Math.atan2(dyT, dxT);
         // Maintain visuals (base + head)
-        try {
-          const base = e._turretBase;
-          const head = e._turretHead;
-          if (base) {
-            base.x = e.x; base.y = e.y;
+          try {
+            const base = e._turretBase;
+            const head = e._turretHead;
+            if (base) {
+              base.x = e.x; base.y = e.y;
           }
           if (head) {
             const baseH = base ? (base.displayHeight || base.height || 12) : 12;
@@ -5810,7 +5922,7 @@ export default class CombatScene extends Phaser.Scene {
       b.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } };
     };
 
-    if (e.bossType === 'Dandelion') {
+      if (e.bossType === 'Dandelion') {
       // Initialize Dandelion-specific sweep/cooldown state once
       if (!e._dnInit) {
         e._dnInit = true;
@@ -5834,12 +5946,267 @@ export default class CombatScene extends Phaser.Scene {
         e._dnDashUntil = 0;
         e._dnDashNextAt = now + 3000; // first dash no sooner than 3s in
         e._dnDashTrailLast = null;
+        // Assault (dash-melee-mine) state
+        e._dnAssaultState = 'idle'; // 'idle' | 'windup' | 'dashIn' | 'melee' | 'dashOut' | 'recover'
+        e._dnAssaultNextAt = now + 10000; // first assault no sooner than 10s in
+        e._dnAssaultWindupUntil = 0;
+        e._dnAssaultRecoverUntil = 0;
+        e._dnAssaultDirInX = 0;
+        e._dnAssaultDirInY = 0;
+        e._dnAssaultDirOutX = 0;
+        e._dnAssaultDirOutY = 0;
+        e._dnAssaultDashSpeed = 800;
+        e._dnAssaultDashOutStartAt = 0;
+        e._dnAssaultDashOutDurMs = 500; // 2x normal 250ms dash duration
+        e._dnAssaultMeleeDone = false;
+        // Mine timing: all mines every 100ms during dash-out
+        e._dnAssaultMineInterval = 100;
+        e._dnAssaultNextMineAt = 0;
+        e._dnAssaultLineG = null;
+        e._dnAssaultTrailLast = null;
+        e._dnAssaultDashInStartedAt = 0;
+        e._dnAssaultWindupStartAt = 0;
+        e._dnAssaultWindupLen = 200;
+        // Cache base speed for slow/restore
+        e._dnBaseSpeed = e.speed || 120;
       }
 
       const dtMsDn = (this.game?.loop?.delta || 16.7);
 
-      // Handle Dandelion special attack (laser machine-gun) first
-      if (e._dnSpecialState === 'aim') {
+      // Handle Dandelion assault ability (dash to player, melee, dash back laying mines)
+      const nowDn = now;
+      const stunnedDn = nowDn < (e._stunnedUntil || 0);
+      const assaultActive = e._dnAssaultState && e._dnAssaultState !== 'idle';
+
+      // Cancel assault if stunned or strongly repulsed; allow immediate recast later (no extra CD)
+      if (assaultActive && stunnedDn) {
+        try { e.body?.setVelocity?.(0, 0); } catch (_) {}
+        e._dnAssaultState = 'idle';
+        e._dnAssaultMeleeDone = false;
+        try { e._dnAssaultLineG?.destroy(); } catch (_) {}
+        e._dnAssaultLineG = null;
+      }
+
+      // Assault state machine: when active, skip all other Dandelion attacks
+      const assaultState = e._dnAssaultState;
+      if (e._dnAssaultState !== 'idle') {
+        if (assaultState === 'windup') {
+          // 1s windup: slow, no movement, animated red arrows indicating dash direction
+          try { e.body?.setVelocity?.(0, 0); } catch (_) {}
+          e.speed = e._dnBaseSpeed * 0.4;
+          if (!e._dnAssaultLineG) {
+            try {
+              const g = this.add.graphics();
+              g.setDepth(9600);
+              g.setBlendMode(Phaser.BlendModes.ADD);
+              e._dnAssaultLineG = g;
+            } catch (_) {}
+          }
+          try {
+            const g = e._dnAssaultLineG;
+            if (g) {
+              g.clear();
+              const sx = e.x; const sy = e.y;
+              // Recompute direction to player each frame so arrow line tracks player,
+              // and extend arrows well past the player (visually \"infinite\" in-arena)
+              let nx = 0; let ny = 0; let len = 0;
+              try {
+                const dxp = this.player.x - sx;
+                const dyp = this.player.y - sy;
+                const dist = Math.hypot(dxp, dyp) || 1;
+                nx = dxp / dist;
+                ny = dyp / dist;
+                // Extend line well beyond player hit position
+                len = dist + 600;
+              } catch (_) {}
+              const tWind = Math.max(0, (nowDn - (e._dnAssaultWindupStartAt || nowDn)) / 1000);
+              const arrowSpeed = 320; // slower arrows along dash path
+              const spacing = 24;     // spacing between arrows
+              const headOffset = (tWind * arrowSpeed) % spacing;
+              // Fill the whole line from near the boss out past the player
+              for (let dist = 16 + headOffset; dist <= len; dist += spacing) {
+                const ax = sx + nx * dist;
+                const ay = sy + ny * dist;
+                const size = 10;
+                const ang = Math.atan2(ny, nx);
+                const cos = Math.cos(ang); const sin = Math.sin(ang);
+                // Triangle points for arrow head
+                const tipX = ax + cos * size;
+                const tipY = ay + sin * size;
+                const leftX = ax + Math.cos(ang + Math.PI * 0.75) * size * 0.7;
+                const leftY = ay + Math.sin(ang + Math.PI * 0.75) * size * 0.7;
+                const rightX = ax + Math.cos(ang - Math.PI * 0.75) * size * 0.7;
+                const rightY = ay + Math.sin(ang - Math.PI * 0.75) * size * 0.7;
+                const alpha = 0.25 + 0.35 * Math.min(1, dist / len);
+                g.fillStyle(0xff3333, alpha);
+                g.beginPath();
+                g.moveTo(tipX, tipY);
+                g.lineTo(leftX, leftY);
+                g.lineTo(rightX, rightY);
+                g.closePath();
+                g.fillPath();
+              }
+            }
+          } catch (_) {}
+          if (nowDn >= (e._dnAssaultWindupUntil || 0)) {
+            try { e._dnAssaultLineG?.destroy(); } catch (_) {}
+            e._dnAssaultLineG = null;
+            e.speed = e._dnBaseSpeed;
+            e._dnAssaultState = 'dashIn';
+            e._dnAssaultDashInStartedAt = nowDn;
+          }
+          return;
+        } else if (assaultState === 'dashIn') {
+          // Dash toward player with constant speed, tracking player until in melee radius or 1s cap
+          const dashSpeed = e._dnAssaultDashSpeed || 800;
+          let nx = 0; let ny = 0;
+          try {
+            const dxp = this.player.x - e.x;
+            const dyp = this.player.y - e.y;
+            let len = Math.hypot(dxp, dyp) || 1;
+            nx = dxp / len;
+            ny = dyp / len;
+          } catch (_) {}
+          e._dnAssaultDirInX = nx;
+          e._dnAssaultDirInY = ny;
+          e._dnAssaultDirOutX = -nx;
+          e._dnAssaultDirOutY = -ny;
+          try {
+            e.body?.setVelocity?.(nx * dashSpeed, ny * dashSpeed);
+          } catch (_) {}
+          // Break any soft barricades passed through while dashing
+          try { this._dandelionBreakSoftBarricades(e); } catch (_) {}
+          // Dash trail (red), similar to sideways dash
+          try {
+            if (!e._dnAssaultTrailLast) e._dnAssaultTrailLast = { x: e.x, y: e.y };
+            const g = this.add.graphics();
+            g.setDepth(9800);
+            g.setBlendMode(Phaser.BlendModes.ADD);
+            g.lineStyle(6, 0xff3333, 0.95);
+            g.beginPath();
+            g.moveTo(e._dnAssaultTrailLast.x, e._dnAssaultTrailLast.y);
+            g.lineTo(e.x, e.y);
+            g.strokePath();
+            this.tweens.add({
+              targets: g,
+              alpha: 0,
+              duration: 220,
+              ease: 'Quad.easeOut',
+              onComplete: () => { try { g.destroy(); } catch (_) {} },
+            });
+            e._dnAssaultTrailLast.x = e.x;
+            e._dnAssaultTrailLast.y = e.y;
+          } catch (_) {}
+          // Check melee trigger or 1s cap
+          let withinMelee = false;
+          try {
+            const dxp = this.player.x - e.x;
+            const dyp = this.player.y - e.y;
+            const d = Math.hypot(dxp, dyp) || 1;
+            const meleeR = 48;
+            if (d <= meleeR) withinMelee = true;
+          } catch (_) {}
+          const exceededCap = nowDn - (e._dnAssaultDashInStartedAt || nowDn) >= 1000;
+          if (withinMelee || exceededCap) {
+            try { e.body?.setVelocity?.(0, 0); } catch (_) {}
+            e._dnAssaultState = 'melee';
+          }
+          return;
+        } else if (assaultState === 'melee') {
+          if (!e._dnAssaultMeleeDone) {
+            try { this._performDandelionAssaultMelee?.(e); } catch (_) {}
+            e._dnAssaultMeleeDone = true;
+          }
+          e._dnAssaultDashOutStartAt = nowDn;
+          // Wait one interval (100ms) before dropping the first mine, so none spawn immediately
+          e._dnAssaultNextMineAt = nowDn + (e._dnAssaultMineInterval || 100);
+          e._dnAssaultState = 'dashOut';
+          return;
+        } else if (assaultState === 'dashOut') {
+          const dashSpeed = e._dnAssaultDashSpeed || 800;
+          const nx = e._dnAssaultDirOutX || 0;
+          const ny = e._dnAssaultDirOutY || 0;
+          try {
+            e.body?.setVelocity?.(nx * dashSpeed, ny * dashSpeed);
+          } catch (_) {}
+          // Break any soft barricades passed through while dashing
+          try { this._dandelionBreakSoftBarricades(e); } catch (_) {}
+          // Dash trail
+          try {
+            if (!e._dnAssaultTrailLast) e._dnAssaultTrailLast = { x: e.x, y: e.y };
+            const g = this.add.graphics();
+            g.setDepth(9800);
+            g.setBlendMode(Phaser.BlendModes.ADD);
+            g.lineStyle(6, 0xff3333, 0.95);
+            g.beginPath();
+            g.moveTo(e._dnAssaultTrailLast.x, e._dnAssaultTrailLast.y);
+            g.lineTo(e.x, e.y);
+            g.strokePath();
+            this.tweens.add({
+              targets: g,
+              alpha: 0,
+              duration: 220,
+              ease: 'Quad.easeOut',
+              onComplete: () => { try { g.destroy(); } catch (_) {} },
+            });
+            e._dnAssaultTrailLast.x = e.x;
+            e._dnAssaultTrailLast.y = e.y;
+          } catch (_) {}
+          // Lay mines at fixed interval
+          if (nowDn >= (e._dnAssaultNextMineAt || 0)) {
+            try { this._spawnDandelionMine?.(e.x, e.y); } catch (_) {}
+            // After the first mine, drop subsequent mines every 100ms
+            e._dnAssaultNextMineAt = nowDn + 100;
+          }
+          // End dash-out after configured duration
+          if (nowDn >= (e._dnAssaultDashOutStartAt || nowDn) + (e._dnAssaultDashOutDurMs || 500)) {
+            try { e.body?.setVelocity?.(0, 0); } catch (_) {}
+            e._dnAssaultState = 'recover';
+            e._dnAssaultRecoverUntil = nowDn + 2000; // 2s with no attacks
+            e._dnAssaultTrailLast = null;
+          }
+          return;
+        } else if (assaultState === 'recover') {
+          // Movement allowed via generic shooter logic; just block attacks
+          if (nowDn >= (e._dnAssaultRecoverUntil || 0)) {
+            e._dnAssaultState = 'idle';
+            e._dnAssaultMeleeDone = false;
+          }
+          // Fall through to allow generic movement; skip attacks below
+        }
+      }
+
+      // Attempt to start assault between normal cycles: right after cooldown, before next aim
+      if (e._dnAssaultState === 'idle') {
+        const betweenCycles = e._dnMode === 'idle' && nowDn >= (e._dnCooldownUntil || 0);
+        if (betweenCycles && nowDn >= (e._dnAssaultNextAt || 0) && e._dnSpecialState === 'idle' && e._dnDashState === 'idle') {
+          e._dnAssaultState = 'windup';
+          e._dnAssaultWindupUntil = nowDn + 2000; // 2s windup
+          e._dnAssaultMeleeDone = false;
+          e._dnAssaultDashInStartedAt = nowDn;
+          e._dnAssaultWindupStartAt = nowDn;
+          // Compute initial in/out directions from current player position (fixed for whole windup)
+          try {
+            const dxp = this.player.x - e.x;
+            const dyp = this.player.y - e.y;
+            let len = Math.hypot(dxp, dyp) || 1;
+            const nx = dxp / len;
+            const ny = dyp / len;
+            e._dnAssaultDirInX = nx;
+            e._dnAssaultDirInY = ny;
+            e._dnAssaultDirOutX = -nx;
+            e._dnAssaultDirOutY = -ny;
+            e._dnAssaultWindupLen = Math.min(420, Math.max(120, len));
+          } catch (_) {}
+          // Set next assault CD (20s)
+          e._dnAssaultNextAt = nowDn + 20000;
+        }
+      }
+
+      // Handle Dandelion special attack (laser machine-gun) first, but skip if assault is active
+      if (e._dnAssaultState !== 'idle') {
+        // Assault ability blocks other Dandelion attacks
+      } else if (e._dnSpecialState === 'aim') {
         // 1.5s aim line at player; Dandelion stays still
         try { e.body?.setVelocity?.(0, 0); } catch (_) {}
         if (!e._dnAimG) e._dnAimG = this.add.graphics();
@@ -5993,21 +6360,25 @@ export default class CombatScene extends Phaser.Scene {
         return;
       }
 
-      // Handle Dandelion sideways dash (available any time except during special)
+      // Handle Dandelion sideways dash (available any time except during special/assault)
       const dashSpeed = 800; // significantly faster than player dash
       const dashDurMs = 250; // ~0.25s dash (~200px at this speed)
-      if (e._dnDashState === 'dashing') {
-        if (now >= (e._dnDashUntil || 0)) {
-          // End dash; allow generic shooter movement to resume
-          e._dnDashState = 'idle';
-          e._dnDashTrailLast = null;
-        } else {
+      if (e._dnAssaultState !== 'idle') {
+        // Assault ability owns dashing during its phases
+        } else if (e._dnDashState === 'dashing') {
+          if (now >= (e._dnDashUntil || 0)) {
+            // End dash; allow generic shooter movement to resume
+            e._dnDashState = 'idle';
+            e._dnDashTrailLast = null;
+          } else {
           // Maintain dash velocity and draw dash trail like the player's
-          try {
-            const vx = e._dnDashDirX * dashSpeed;
-            const vy = e._dnDashDirY * dashSpeed;
-            e.body?.setVelocity?.(vx, vy);
-          } catch (_) {}
+            try {
+              const vx = e._dnDashDirX * dashSpeed;
+              const vy = e._dnDashDirY * dashSpeed;
+              e.body?.setVelocity?.(vx, vy);
+            } catch (_) {}
+            // Break any soft barricades passed through while dashing
+            try { this._dandelionBreakSoftBarricades(e); } catch (_) {}
           try {
             if (e._dnDashTrailLast) {
               const g = this.add.graphics();
@@ -6032,7 +6403,7 @@ export default class CombatScene extends Phaser.Scene {
             }
           } catch (_) {}
         }
-      } else if (e._dnSpecialState === 'idle' && now >= (e._dnDashNextAt || 0)) {
+      } else if (e._dnSpecialState === 'idle' && e._dnAssaultState === 'idle' && now >= (e._dnDashNextAt || 0)) {
         // Eligible to start a new dash: sideways relative to player, with random side
         try {
           const dxp = this.player.x - e.x;
@@ -6057,7 +6428,7 @@ export default class CombatScene extends Phaser.Scene {
       }
 
       // Handle normal Dandelion attack loop: aim (1s) -> burst (1s) -> cooldown (1.5s)
-      if (e._dnMode === 'idle') {
+      if (e._dnAssaultState === 'idle' && e._dnMode === 'idle') {
         // Start a new cycle only if not in post-special cooldown
         if (now >= (e._dnAfterSpecialUntil || 0)) {
           e._dnMode = 'sweep'; // reuse field: 'sweep' = normal aim phase
@@ -6067,7 +6438,7 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
 
-      if (e._dnMode === 'sweep') {
+      if (e._dnAssaultState === 'idle' && e._dnMode === 'sweep') {
         // 1s aim lock at player, Dandelion keeps moving via generic shooter logic
         const aimDur = 1000;
         try {
@@ -6474,9 +6845,9 @@ export default class CombatScene extends Phaser.Scene {
               }
             });
           }
+          }
+          return;
         }
-        return;
-      }
 
       // Normal phase: Bigwig acts like a stationary machine-gunner with 20-round bursts
       if (e._bwPhase === 'normal' && canAct) {
@@ -7679,6 +8050,141 @@ export default class CombatScene extends Phaser.Scene {
     if (disp) this.time.delayedCall(count * 90 + 200, () => { try { disp.destroy(); } catch (_) {} });
     // Scene-level helper retained for compatibility (not used by mines directly)
     this._explodeMine = (mine) => { try { mine?._explodeFn?.(mine); } catch (_) {} };
+  }
+
+  // Dandelion assault melee: separate hook so it can diverge from default boss melee later
+  _performDandelionAssaultMelee(boss) {
+    if (!boss || !this.player) return;
+    try {
+      // Mirror standard boss melee exactly: same VFX, cone, range, damage, and i-frames.
+      const e = boss;
+      const cfg = e._bossMeleeCfg || { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 };
+      const px = this.player.x; const py = this.player.y;
+      const dx = px - e.x; const dy = py - e.y;
+      const facing = Math.atan2(dy, dx);
+      // Alternate start angle just like the shared boss melee
+      e._bmAlt = !e._bmAlt;
+      // Use the same slash VFX as boss melee/Rook: 150° cone, 90ms duration, red
+      try { this.spawnMeleeVfx(e, facing, 150, 90, 0xff3333, cfg.range, e._bmAlt); } catch (_) {}
+      // Damage tick at ~45ms with same geometry and damage rules
+      this.time.delayedCall(45, () => {
+        if (!this.player?.active || !e.active) return;
+        const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
+        const dd = Math.hypot(pdx, pdy) || 1;
+        const angP = Math.atan2(pdy, pdx);
+        const diff = Math.abs(Phaser.Math.Angle.Wrap(angP - facing));
+        if (dd <= cfg.range && diff <= cfg.half) {
+          const dmg = (e.damage || 10);
+          if (this.time.now >= (this.player.iframesUntil || 0)) {
+            try { this.applyPlayerDamage(dmg); } catch (_) {}
+            // Same short melee-specific i-frames as standard boss melee
+            this.player.iframesUntil = this.time.now + 75;
+            try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
+          }
+        }
+      });
+    } catch (_) {}
+  }
+
+  // Spawn a stationary Dandelion mine at (x, y)
+  _spawnDandelionMine(x, y) {
+    try {
+      const mine = this.physics.add.image(x, y, 'bullet');
+      mine.setVisible(false);
+      mine.body.allowGravity = false;
+      mine.setImmovable(true);
+      mine.body.setVelocity(0, 0);
+      mine.isDnMine = true;
+      mine.isEnemy = true;
+      mine.hp = 30;
+      mine.maxHp = 30;
+      mine._sensorRadius = 50;
+      mine._blastRadius = 70;
+      mine._sensorTriggered = false;
+      mine._sensorTriggerAt = 0;
+      // 12x12 square hitbox centered on mine for physics
+      try { mine.setSize(12, 12).setOffset(-6, -6); } catch (_) {}
+      // Ensure lasers and any getBounds-based checks see a 12x12 box as well
+      try {
+        mine.getBounds = () => new Phaser.Geom.Rectangle(mine.x - 6, mine.y - 6, 12, 12);
+      } catch (_) {}
+      // Add to enemies group so bullets and abilities can damage it
+      try { this.enemies?.add?.(mine); } catch (_) {}
+      // Explosion handler: only damages player and soft barricades
+      mine._explodeFn = (m) => {
+        if (!m?.active) return;
+        const ex = m.x; const ey = m.y;
+        const r = m._blastRadius || 70; const r2 = r * r;
+        // Universal enemy explosion VFX
+        try { impactBurst(this, ex, ey, { color: 0xff5533, size: 'large', radius: r }); } catch (_) {}
+        // Damage player
+        try {
+          const pdx = this.player.x - ex; const pdy = this.player.y - ey;
+          if ((pdx * pdx + pdy * pdy) <= r2) {
+            let dmg = 30;
+            try {
+              const mods = this.gs?.getDifficultyMods?.() || {};
+              const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
+              dmg = Math.max(1, Math.round(dmg * mul));
+            } catch (_) {}
+            const now = this.time.now;
+            if (now >= (this.player.iframesUntil || 0)) {
+              try { this.applyPlayerDamage(dmg); } catch (_) {}
+            }
+          }
+        } catch (_) {}
+        // Damage soft barricades only
+        try {
+          const soft = this.barricadesSoft?.getChildren?.() || [];
+          for (let i = 0; i < soft.length; i += 1) {
+            const s = soft[i]; if (!s?.active) continue;
+            const dx = s.x - ex; const dy = s.y - ey;
+            if ((dx * dx + dy * dy) <= r2) {
+              const hp = s.getData('hp');
+              if (typeof hp === 'number') {
+                const newHp = hp - 30;
+                s.setData('hp', newHp);
+                if (newHp <= 0) {
+                  try { s.destroy(); } catch (_) {}
+                }
+              }
+            }
+          }
+        } catch (_) {}
+        try { m._g?.destroy(); } catch (_) {}
+        m._g = null;
+        try { m.destroy(); } catch (_) {}
+      };
+      // Track mines for sensor logic
+      if (!this._dnMines) this._dnMines = [];
+      this._dnMines.push(mine);
+      return mine;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Destroy any soft barricades that Dandelion is currently overlapping during a dash
+  _dandelionBreakSoftBarricades(boss) {
+    try {
+      if (!boss || !this.barricadesSoft) return;
+      const arr = this.barricadesSoft.getChildren?.() || [];
+      const r = 18; const r2 = r * r;
+      for (let i = 0; i < arr.length; i += 1) {
+        const s = arr[i]; if (!s?.active) continue;
+        const dx = s.x - boss.x; const dy = s.y - boss.y;
+        if ((dx * dx + dy * dy) <= r2) {
+          const hp = s.getData('hp');
+          if (typeof hp === 'number') {
+            const newHp = hp - 9999;
+            s.setData('hp', newHp);
+            if (newHp <= 0) {
+              try { s.destroy(); } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 }
 
