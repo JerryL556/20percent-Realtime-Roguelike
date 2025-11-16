@@ -298,6 +298,19 @@ export function createBoss(scene, x, y, hp = 600, damage = 20, speed = 50, textu
   b.damage = damage;
   b.speed = speed;
   b.isBoss = true;
+  // Boss melee: separate config that currently mirrors Rook melee, but can diverge later.
+  // Auto-melee uses this config + a detection radius when the player gets close.
+  try {
+    b._bossMeleeCfg = {
+      range: 90,
+      half: Phaser.Math.DegToRad ? Phaser.Math.DegToRad(75) : (Math.PI / 4),
+      wind: 250,
+      sweep: 90,
+      recover: 650,
+    };
+    b._bossMeleeRadius = 110; // detection radius; slightly larger than swing range
+    b._bossMeleeEnabled = true;
+  } catch (_) {}
   try {
     // Attach visual sprite using the provided boss asset key and scale to fit the hitbox.
     // ENEMY_SPRITE_VISUAL_MULT is 2.0, so pass visMult = 0.5 to net to 1.0x body height.

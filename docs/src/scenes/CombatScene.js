@@ -864,9 +864,14 @@ export default class CombatScene extends Phaser.Scene {
                 const mods = this.gs?.getDifficultyMods?.() || {};
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
-        let boss = createBoss(this, cx, cy, 400, 10, 120, bossType);
+        // Use a standard base speed, then optionally boost Dandelion only.
+        let boss = createBoss(this, cx, cy, 400, 10, 60, bossType);
         boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
-        boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 120; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
+        boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp;
+        // Dandelion gets higher base speed; other bosses stay at standard speed.
+        const baseBossSpeed = 60;
+        boss.speed = (bossType === 'Dandelion') ? 120 : baseBossSpeed;
+        boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
         // visual comes from asset via createBoss catch (_) {} }
         boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
         // Visual scaling is handled by EnemyFactory helper; keep physics body at 12x12
@@ -1865,6 +1870,8 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     } catch (_) {}
+    // Also damage nearby destructible (soft) barricades
+    try { this.damageSoftBarricadesInRadius(ex, ey, radius, 10); } catch (_) {}
     // Cleanup graphics
     try { bomb.g?.destroy(); } catch (_) {}
   }
@@ -1998,15 +2005,51 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
+  // Boss: damage any nearby soft barricades in a 37x37 square centered on the boss.
+  damageNearbySoftBarricadesForBoss(boss) {
+    if (!boss || !boss.active) return;
+    const arr = this.barricadesSoft?.getChildren?.() || [];
+    if (!arr.length) return;
+    const now = this.time.now;
+    // Use a slightly larger square so that, given boss (36x36) and barricade (~16x16) separation,
+    // their centers still fall inside when the bodies visually touch.
+    const half = 30; // 60x60 square centered on boss
+    const bx = boss.x;
+    const by = boss.y;
+    for (let i = 0; i < arr.length; i += 1) {
+      const s = arr[i];
+      if (!s || !s.active) continue;
+      if (!s.getData('destructible')) continue;
+      const dx = s.x - bx;
+      const dy = s.y - by;
+      if (Math.abs(dx) > half || Math.abs(dy) > half) continue;
+      const last = s.getData('_lastBossNearbyHitAt') || 0;
+      if (now - last < 150) continue; // 150ms per-barricade rate
+      s.setData('_lastBossNearbyHitAt', now);
+      const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+      const dmg = 10; // fixed damage for boss vs soft barricade
+      const hp1 = hp0 - dmg;
+      if (hp1 <= 0) {
+        try { s.destroy(); } catch (_) {}
+      } else {
+        s.setData('hp', hp1);
+      }
+    }
+  }
+
   // Enemy body tries to push through a destructible barricade: damage over time
   onEnemyHitBarricade(e, s) {
     if (!s?.active) return;
     if (!s.getData('destructible')) return;
     const now = this.time.now;
     const last = s.getData('_lastMeleeHurtAt') || 0;
-    if (now - last < 250) return; // throttle
+    const minInterval = (e && e.isBoss) ? 100 : 250; // bosses hit barricades more frequently
+    if (now - last < minInterval) return; // throttle
     s.setData('_lastMeleeHurtAt', now);
-    const dmg = Math.max(4, Math.floor((e?.damage || 8) * 0.6));
+    let dmg = Math.max(4, Math.floor((e?.damage || 8) * 0.6));
+    if (e && e.isBoss) {
+      dmg *= 3; // bosses break soft barricades faster
+    }
     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
     const hp1 = hp0 - dmg;
     if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
@@ -4277,7 +4320,8 @@ export default class CombatScene extends Phaser.Scene {
         const isDandelion = e.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion');
         const usingDnSpecial = isDandelion && (e._dnSpecialState === 'aim' || e._dnSpecialState === 'burst');
         const isHazel = e.isBoss && (e.bossType === 'Hazel' || e._bossId === 'Hazel');
-        const channelingHazel = isHazel && (e._hzPhaseState === 'channel' || e._hzSpecialActive);
+        // Hazel: freeze only during Phase Bomb channel; allow movement during missile special
+        const channelingHazel = isHazel && (e._hzPhaseState === 'channel');
         const dandelionDashing = isDandelion && e._dnDashState === 'dashing';
         // Special/channel states: zero velocity and skip generic movement
         if (channelingBigwig || usingDnSpecial || channelingHazel) {
@@ -4672,6 +4716,75 @@ export default class CombatScene extends Phaser.Scene {
             if (now >= (e._meleeUntil || 0)) { e._mState = 'idle'; }
           }
         }
+        // Boss: constantly damage soft barricades in a 37x37 square around their body
+        if (e.isBoss) {
+          try { this.damageNearbySoftBarricadesForBoss(e); } catch (_) {}
+        }
+        // Boss melee: auto-trigger a Rook-style melee when the player gets close,
+        // using a separate state machine so existing boss AI remains unchanged.
+        if (e.isBoss && e._bossMeleeEnabled) {
+          const cfg = e._bossMeleeCfg || { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 };
+          const detect = typeof e._bossMeleeRadius === 'number' ? e._bossMeleeRadius : (cfg.range + 8);
+          if (!e._bmState) e._bmState = 'idle';
+          // Enter windup if player is within detection radius
+          if (e._bmState === 'idle') {
+            if (dist <= detect) {
+              e._bmState = 'windup';
+              e._bmUntil = now + cfg.wind;
+              e._bmFacing = Math.atan2(dy, dx);
+              e._bmAlt = !e._bmAlt;
+            }
+          }
+          // Freeze during windup
+          if (e._bmState === 'windup') {
+            vx = 0; vy = 0;
+            if (now >= (e._bmUntil || 0)) {
+              // Start sweep using the same VFX as enemy melee/Rook
+              e._bmState = 'sweep';
+              e._bmDidHit = false;
+              e._bmUntil = now + cfg.sweep;
+              try { this.spawnMeleeVfx(e, e._bmFacing, 150, 90, 0xff3333, cfg.range, e._bmAlt); } catch (_) {}
+              // Damage tick ~45ms after sweep begins, matching existing melee timing
+              this.time.delayedCall(45, () => {
+                if (!e.active || e._bmState !== 'sweep') return;
+                const pdx = this.player.x - e.x; const pdy = this.player.y - e.y;
+                const dd = Math.hypot(pdx, pdy) || 1;
+                const angP = Math.atan2(pdy, pdx);
+                const diff = Math.abs(Phaser.Math.Angle.Wrap(angP - (e._bmFacing || 0)));
+                if (dd <= cfg.range && diff <= cfg.half && !e._bmDidHit) {
+                  this.applyPlayerDamage((e.damage || 10));
+                  this.player.iframesUntil = this.time.now + 75;
+                  try { impactBurst(this, this.player.x, this.player.y, { color: 0xff3333, size: 'small' }); } catch (_) {}
+                  e._bmDidHit = true;
+                  if (this.gs && this.gs.hp <= 0) {
+                    try {
+                      const eff = getPlayerEffects(this.gs);
+                      this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                      this.gs.nextScene = SceneKeys.Hub;
+                      SaveManager.saveToLocal(this.gs);
+                      this.scene.start(SceneKeys.Hub);
+                    } catch (_) {}
+                    return;
+                  }
+                }
+              });
+            }
+          }
+          // During sweep, stand still
+          if (e._bmState === 'sweep') {
+            vx = 0; vy = 0;
+            if (now >= (e._bmUntil || 0)) {
+              e._bmState = 'recover';
+              e._bmUntil = now + cfg.recover;
+              // Reuse melee slowdown window so bosses briefly move slower after a swing
+              e._meleeSlowUntil = now + 280;
+            }
+          }
+          // Recovery: then back to idle
+          if (e._bmState === 'recover') {
+            if (now >= (e._bmUntil || 0)) { e._bmState = 'idle'; }
+          }
+        }
         // Pathfinding when LOS to player is blocked
         let usingPath = false;
         const losBlocked = this.isLineBlocked(e.x, e.y, this.player.x, this.player.y);
@@ -4820,7 +4933,7 @@ export default class CombatScene extends Phaser.Scene {
         e._svx += (vx - e._svx) * smooth;
         e._svy += (vy - e._svy) * smooth;
         // Post-sweep slow for melee enemies (reduced slowdown: 60% speed)
-        if (e.isMelee && e._meleeSlowUntil && now < e._meleeSlowUntil) { e._svx *= 0.6; e._svy *= 0.6; }
+        if ((e.isMelee || e.isBoss) && e._meleeSlowUntil && now < e._meleeSlowUntil) { e._svx *= 0.6; e._svy *= 0.6; }
         e.body.setVelocity(e._svx, e._svy);
         // Separate, lightweight hover effect: only when overlapping player, nudge position outward
         // This does not alter movement modes or velocities; we only correct penetration
@@ -5556,7 +5669,17 @@ export default class CombatScene extends Phaser.Scene {
     try { g.clear(); } catch (_) {}
     // Compute end vs barricades, then render thicker dual-color beam
     const hit = this.computeEnemyLaserEnd(e.x, e.y, angle);
-    const ex = hit.ex, ey = hit.ey;
+    let ex = hit.ex, ey = hit.ey;
+    // Clip beam visually to player if it hits them, so the beam doesn't draw past the hit point
+    try {
+      const lineFull = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+      const rectPFull = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
+      const pts = Phaser.Geom.Intersects.GetLineToRectangle(lineFull, rectPFull);
+      if (pts && pts.length) {
+        ex = pts[0].x;
+        ey = pts[0].y;
+      }
+    } catch (_) {}
     try {
       g.lineStyle(5, 0xff3333, 0.95).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
       g.lineStyle(2, 0x66aaff, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
@@ -5568,7 +5691,7 @@ export default class CombatScene extends Phaser.Scene {
       e._beamTickAccum = (e._beamTickAccum || 0) + dt;
       while (e._beamTickAccum >= tick) {
         e._beamTickAccum -= tick;
-        // Check if beam line hits player's bounds
+        // Check if beam line (clipped) hits player's bounds
         const line = new Phaser.Geom.Line(e.x, e.y, ex, ey);
         const rect = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
         if (damagePlayer && Phaser.Geom.Intersects.LineToRectangle(line, rect)) {
@@ -5585,7 +5708,7 @@ export default class CombatScene extends Phaser.Scene {
             }
           }
         }
-        // Damage soft barricades intersecting the beam
+        // Damage soft barricades intersecting the (clipped) beam
         try {
           const arr = this.barricadesSoft?.getChildren?.() || [];
           for (let i = 0; i < arr.length; i += 1) {
@@ -5767,13 +5890,24 @@ export default class CombatScene extends Phaser.Scene {
           try {
             const hit = this.computeEnemyLaserEnd(e.x, e.y, shotAng);
             const ex = hit.ex, ey = hit.ey;
+            // Clip beam visually to player if it hits them, so the beam doesn't draw past the hit point
+            let hitX = ex; let hitY = ey;
+            try {
+              const lineFull = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+              const rectP = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
+              const pts = Phaser.Geom.Intersects.GetLineToRectangle(lineFull, rectP);
+              if (pts && pts.length) {
+                hitX = pts[0].x;
+                hitY = pts[0].y;
+              }
+            } catch (_) {}
             // Visual: intense red beam that fades quickly
             try {
               const g = this.add.graphics();
               try { g.setDepth(8050); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
               try {
-                g.lineStyle(6, 0xff2222, 0.98).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
-                g.lineStyle(3, 0xffaaaa, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
+                g.lineStyle(6, 0xff2222, 0.98).beginPath(); g.moveTo(e.x, e.y); g.lineTo(hitX, hitY); g.strokePath();
+                g.lineStyle(3, 0xffaaaa, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(hitX, hitY); g.strokePath();
               } catch (_) {}
               try {
                 this.tweens.add({
@@ -5814,7 +5948,7 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
             // One-time hit check against player and soft barricades
             try {
-              const line = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+              const line = new Phaser.Geom.Line(e.x, e.y, hitX, hitY);
               // Player hit
               try {
                 const rectP = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
@@ -5822,6 +5956,7 @@ export default class CombatScene extends Phaser.Scene {
                   if (this.time.now >= (this.player.iframesUntil || 0)) {
                     const dmg = 10;
                     this.applyPlayerDamage(dmg);
+                    try { impactBurst(this, hitX, hitY, { color: 0xff4455, size: 'small' }); } catch (_) {}
                     this.player.iframesUntil = this.time.now; // no extra i-frames
                     if (this.gs.hp <= 0) {
                       const eff = getPlayerEffects(this.gs);
@@ -5842,10 +5977,11 @@ export default class CombatScene extends Phaser.Scene {
                   const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
                   if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
                     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
-                    const dmg = 10;
+                    const dmg = 30;
                     const hp1 = hp0 - dmg;
                     if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
                     else s.setData('hp', hp1);
+                    try { impactBurst(this, s.x, s.y, { color: 0xff4455, size: 'small' }); } catch (_) {}
                   }
                 }
               } catch (_) {}
@@ -5983,13 +6119,24 @@ export default class CombatScene extends Phaser.Scene {
           try {
             const hit = this.computeEnemyLaserEnd(e.x, e.y, shotAng);
             const ex = hit.ex, ey = hit.ey;
+            // Clip beam visually to player if it hits them, so the beam doesn't draw past the hit point
+            let hitX = ex; let hitY = ey;
+            try {
+              const lineFull = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+              const rectPFull = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
+              const pts = Phaser.Geom.Intersects.GetLineToRectangle(lineFull, rectPFull);
+              if (pts && pts.length) {
+                hitX = pts[0].x;
+                hitY = pts[0].y;
+              }
+            } catch (_) {}
             // Visual: intense red beam that fades quickly
             try {
               const g = this.add.graphics();
               try { g.setDepth(8050); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
               try {
-                g.lineStyle(6, 0xff2222, 0.98).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
-                g.lineStyle(3, 0xffaaaa, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
+                g.lineStyle(6, 0xff2222, 0.98).beginPath(); g.moveTo(e.x, e.y); g.lineTo(hitX, hitY); g.strokePath();
+                g.lineStyle(3, 0xffaaaa, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(hitX, hitY); g.strokePath();
               } catch (_) {}
               try {
                 this.tweens.add({
@@ -6012,7 +6159,7 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
             // One-time hit check against player and soft barricades (10 dmg, full barricade damage)
             try {
-              const line = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+              const line = new Phaser.Geom.Line(e.x, e.y, hitX, hitY);
               // Player hit
               try {
                 const rectP = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
@@ -6020,6 +6167,7 @@ export default class CombatScene extends Phaser.Scene {
                   if (this.time.now >= (this.player.iframesUntil || 0)) {
                     const dmg = 10;
                     this.applyPlayerDamage(dmg);
+                    try { impactBurst(this, hitX, hitY, { color: 0xff4455, size: 'small' }); } catch (_) {}
                     this.player.iframesUntil = this.time.now; // no extra i-frames
                     if (this.gs.hp <= 0) {
                       const eff = getPlayerEffects(this.gs);
@@ -6031,7 +6179,7 @@ export default class CombatScene extends Phaser.Scene {
                   }
                 }
               } catch (_) {}
-              // Soft barricades: 10 damage, no reduction
+              // Soft barricades: 30 damage, no reduction
               try {
                 const arr = this.barricadesSoft?.getChildren?.() || [];
                 for (let i = 0; i < arr.length; i += 1) {
@@ -6040,10 +6188,11 @@ export default class CombatScene extends Phaser.Scene {
                   const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
                   if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
                     const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
-                    const dmg = 10;
+                    const dmg = 30;
                     const hp1 = hp0 - dmg;
                     if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
                     else s.setData('hp', hp1);
+                    try { impactBurst(this, s.x, s.y, { color: 0xff4455, size: 'small' }); } catch (_) {}
                   }
                 }
               } catch (_) {}
