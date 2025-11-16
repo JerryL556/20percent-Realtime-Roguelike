@@ -689,6 +689,14 @@ export default class CombatScene extends Phaser.Scene {
         // Shield VFX: subtle blue ring when shield > 0; break animation on 0
         try {
           const gs = this.gs; if (!gs || !this.player) return;
+          // Maintain short history of player positions for lagged targeting (e.g., Dandelion special)
+          try {
+            if (!this._playerPosHistory) this._playerPosHistory = [];
+            const hist = this._playerPosHistory;
+            hist.push({ t: this.time.now, x: this.player.x, y: this.player.y });
+            const cutoff = this.time.now - 1000; // keep last 1s
+            while (hist.length && hist[0].t < cutoff) hist.shift();
+          } catch (_) {}
           const hasShield = (gs.shield || 0) > 0.0001;
           if (hasShield) {
             if (!this._shieldRingG || !this._shieldRingG.active) {
@@ -856,9 +864,9 @@ export default class CombatScene extends Phaser.Scene {
                 const mods = this.gs?.getDifficultyMods?.() || {};
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
-        let boss = createBoss(this, cx, cy, 400, 10, 60, bossType);
+        let boss = createBoss(this, cx, cy, 400, 10, 120, bossType);
         boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
-        boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
+        boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 120; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
         // visual comes from asset via createBoss catch (_) {} }
         boss._nextNormalAt = 0; boss._nextSpecialAt = this.time.now + 2500; boss._state = 'idle';
         // Visual scaling is handled by EnemyFactory helper; keep physics body at 12x12
@@ -1232,6 +1240,7 @@ export default class CombatScene extends Phaser.Scene {
             // Spark exactly on the arc boundary
             try { impactBurst(this, hitX, hitY, { color: 0xff3333, size: 'small' }); } catch (_) {}
             // Destroy projectile without applying damage or AoE
+            try { if (b._g) { b._g.destroy(); b._g = null; } } catch (_) {}
             try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
             try { b.setActive(false).setVisible(false); } catch (_) {}
             this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
@@ -1423,6 +1432,7 @@ export default class CombatScene extends Phaser.Scene {
         b._pierceLeft -= 1;
       } else {
         // Defer removal to end of tick to avoid skipping other overlaps this frame
+        try { if (b._g) { b._g.destroy(); b._g = null; } } catch (_) {}
         try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
         try { b.setActive(false).setVisible(false); } catch (_) {}
         this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} });
@@ -4243,6 +4253,7 @@ export default class CombatScene extends Phaser.Scene {
             if (d2 >= rInner2 && d2 <= rOuter2) {
               // Small spark where the bullet hits the ring
               try { impactBurst(this, b.x, b.y, { color: 0xaa66ff, size: 'small' }); } catch (_) {}
+              try { if (b._g) { b._g.destroy(); b._g = null; } } catch (_) {}
               try { if (b.body) b.body.checkCollision.none = true; } catch (_) {}
               try { b.setActive(false).setVisible(false); } catch (_) {}
               try { this.time.delayedCall(0, () => { try { b.destroy(); } catch (_) {} }); } catch (_) {}
@@ -4259,12 +4270,22 @@ export default class CombatScene extends Phaser.Scene {
       if (e.isDummy) { try { e.body.setVelocity(0, 0); } catch (_) {} return; }
       const now = this.time.now;
       const dt = (this.game?.loop?.delta || 16.7) / 1000; // seconds
-      // Bigwig: freeze completely during ability/turret channels (movement handled in boss AI)
+      // Bigwig/Dandelion/Hazel: freeze completely during certain boss abilities (movement handled in boss AI)
       try {
         const isBigwig = e.isBoss && (e.bossType === 'Bigwig' || e._bossId === 'Bigwig');
         const channelingBigwig = isBigwig && ((e._bwAbilityState === 'channel') || (e._bwTurretState === 'turretChannel'));
-        if (channelingBigwig) {
+        const isDandelion = e.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion');
+        const usingDnSpecial = isDandelion && (e._dnSpecialState === 'aim' || e._dnSpecialState === 'burst');
+        const isHazel = e.isBoss && (e.bossType === 'Hazel' || e._bossId === 'Hazel');
+        const channelingHazel = isHazel && (e._hzPhaseState === 'channel' || e._hzSpecialActive);
+        const dandelionDashing = isDandelion && e._dnDashState === 'dashing';
+        // Special/channel states: zero velocity and skip generic movement
+        if (channelingBigwig || usingDnSpecial || channelingHazel) {
           e.body?.setVelocity?.(0, 0);
+          return;
+        }
+        // Dandelion dash: let updateBossAI control velocity; just skip generic movement
+        if (dandelionDashing) {
           return;
         }
       } catch (_) {}
@@ -4873,24 +4894,13 @@ export default class CombatScene extends Phaser.Scene {
           if (e._prismState === 'beam' && nowT >= (e._beamUntil || 0)) {
             e._prismState = 'idle';
             try { e._laserG?.clear(); } catch (_) {}
+            // Visual-only cooldown: brief exhaust after beam stops
+            try { e._prismCoolUntil = nowT + 750; } catch (_) {}
             // Reset sweep counter and delay next sweep so resuming isn't immediate
             e._sweepsSinceAbility = 0;
             e._nextSweepAt = nowT + Phaser.Math.Between(2500, 3500);
           }
-          // Trigger special ability after 3 completed sweeps (not time-based)
-          if (e._prismState !== 'aim' && e._prismState !== 'beam') {
-              if ((e._sweepsSinceAbility || 0) >= 3 && !e._sweepActive) {
-              // Cancel any ongoing sweep when starting aim
-              if (e._sweepActive) { e._sweepActive = false; try { e._laserG?.clear(); } catch (_) {} }
-              e._sweepsSinceAbility = 0;
-              e._prismState = 'aim';
-              e._aimUntil = nowT + 1750; // lock for 1.75s
-              if (!e._aimG) e._aimG = this.add.graphics();
-              try { e._aimG.clear(); } catch (_) {}
-              e._aimG.lineStyle(1, 0xff2222, 1);
-              e._aimG.beginPath(); e._aimG.moveTo(e.x, e.y); e._aimG.lineTo(this.player.x, this.player.y); e._aimG.strokePath();
-            }
-          }
+          // Trigger special ability after 3 completed sweeps (handled via idle -> pending aim)
           // Update aim line
           if (e._prismState === 'aim') {
             if (e._aimG) {
@@ -4912,16 +4922,33 @@ export default class CombatScene extends Phaser.Scene {
           // Sweeping laser while idle
           if (e._prismState === 'idle' || !e._prismState) {
             if (!e._sweepActive && nowT >= (e._nextSweepAt || 0)) {
-              e._sweepActive = true;
-              const base = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-              // Sweeping beam: 80 degrees total, slower
-              e._sweepFrom = base - Phaser.Math.DegToRad(40);
-              e._sweepTo = base + Phaser.Math.DegToRad(40);
-              e._sweepT = 0; e._sweepDuration = 1500; // ms
-              // Alternate sweep direction each time: 1 then -1 then 1 ...
-              e._sweepDir = (e._sweepDir === -1) ? 1 : -1;
-              if (!e._laserG) { e._laserG = this.add.graphics(); try { e._laserG.setDepth(8000); e._laserG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
-              e._sweepTickAccum = 0;
+              if (e._pendingAim) {
+                // Start special aim phase after standard sweep delay
+                e._pendingAim = false;
+                e._sweepsSinceAbility = 0;
+                e._prismState = 'aim';
+                e._aimUntil = nowT + 1750; // lock for 1.75s
+                if (!e._aimG) e._aimG = this.add.graphics();
+                try {
+                  e._aimG.clear();
+                  e._aimG.lineStyle(1, 0xff2222, 1);
+                  e._aimG.beginPath();
+                  e._aimG.moveTo(e.x, e.y);
+                  e._aimG.lineTo(this.player.x, this.player.y);
+                  e._aimG.strokePath();
+                } catch (_) {}
+              } else {
+                e._sweepActive = true;
+                const base = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+                // Sweeping beam: 80 degrees total, slower
+                e._sweepFrom = base - Phaser.Math.DegToRad(40);
+                e._sweepTo = base + Phaser.Math.DegToRad(40);
+                e._sweepT = 0; e._sweepDuration = 1500; // ms
+                // Alternate sweep direction each time: 1 then -1 then 1 ...
+                e._sweepDir = (e._sweepDir === -1) ? 1 : -1;
+                if (!e._laserG) { e._laserG = this.add.graphics(); try { e._laserG.setDepth(8000); e._laserG.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {} }
+                e._sweepTickAccum = 0;
+              }
             }
             if (e._sweepActive) {
               const dtMs = (this.game?.loop?.delta || 16.7);
@@ -4939,18 +4966,39 @@ export default class CombatScene extends Phaser.Scene {
               });
               if (t >= 1) {
                 e._sweepActive = false; try { e._laserG?.clear(); } catch (_) {}
+                // Visual-only cooldown: Hazel-style exhaust from Prism backside for 0.75s
+                try { e._prismCoolUntil = nowT + 750; } catch (_) {}
                 // Count completed sweep and schedule next unless ability will fire immediately
                 e._sweepsSinceAbility = (e._sweepsSinceAbility || 0) + 1;
                 if (e._sweepsSinceAbility >= 3) {
-                  // Start aim immediately after third sweep
-                  e._prismState = 'aim';
-                  e._aimUntil = nowT + 800;
-                  if (!e._aimG) e._aimG = this.add.graphics();
-                  try { e._aimG.clear(); e._aimG.lineStyle(1, 0xff2222, 1); e._aimG.beginPath(); e._aimG.moveTo(e.x, e.y); e._aimG.lineTo(this.player.x, this.player.y); e._aimG.strokePath(); } catch (_) {}
+                  // After third sweep, schedule special aim to start after normal sweep gap
+                  e._pendingAim = true;
+                  e._nextSweepAt = nowT + Phaser.Math.Between(1200, 1800);
                 } else {
                   e._nextSweepAt = nowT + Phaser.Math.Between(1200, 1800);
                 }
               }
+            }
+            // When Prism is not firing a laser, draw brief exhaust if cooling timer is active
+            if ((e._prismCoolUntil || 0) > nowT && e._prismState !== 'beam') {
+              try {
+                const facingRight = this.player.x >= e.x;
+                const back = facingRight ? Math.PI : 0;
+                const tail = 10;
+                const tx = e.x + Math.cos(back) * tail;
+                const ty = e.y + Math.sin(back) * tail;
+                pixelSparks(this, tx, ty, {
+                  angleRad: back,
+                  count: 2,
+                  spreadDeg: 26,
+                  speedMin: 70,
+                  speedMax: 150,
+                  lifeMs: 180,
+                  color: 0xffffff,
+                  size: 3,
+                  alpha: 0.95,
+                });
+              } catch (_) {}
             }
           }
         } else if (e.isSnitch) {
@@ -5546,9 +5594,10 @@ export default class CombatScene extends Phaser.Scene {
             const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
             if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
               const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
-              // Prism lasers do reduced damage to barricades (50% of player DPS);
+              // Prism and Dandelion lasers do reduced damage to barricades (50% of player DPS);
               // other beams using this helper keep full DPS.
-              const barricadeMul = (e && e.isPrism) ? 0.5 : 1;
+              const isPrismOrDandelion = !!(e && (e.isPrism || e.bossType === 'Dandelion'));
+              const barricadeMul = isPrismOrDandelion ? 0.5 : 1;
               const dmg = Math.max(1, Math.round(dps * tick * barricadeMul));
               const hp1 = hp0 - dmg;
               if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
@@ -5639,42 +5688,423 @@ export default class CombatScene extends Phaser.Scene {
     };
 
     if (e.bossType === 'Dandelion') {
-      // Continuous prism beam sweep (similar to Hazel's default attack)
-      if (!e._dashing) {
-        if (!e._dnState || e._dnState === 'sweep') {
-          e._dnState = 'sweep';
-          const dtMs = (this.game?.loop?.delta || 16.7);
-          e._dnSweepT = (e._dnSweepT || 0) + dtMs;
-          const base = angToPlayer;
-          const span = Phaser.Math.DegToRad(80);
-          const dur = 1400;
-          const t = (Math.sin((e._dnSweepT / dur) * Math.PI * 2) * 0.5 + 0.5);
-          const ang = base - span / 2 + span * t;
-          this.renderPrismBeam(e, ang, dtMs / 1000, {
-            applyDamage: true,
-            damagePlayer: true,
-            dps: 10,
-            tick: 0.05,
+      // Initialize Dandelion-specific sweep/cooldown state once
+      if (!e._dnInit) {
+        e._dnInit = true;
+        e._dnMode = 'idle'; // 'idle' | 'sweep' | 'cooldown'
+        e._dnSweepDurationMs = 3000;
+        e._dnCooldownMs = 1500;
+        e._dnSweepStartAt = 0;
+        e._dnCooldownUntil = 0;
+        e._dnVfxUntil = 0;
+        e._dnSweepT = 0;
+        e._dnCycles = 0;
+        e._dnSpecialState = 'idle'; // 'idle' | 'aim' | 'burst'
+        e._dnSpecialAimUntil = 0;
+        e._dnSpecialBurstUntil = 0;
+        e._dnNextShotAt = 0;
+        e._dnAfterSpecialUntil = 0;
+        e._dnAfterVfxUntil = 0;
+        e._dnTargetLagMs = 100; // ms; used with player position history
+        // Dash state: sideways bursts with cooldown
+        e._dnDashState = 'idle'; // 'idle' | 'dashing'
+        e._dnDashUntil = 0;
+        e._dnDashNextAt = now + 3000; // first dash no sooner than 3s in
+        e._dnDashTrailLast = null;
+      }
+
+      const dtMsDn = (this.game?.loop?.delta || 16.7);
+
+      // Handle Dandelion special attack (laser machine-gun) first
+      if (e._dnSpecialState === 'aim') {
+        // 1.5s aim line at player; Dandelion stays still
+        try { e.body?.setVelocity?.(0, 0); } catch (_) {}
+        if (!e._dnAimG) e._dnAimG = this.add.graphics();
+        try {
+          const g = e._dnAimG;
+          g.clear();
+          g.lineStyle(1, 0xff3333, 1);
+          g.beginPath();
+          g.moveTo(e.x, e.y);
+          g.lineTo(this.player.x, this.player.y);
+          g.strokePath();
+        } catch (_) {}
+        if (now >= (e._dnSpecialAimUntil || 0)) {
+          e._dnSpecialState = 'burst';
+          e._dnSpecialBurstUntil = now + 3000; // 3s burst
+          e._dnNextShotAt = now;
+          try { e._dnAimG?.clear(); } catch (_) {}
+        }
+        // Skip normal sweep logic while in special
+        return;
+      } else if (e._dnSpecialState === 'burst') {
+        // 3s laser "machine gun": 4 shots/s toward player with small spread
+        try { e.body?.setVelocity?.(0, 0); } catch (_) {}
+        if (now >= (e._dnSpecialBurstUntil || 0)) {
+          e._dnSpecialState = 'idle';
+          e._dnAfterSpecialUntil = now + 3000; // 3s extended cooldown before sweeps resume
+          e._dnAfterVfxUntil = now + 2000; // 2s strong exhaust VFX after special
+        } else if (now >= (e._dnNextShotAt || 0)) {
+          // Sample a true lagged target position from history (e.g., ~300ms ago)
+          let txP = this.player.x;
+          let tyP = this.player.y;
+          try {
+            const hist = this._playerPosHistory || [];
+            if (hist.length) {
+              const targetMs = now - (e._dnTargetLagMs || 300);
+              let best = hist[0];
+              for (let i = 1; i < hist.length; i += 1) {
+                const h = hist[i];
+                if (Math.abs(h.t - targetMs) < Math.abs(best.t - targetMs)) best = h;
+              }
+              txP = best.x; tyP = best.y;
+            }
+          } catch (_) {}
+          // Fire one laser shot
+          const base = Math.atan2(tyP - e.y, txP - e.x);
+          const spreadRad = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1)); // ±1° (~2° total)
+          const shotAng = base + spreadRad;
+          try {
+            const hit = this.computeEnemyLaserEnd(e.x, e.y, shotAng);
+            const ex = hit.ex, ey = hit.ey;
+            // Visual: intense red beam that fades quickly
+            try {
+              const g = this.add.graphics();
+              try { g.setDepth(8050); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+              try {
+                g.lineStyle(6, 0xff2222, 0.98).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
+                g.lineStyle(3, 0xffaaaa, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
+              } catch (_) {}
+              try {
+                this.tweens.add({
+                  targets: g,
+                  alpha: 0,
+                  duration: 160,
+                  ease: 'Quad.easeOut',
+                  onComplete: () => { try { g.destroy(); } catch (_) {} },
+                });
+              } catch (_) { try { g.destroy(); } catch (__ ) {} }
+            } catch (_) {}
+            // Muzzle VFX at Dandelion's laser spawnpoint (railgun-style, tinted red)
+            try {
+              const mx = e.x + Math.cos(shotAng) * 10;
+              const my = e.y + Math.sin(shotAng) * 10;
+              muzzleFlashSplit(this, mx, my, { angle: shotAng, color: 0xff3333, count: 3, spreadDeg: 26, length: 20, thickness: 4 });
+              const burst = { spreadDeg: 18, speedMin: 140, speedMax: 260, lifeMs: 220, color: 0xff5555, size: 2, alpha: 0.95 };
+              pixelSparks(this, mx, my, { angleRad: shotAng - Math.PI / 2, count: 8, ...burst });
+              pixelSparks(this, mx, my, { angleRad: shotAng + Math.PI / 2, count: 8, ...burst });
+            } catch (_) {}
+            // Muzzle VFX at Dandelion's laser spawnpoint (railgun-style, tinted red)
+            try {
+              const mx = e.x + Math.cos(shotAng) * 10;
+              const my = e.y + Math.sin(shotAng) * 10;
+              muzzleFlashSplit(this, mx, my, { angle: shotAng, color: 0xff3333, count: 3, spreadDeg: 26, length: 20, thickness: 4 });
+              const burst = { spreadDeg: 18, speedMin: 140, speedMax: 260, lifeMs: 220, color: 0xff5555, size: 2, alpha: 0.95 };
+              pixelSparks(this, mx, my, { angleRad: shotAng - Math.PI / 2, count: 8, ...burst });
+              pixelSparks(this, mx, my, { angleRad: shotAng + Math.PI / 2, count: 8, ...burst });
+            } catch (_) {}
+            // Muzzle VFX at Dandelion's laser spawnpoint (railgun-style, tinted red)
+            try {
+              const mx = e.x + Math.cos(shotAng) * 10;
+              const my = e.y + Math.sin(shotAng) * 10;
+              muzzleFlashSplit(this, mx, my, { angle: shotAng, color: 0xff3333, count: 3, spreadDeg: 26, length: 20, thickness: 4 });
+              const burst = { spreadDeg: 18, speedMin: 140, speedMax: 260, lifeMs: 220, color: 0xff5555, size: 2, alpha: 0.95 };
+              pixelSparks(this, mx, my, { angleRad: shotAng - Math.PI / 2, count: 8, ...burst });
+              pixelSparks(this, mx, my, { angleRad: shotAng + Math.PI / 2, count: 8, ...burst });
+            } catch (_) {}
+            // One-time hit check against player and soft barricades
+            try {
+              const line = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+              // Player hit
+              try {
+                const rectP = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
+                if (Phaser.Geom.Intersects.LineToRectangle(line, rectP)) {
+                  if (this.time.now >= (this.player.iframesUntil || 0)) {
+                    const dmg = 10;
+                    this.applyPlayerDamage(dmg);
+                    this.player.iframesUntil = this.time.now; // no extra i-frames
+                    if (this.gs.hp <= 0) {
+                      const eff = getPlayerEffects(this.gs);
+                      this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                      this.gs.nextScene = SceneKeys.Hub;
+                      SaveManager.saveToLocal(this.gs);
+                      this.scene.start(SceneKeys.Hub);
+                    }
+                  }
+                }
+              } catch (_) {}
+              // Soft barricades: 100% damage (like regular beam, no half multiplier)
+              try {
+                const arr = this.barricadesSoft?.getChildren?.() || [];
+                for (let i = 0; i < arr.length; i += 1) {
+                  const s = arr[i]; if (!s?.active) continue;
+                  if (!s.getData('destructible')) continue;
+                  const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+                  if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
+                    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+                    const dmg = 10;
+                    const hp1 = hp0 - dmg;
+                    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
+                    else s.setData('hp', hp1);
+                  }
+                }
+              } catch (_) {}
+            } catch (_) {}
+          } catch (_) {}
+          e._dnNextShotAt = now + 250; // 4 shots per second
+        }
+        // Skip normal sweep logic while in special
+        return;
+      }
+
+      // Handle Dandelion sideways dash (available any time except during special)
+      const dashSpeed = 800; // significantly faster than player dash
+      const dashDurMs = 250; // ~0.25s dash (~200px at this speed)
+      if (e._dnDashState === 'dashing') {
+        if (now >= (e._dnDashUntil || 0)) {
+          // End dash; allow generic shooter movement to resume
+          e._dnDashState = 'idle';
+          e._dnDashTrailLast = null;
+        } else {
+          // Maintain dash velocity and draw dash trail like the player's
+          try {
+            const vx = e._dnDashDirX * dashSpeed;
+            const vy = e._dnDashDirY * dashSpeed;
+            e.body?.setVelocity?.(vx, vy);
+          } catch (_) {}
+          try {
+            if (e._dnDashTrailLast) {
+              const g = this.add.graphics();
+              try { g.setDepth(9800); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+              // Dandelion dash trail: wider and red
+              g.lineStyle(6, 0xff3333, 0.95);
+              g.beginPath();
+              g.moveTo(e._dnDashTrailLast.x, e._dnDashTrailLast.y);
+              g.lineTo(e.x, e.y);
+              g.strokePath();
+              try {
+                this.tweens.add({
+                  targets: g,
+                  alpha: 0,
+                  duration: 220,
+                  ease: 'Quad.easeOut',
+                  onComplete: () => { try { g.destroy(); } catch (_) {} },
+                });
+              } catch (_) { try { g.destroy(); } catch (__ ) {} }
+              e._dnDashTrailLast.x = e.x;
+              e._dnDashTrailLast.y = e.y;
+            }
+          } catch (_) {}
+        }
+      } else if (e._dnSpecialState === 'idle' && now >= (e._dnDashNextAt || 0)) {
+        // Eligible to start a new dash: sideways relative to player, with random side
+        try {
+          const dxp = this.player.x - e.x;
+          const dyp = this.player.y - e.y;
+          let len = Math.hypot(dxp, dyp) || 1;
+          const nx = dxp / len;
+          const ny = dyp / len;
+          // Perpendicular directions: (-ny, nx) and (ny, -nx)
+          const left = { x: -ny, y: nx };
+          const right = { x: ny, y: -nx };
+          const pickRight = Phaser.Math.Between(0, 1) === 1;
+          const dir = pickRight ? right : left;
+          e._dnDashDirX = dir.x;
+          e._dnDashDirY = dir.y;
+          e._dnDashState = 'dashing';
+          e._dnDashUntil = now + dashDurMs;
+          e._dnDashTrailLast = { x: e.x, y: e.y };
+          // Next dash no sooner than 3s later plus a small random delay for variability (0–2s)
+          const extra = Phaser.Math.Between(0, 2000);
+          e._dnDashNextAt = now + 3000 + extra;
+        } catch (_) {}
+      }
+
+      // Handle normal Dandelion attack loop: aim (1s) -> burst (1s) -> cooldown (1.5s)
+      if (e._dnMode === 'idle') {
+        // Start a new cycle only if not in post-special cooldown
+        if (now >= (e._dnAfterSpecialUntil || 0)) {
+          e._dnMode = 'sweep'; // reuse field: 'sweep' = normal aim phase
+          e._dnSweepStartAt = now;
+          // Initialize/clear normal aim graphics
+          if (!e._dnNormAimG) e._dnNormAimG = this.add.graphics();
+        }
+      }
+
+      if (e._dnMode === 'sweep') {
+        // 1s aim lock at player, Dandelion keeps moving via generic shooter logic
+        const aimDur = 1000;
+        try {
+          const g = e._dnNormAimG;
+          if (g) {
+            g.clear();
+            g.lineStyle(1, 0xff3333, 1);
+            g.beginPath();
+            g.moveTo(e.x, e.y);
+            g.lineTo(this.player.x, this.player.y);
+            g.strokePath();
+          }
+        } catch (_) {}
+        if (now - (e._dnSweepStartAt || 0) >= aimDur) {
+          // Transition to 1s burst using same machine-gun parameters as special
+          e._dnMode = 'burst';
+          e._dnSweepStartAt = now;
+          try { e._dnNormAimG?.clear(); } catch (_) {}
+          // Ensure shot timer starts now
+          if (now < (e._dnNextShotAt || 0)) e._dnNextShotAt = now;
+        }
+        } else if (e._dnMode === 'burst') {
+        // 1s laser machine-gun burst: 4 shots/s, same behavior as special but shorter and while moving
+        const burstDur = 1000;
+        if (now - (e._dnSweepStartAt || 0) >= burstDur) {
+          // Enter cooldown
+          e._dnMode = 'cooldown';
+          e._dnCooldownUntil = now + (e._dnCooldownMs || 1500);
+          e._dnVfxUntil = now + 1000; // 1s of exhaust VFX during cooldown
+        } else if (now >= (e._dnNextShotAt || 0)) {
+          // Use same lagged target logic as special: aim where player was ~300ms ago
+          let txP = this.player.x;
+          let tyP = this.player.y;
+          try {
+            const hist = this._playerPosHistory || [];
+            if (hist.length) {
+              const targetMs = now - (e._dnTargetLagMs || 300);
+              let best = hist[0];
+              for (let i = 1; i < hist.length; i += 1) {
+                const h = hist[i];
+                if (Math.abs(h.t - targetMs) < Math.abs(best.t - targetMs)) best = h;
+              }
+              txP = best.x; tyP = best.y;
+            }
+          } catch (_) {}
+          const base = Math.atan2(tyP - e.y, txP - e.x);
+          const spreadRad = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1)); // ±1° (~2° total)
+          const shotAng = base + spreadRad;
+          try {
+            const hit = this.computeEnemyLaserEnd(e.x, e.y, shotAng);
+            const ex = hit.ex, ey = hit.ey;
+            // Visual: intense red beam that fades quickly
+            try {
+              const g = this.add.graphics();
+              try { g.setDepth(8050); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+              try {
+                g.lineStyle(6, 0xff2222, 0.98).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
+                g.lineStyle(3, 0xffaaaa, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
+              } catch (_) {}
+              try {
+                this.tweens.add({
+                  targets: g,
+                  alpha: 0,
+                  duration: 160,
+                  ease: 'Quad.easeOut',
+                  onComplete: () => { try { g.destroy(); } catch (_) {} },
+                });
+              } catch (_) { try { g.destroy(); } catch (__ ) {} }
+            } catch (_) {}
+            // Muzzle VFX at Dandelion's laser spawnpoint (railgun-style, tinted red)
+            try {
+              const mx = e.x + Math.cos(shotAng) * 10;
+              const my = e.y + Math.sin(shotAng) * 10;
+              muzzleFlashSplit(this, mx, my, { angle: shotAng, color: 0xff3333, count: 3, spreadDeg: 26, length: 20, thickness: 4 });
+              const burst = { spreadDeg: 18, speedMin: 140, speedMax: 260, lifeMs: 220, color: 0xff5555, size: 2, alpha: 0.95 };
+              pixelSparks(this, mx, my, { angleRad: shotAng - Math.PI / 2, count: 8, ...burst });
+              pixelSparks(this, mx, my, { angleRad: shotAng + Math.PI / 2, count: 8, ...burst });
+            } catch (_) {}
+            // One-time hit check against player and soft barricades (10 dmg, full barricade damage)
+            try {
+              const line = new Phaser.Geom.Line(e.x, e.y, ex, ey);
+              // Player hit
+              try {
+                const rectP = this.player.getBounds?.() || new Phaser.Geom.Rectangle(this.player.x - 6, this.player.y - 6, 12, 12);
+                if (Phaser.Geom.Intersects.LineToRectangle(line, rectP)) {
+                  if (this.time.now >= (this.player.iframesUntil || 0)) {
+                    const dmg = 10;
+                    this.applyPlayerDamage(dmg);
+                    this.player.iframesUntil = this.time.now; // no extra i-frames
+                    if (this.gs.hp <= 0) {
+                      const eff = getPlayerEffects(this.gs);
+                      this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                      this.gs.nextScene = SceneKeys.Hub;
+                      SaveManager.saveToLocal(this.gs);
+                      this.scene.start(SceneKeys.Hub);
+                    }
+                  }
+                }
+              } catch (_) {}
+              // Soft barricades: 10 damage, no reduction
+              try {
+                const arr = this.barricadesSoft?.getChildren?.() || [];
+                for (let i = 0; i < arr.length; i += 1) {
+                  const s = arr[i]; if (!s?.active) continue;
+                  if (!s.getData('destructible')) continue;
+                  const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
+                  if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
+                    const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+                    const dmg = 10;
+                    const hp1 = hp0 - dmg;
+                    if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
+                    else s.setData('hp', hp1);
+                  }
+                }
+              } catch (_) {}
+            } catch (_) {}
+          } catch (_) {}
+          e._dnNextShotAt = now + 250; // 4 shots per second
+        }
+      } else if (e._dnMode === 'cooldown') {
+        // 1.5s fixed cooldown after normal burst: Dandelion keeps moving; exhaust VFX only during first 1s
+        if (now >= (e._dnCooldownUntil || 0)) {
+          e._dnMode = 'idle';
+          e._dnCycles = (e._dnCycles || 0) + 1;
+          // Trigger special after four full aim+burst+cooldown cycles
+          if ((e._dnCycles || 0) >= 4 && now >= (e._dnAfterSpecialUntil || 0) && e._dnSpecialState === 'idle') {
+            e._dnCycles = 0;
+            e._dnSpecialState = 'aim';
+            e._dnSpecialAimUntil = now + 1500;
+          }
+        } else if (now < (e._dnVfxUntil || 0)) {
+          // Exhaust after a normal burst: medium-strength Hazel-style sparks
+          try {
+            const facingRight = this.player.x >= e.x;
+            const back = facingRight ? Math.PI : 0;
+            const tail = 10;
+            const tx = e.x + Math.cos(back) * tail;
+            const ty = e.y + Math.sin(back) * tail;
+            pixelSparks(this, tx, ty, {
+              angleRad: back,
+              count: 4,
+              spreadDeg: 34,
+              speedMin: 90,
+              speedMax: 190,
+              lifeMs: 220,
+              color: 0xffffff,
+              size: 4,
+              alpha: 1.0,
+            });
+          } catch (_) {}
+        }
+      }
+      // Stronger exhaust immediately after special: larger, brighter, more spread (independent of sweep cooldown)
+      if (now < (e._dnAfterVfxUntil || 0)) {
+        try {
+          const facingRight = this.player.x >= e.x;
+          const back = facingRight ? Math.PI : 0;
+          const tail = 12;
+          const tx = e.x + Math.cos(back) * tail;
+          const ty = e.y + Math.sin(back) * tail;
+          pixelSparks(this, tx, ty, {
+            angleRad: back,
+            count: 6,
+            spreadDeg: 46,
+            speedMin: 110,
+            speedMax: 230,
+            lifeMs: 260,
+            color: 0xffeeee,
+            size: 5,
+            alpha: 1.0,
           });
-        }
+        } catch (_) {}
       }
-      // Retain Dandelion's dash special
-      if (!e._dashing && now >= (e._nextSpecialAt || 0)) {
-        e._dashing = true; e._dashUntil = now + 300; e._nextSpecialAt = now + 6000;
-        const spd = 360; const vx = Math.cos(angToPlayer) * spd; const vy = Math.sin(angToPlayer) * spd;
-        try { e.body.setVelocity(vx, vy); } catch (_) {}
-        const hb = this.enemyBullets.get(e.x, e.y, 'bullet');
-        if (hb) {
-          hb.setActive(true).setVisible(false); hb.setCircle(8).setOffset(-8, -8); hb.damage = e.damage + 6; hb._dashHit = true;
-          hb.update = () => {
-            if (!e.active) { try { hb.destroy(); } catch (_) {} return; }
-            hb.setPosition(e.x, e.y);
-            const view = this.cameras?.main?.worldView; if (view && !view.contains(hb.x, hb.y)) { try { hb.destroy(); } catch (_) {} }
-            if (this.time.now > (e._dashUntil || 0)) { try { hb.destroy(); } catch (_) {} }
-          };
-        }
-      }
-      if (e._dashing && now >= (e._dashUntil || 0)) { e._dashing = false; try { e.body.setVelocity(0, 0); } catch (_) {} }
     } else if (e.bossType === 'Bigwig') {
       // Initialize Bigwig-specific attack and ability state
       if (!e._bwInit) {
@@ -6806,10 +7236,12 @@ export default class CombatScene extends Phaser.Scene {
           };
         }
       }
+      try { if (b._g) { b._g.destroy(); b._g = null; } } catch (_) {}
       try { b.destroy(); } catch (_) {}
       return;
     }
     // Default player bullet behavior on barricade: explosive rockets already handled at overlap, others simply destroy
+    try { if (b._g) { b._g.destroy(); b._g = null; } } catch (_) {}
     try { b.destroy(); } catch (_) {}
   }
 
