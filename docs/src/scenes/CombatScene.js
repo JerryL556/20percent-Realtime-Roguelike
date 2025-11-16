@@ -1140,7 +1140,24 @@ export default class CombatScene extends Phaser.Scene {
       this,
     );
     // Enemies can break destructible barricades by pushing into them (non-Dandelion enemies)
-    this.physics.add.collider(this.enemies, this.barricadesSoft, (e, s) => this.onEnemyHitBarricade(e, s));
+    this.physics.add.collider(
+      this.enemies,
+      this.barricadesSoft,
+      (e, s) => this.onEnemyHitBarricade(e, s),
+      (e, s) => {
+        // While Dandelion is dashing/assault-dashing, ignore soft barricade collision resolution here too
+        try {
+          if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
+            const st = e._dnAssaultState || 'idle';
+            const assaultDash = st === 'dashIn' || st === 'dashOut';
+            const normalDash = e._dnDashState === 'dashing';
+            if (assaultDash || normalDash) return false;
+          }
+        } catch (_) {}
+        return true;
+      },
+      this,
+    );
     // For rail bullets, skip physics separation so they don't get stuck
     this.physics.add.collider(
       this.bullets,
