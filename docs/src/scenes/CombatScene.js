@@ -747,7 +747,7 @@ export default class CombatScene extends Phaser.Scene {
             }
           }
         } catch (_) {}
-        // Landmine Dispenser: manage mine travel + detection globally so it works in all contexts
+        // Landmine Dispenser: manage mine travel + arming + detection globally so behavior is consistent
         try {
           if (Array.isArray(this._mines) && this._mines.length) {
             const nowT = this.time.now;
@@ -755,34 +755,40 @@ export default class CombatScene extends Phaser.Scene {
             const enemies = this.enemies?.getChildren?.() || [];
             for (let i = 0; i < this._mines.length; i += 1) {
               const m = this._mines[i]; if (!m?.active) continue;
-              // Stop at fixed radius if not yet armed
+              // Unarmed: let physics move the mine, and once it reaches stop radius, start arm delay
               if (!m._armed) {
-                // kinematic step for mine travel
-                if (typeof m._ox === 'number' && typeof m._oy === 'number') {
-                  if (typeof m._speed !== 'number') m._speed = 260;
-                  if (typeof m._ang !== 'number' || !isFinite(m._ang)) m._ang = Math.atan2((m.y - m._oy), (m.x - m._ox));
-                  const dt = ((this.game?.loop?.delta) || 16) / 1000;
-                  const r = Math.sqrt(m._travelMax2 || 3600);
-                  const tx = m._ox + Math.cos(m._ang) * r;
-                  const ty = m._oy + Math.sin(m._ang) * r;
-                  const vxk = Math.cos(m._ang) * m._speed;
-                  const vyk = Math.sin(m._ang) * m._speed;
-                  const nx = m.x + vxk * dt; const ny = m.y + vyk * dt;
-                  let hit = false; const line = new Phaser.Geom.Line(m.x, m.y, nx, ny);
-                  const scan = (grp) => { const arr = grp?.getChildren?.() || []; for (let a=0;a<arr.length && !hit;a++){ const s=arr[a]; if (!s?.active) continue; const rect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x-8,s.y-8,16,16); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) hit=true; } };
-                  scan(this.barricadesHard); scan(this.barricadesSoft); if (this.walls) scan(this.walls);
-                  for (let e=0;e<enemies.length && !hit;e++){ const en=enemies[e]; if (!en?.active) continue; const rect=en.getBounds?.() || new Phaser.Geom.Rectangle(en.x-6,en.y-6,12,12); if (Phaser.Geom.Intersects.LineToRectangle(line, rect)) hit=true; }
-                  const toTarget2 = (tx - m.x)*(tx - m.x) + (ty - m.y)*(ty - m.y);
-                  const step2 = (vxk*dt)*(vxk*dt) + (vyk*dt)*(vyk*dt);
-                  if (step2 < toTarget2 && !hit) { try { m.setPosition(nx, ny); } catch(_){} }
-                }
-                const dx = (m.x - (m._ox || 0)); const dy = (m.y - (m._oy || 0));
-                if ((dx * dx + dy * dy) >= (m._travelMax2 || 3600)) {
-                  try { m.setVelocity(0, 0); m.body.setVelocity(0, 0); m.body.moves = false; m.body.setImmovable(true); } catch (_) {}
-                  m._armed = true;
+                // Stop and start arm delay once reaching stop radius
+                try {
+                  const dx = (m.x - (m._ox || 0)); const dy = (m.y - (m._oy || 0));
+                  if ((dx * dx + dy * dy) >= (m._travelMax2 || 3600)) {
+                    try { m.setVelocity(0, 0); m.body.setVelocity(0, 0); m.body.moves = false; m.body.setImmovable(true); } catch (_) {}
+                    if (!m._armingUntil) m._armingUntil = nowT + 500; // 0.5s delay before armed
+                  }
+                } catch (_) {}
+                // Promote to armed after delay and update visuals
+                if (m._armingUntil && nowT >= m._armingUntil) {
+                  m._armed = true; m._armingUntil = 0;
+                  try { m.setTint(0x33ff66); } catch (_) {}
+                  if (!m._armG) {
+                    try {
+                      const g = this.add.graphics({ x: m.x, y: m.y });
+                      g.setDepth(8000);
+                      g.setBlendMode(Phaser.BlendModes.ADD);
+                      m._armG = g;
+                    } catch (_) {}
+                  }
                 }
               } else {
-                // Armed: trigger when enemy enters detection radius (skip dummy)
+                // Armed: maintain glow and trigger when enemy enters detection radius (skip dummy)
+                try {
+                  if (m._armG) {
+                    const g = m._armG;
+                    g.clear();
+                    g.setPosition(m.x, m.y);
+                    g.fillStyle(0x66ff99, 0.6).fillRect(-4, -4, 8, 8);
+                    g.lineStyle(1, 0xffffff, 0.9).strokeRect(-4, -4, 8, 8);
+                  }
+                } catch (_) {}
                 const r = m._detRadius || 40; const r2 = r * r;
                 for (let k = 0; k < enemies.length; k += 1) {
                   const e = enemies[k]; if (!e?.active || e.isDummy) continue;
@@ -7019,41 +7025,27 @@ export default class CombatScene extends Phaser.Scene {
       const vx = Math.cos(ang) * spd; const vy = Math.sin(ang) * spd;
       const mine = this.physics.add.image(x, y, 'bullet');
       mine.setActive(true).setVisible(true);
-      try { mine.setTint(0x33ff66); } catch (_) {}
+      // Visual: white box while flying/unarmed
+      try { mine.setTint(0xffffff); } catch (_) {}
       try { mine.setScale(1.1); } catch (_) {}
       // Keep square hitbox; slightly larger for stable collisions
       try { mine.body.setSize(6, 6, true); } catch (_) {}
       mine.setVelocity(vx, vy);
-      mine._armed = false; mine._placedAt = this.time.now; mine._detRadius = 40; mine._blastRadius = 60; mine._dmg = 30; mine._stunVal = 20; mine._ox = x; mine._oy = y; mine._ang = ang; mine._speed = spd; const stopR = 100; mine._travelMax2 = stopR * stopR;
-      // Colliders: stop on enemies, barricades, walls (become armed). No friendly fire.
-      const armMine = () => {
-        if (mine._armed) return; mine._armed = true;
-        try { mine.setVelocity(0, 0); } catch (_) {}
-        try { mine.body.setVelocity(0, 0); } catch (_) {}
-        try { mine.body.moves = false; mine.body.setImmovable(true); } catch (_) {}
-      };
-      try { this.physics.add.collider(mine, this.enemies, () => armMine()); } catch (_) {}
-      try { if (this.walls) this.physics.add.collider(mine, this.walls, () => armMine()); } catch (_) {}
-      try {
-        if (this.barricadesHard) this.physics.add.collider(mine, this.barricadesHard, () => armMine());
-        if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => armMine());
-      } catch (_) {}
-      // Per-frame check for trigger when armed
-      mine.update = () => {
-        try {
-          if (!mine.active) return;
-          if (!mine._armed) return; // only trigger after stopping
-          const r = mine._detRadius || 40; const r2 = r * r;
-          const arr = this.enemies?.getChildren?.() || [];
-          for (let k = 0; k < arr.length; k += 1) {
-            const e = arr[k]; if (!e?.active || e?.isDummy) continue;
-            const dx = e.x - mine.x; const dy = e.y - mine.y; if ((dx * dx + dy * dy) <= r2) { mine._explodeFn?.(mine); break; }
-          }
-        } catch (_) {}
-      };
-      // Add to custom group for updates
-      if (!this.mines) this.mines = this.physics.add.group({ runChildUpdate: true });
-      try { this.mines.add(mine); } catch (_) {}
+      // State for legacy global handler
+      mine._armed = false;
+      mine._armingUntil = 0;
+      mine._detRadius = 40;
+      mine._blastRadius = 60;
+      mine._dmg = 30;
+      mine._stunVal = 20;
+      mine._ox = x;
+      mine._oy = y;
+      mine._ang = ang;
+      mine._speed = spd;
+      const stopR = 100;
+      mine._travelMax2 = stopR * stopR;
+      // Track mines globally; movement/arming handled in update()
+      if (!this._mines) this._mines = [];
       this._mines.push(mine);
       // Bind per-mine explosion handler to avoid first-use undefined refs
       mine._explodeFn = (m) => {
@@ -7073,6 +7065,10 @@ export default class CombatScene extends Phaser.Scene {
               if ((e2._stunValue || 0) >= 10) { e2._stunnedUntil = nowS + 200; e2._stunValue = 0; }
             }
           }
+        } catch (_) {}
+        try {
+          m._armG?.destroy();
+          m._armG = null;
         } catch (_) {}
         try { m.destroy(); } catch (_) {}
       };
