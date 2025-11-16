@@ -6169,11 +6169,29 @@ export default class CombatScene extends Phaser.Scene {
             e._dnAssaultTrailLast.x = e.x;
             e._dnAssaultTrailLast.y = e.y;
           } catch (_) {}
-          // Lay mines at fixed interval
+          // Lay mines in a 3-mine fan facing the player at fixed intervals
           if (nowDn >= (e._dnAssaultNextMineAt || 0)) {
-            try { this._spawnDandelionMine?.(e.x, e.y); } catch (_) {}
-            // After the first mine, drop subsequent mines every 100ms
-            e._dnAssaultNextMineAt = nowDn + 100;
+            try {
+              const px = this.player.x; const py = this.player.y;
+              const dxp = px - e.x; const dyp = py - e.y;
+              const baseAng = Math.atan2(dyp, dxp);
+              const distToPlayer = Math.hypot(dxp, dyp) || 1;
+              const spread = Phaser.Math.DegToRad(15); // total 30° fan (±15°)
+                const rFan = (distToPlayer > 120) ? Math.min(140, distToPlayer - 60) : 70;
+              // Middle mine at Dandelion's current position
+              try { this._spawnDandelionMineWithVfx?.(e.x, e.y); } catch (_) {}
+              // Side mines at ±15° at 70px
+              const angL = baseAng - spread;
+              const angR = baseAng + spread;
+              const lx = e.x + Math.cos(angL) * rFan;
+              const ly = e.y + Math.sin(angL) * rFan;
+              const rx = e.x + Math.cos(angR) * rFan;
+              const ry = e.y + Math.sin(angR) * rFan;
+              try { this._spawnDandelionMineWithVfx?.(lx, ly); } catch (_) {}
+              try { this._spawnDandelionMineWithVfx?.(rx, ry); } catch (_) {}
+            } catch (_) {}
+            // After each fan, schedule next burst in 100ms
+            e._dnAssaultNextMineAt = nowDn + (e._dnAssaultMineInterval || 100);
           }
           // End dash-out after configured duration
           if (nowDn >= (e._dnAssaultDashOutStartAt || nowDn) + (e._dnAssaultDashOutDurMs || 500)) {
@@ -8179,6 +8197,17 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {
       return null;
     }
+  }
+
+  // Spawn a Dandelion mine with Hazel-style purple teleport/phase VFX first,
+  // then materialize the red mine after a short delay. Mine behavior is unchanged.
+  _spawnDandelionMineWithVfx(x, y) {
+    try {
+      try { teleportSpawnVfx(this, x, y, { color: 0xaa66ff }); } catch (_) {}
+      this.time.delayedCall(250, () => {
+        try { this._spawnDandelionMine?.(x, y); } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   // Destroy any soft barricades that Dandelion is currently overlapping during a dash
