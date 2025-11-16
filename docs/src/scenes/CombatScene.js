@@ -7034,23 +7034,42 @@ export default class CombatScene extends Phaser.Scene {
       // State for legacy global handler
       mine._armed = false;
       mine._armingUntil = 0;
-      mine._detRadius = 40;
-      mine._blastRadius = 60;
+      // 50px trigger radius, 70px explosion radius
+      mine._detRadius = 50;
+      mine._blastRadius = 70;
       mine._dmg = 30;
       mine._stunVal = 20;
       mine._ox = x;
       mine._oy = y;
       mine._ang = ang;
       mine._speed = spd;
-      const stopR = 100;
+      const stopR = 120;
       mine._travelMax2 = stopR * stopR;
+      // Colliders: if a mine hits enemies/barricades/walls before max range, stop it and begin arming delay
+      const onCollideAndArm = () => {
+        if (mine._armed || (mine._armingUntil && mine._armingUntil > 0)) return;
+        try {
+          mine.setVelocity(0, 0);
+          mine.body.setVelocity(0, 0);
+          mine.body.moves = false;
+          mine.body.setImmovable(true);
+        } catch (_) {}
+        mine._armingUntil = this.time.now + 500; // 0.5s before becoming armed
+      };
+      try { this.physics.add.collider(mine, this.enemies, () => onCollideAndArm()); } catch (_) {}
+      try { if (this.walls) this.physics.add.collider(mine, this.walls, () => onCollideAndArm()); } catch (_) {}
+      try {
+        if (this.barricadesHard) this.physics.add.collider(mine, this.barricadesHard, () => onCollideAndArm());
+        if (this.barricadesSoft) this.physics.add.collider(mine, this.barricadesSoft, () => onCollideAndArm());
+      } catch (_) {}
       // Track mines globally; movement/arming handled in update()
       if (!this._mines) this._mines = [];
       this._mines.push(mine);
       // Bind per-mine explosion handler to avoid first-use undefined refs
       mine._explodeFn = (m) => {
         if (!m?.active) return;
-        const ex = m.x; const ey = m.y; const r = m._blastRadius || 60; const r2 = r * r;
+        const ex = m.x; const ey = m.y; const r = m._blastRadius || 70; const r2 = r * r;
+        // Explosion VFX: match actual blast radius (70px)
         try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius: r }); } catch (_) {}
         // Damage + stun enemies (no friendly fire)
         try {
