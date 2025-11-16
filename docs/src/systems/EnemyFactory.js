@@ -254,6 +254,7 @@ function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH
       try { e._g?.destroy(); } catch (_) {}
       try { e._igniteIndicator?.destroy(); e._igniteIndicator = null; } catch (_) {}
       try { e._toxinIndicator?.destroy(); e._toxinIndicator = null; } catch (_) {}
+      try { e._stunIndicator?.destroy(); e._stunIndicator = null; } catch (_) {}
       // If in a boss room, also clear any dash hint graphics stored on the scene
       try { const sc = e.scene; if (sc && sc._dashSeq) { sc._dashSeq._hintG?.destroy?.(); sc._dashSeq = null; } } catch (_) {}
     });
@@ -432,7 +433,7 @@ export function createRookEnemy(scene, x, y, hp = 300, damage = 25, speed = 35) 
   r._shieldOffset = 2;
   r._shieldRadius = 60; // increased visual radius; offset unchanged
   r._shieldHalf = Phaser.Math.DegToRad ? Phaser.Math.DegToRad(45) : (Math.PI/4);
-  r.on('destroy', () => { try { r._g?.destroy(); } catch (_) {} try { r._shieldG?.destroy(); r._shieldG = null; } catch (_) {} try { r._shieldFillG?.destroy(); r._shieldFillG = null; } catch (_) {} try { r._igniteIndicator?.destroy(); r._igniteIndicator = null; } catch (_) {} try { r._toxinIndicator?.destroy(); r._toxinIndicator = null; } catch (_) {} });
+  r.on('destroy', () => { try { r._g?.destroy(); } catch (_) {} try { r._shieldG?.destroy(); r._shieldG = null; } catch (_) {} try { r._shieldFillG?.destroy(); r._shieldFillG = null; } catch (_) {} try { r._igniteIndicator?.destroy(); r._igniteIndicator = null; } catch (_) {} try { r._toxinIndicator?.destroy(); r._toxinIndicator = null; } catch (_) {} try { r._stunIndicator?.destroy(); r._stunIndicator = null; } catch (_) {} });
   // Ensure shield zone is cleaned up if managed by scene
   try { r.on('destroy', () => { try { r._shieldZone?.destroy?.(); r._shieldZone = null; } catch (_) {} }); } catch (_) {}
   return r;
