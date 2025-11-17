@@ -1046,14 +1046,19 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Shooting Range setup: terminal, dummy, and portal to hub
-    if (this.gs?.shootingRange) {
-      // Terminal (left side)
-      this.terminalZone = this.add.zone(60, height / 2, 36, 36);
-      this.physics.world.enable(this.terminalZone);
-      this.terminalZone.body.setAllowGravity(false);
-      this.terminalZone.body.setImmovable(true);
-      this.terminalG = this.add.graphics();
-      this.terminalG.fillStyle(0x33ccff, 1).fillRect(this.terminalZone.x - 12, this.terminalZone.y - 12, 24, 24);
+      if (this.gs?.shootingRange) {
+        // Terminal (left side)
+        this.terminalZone = this.add.zone(60, height / 2, 36, 36);
+        this.physics.world.enable(this.terminalZone);
+        this.terminalZone.body.setAllowGravity(false);
+        this.terminalZone.body.setImmovable(true);
+        this.terminalG = this.add.graphics();
+        // Shooting Range terminal sprite (Terminal.png)
+        try {
+          this.terminalSprite = this.add.image(this.terminalZone.x, this.terminalZone.y, 'diff_terminal');
+          this.terminalSprite.setOrigin(0.5);
+          fitImageHeight(this, this.terminalSprite, 24);
+        } catch (_) {}
 
       // Persistent dummy target in the center-right
       this._dummyDamage = 0;

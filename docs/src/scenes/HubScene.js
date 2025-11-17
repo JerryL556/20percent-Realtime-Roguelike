@@ -164,7 +164,13 @@ export default class HubScene extends Phaser.Scene {
     this.diffTerminalZone.body.setAllowGravity(false);
     this.diffTerminalZone.body.setImmovable(true);
     this.diffTerminalG = this.add.graphics();
-    this.diffTerminalG.fillStyle(0x3366ff, 1).fillRect(this.diffTerminalZone.x - 12, this.diffTerminalZone.y - 12, 24, 24);
+    // Difficulty terminal sprite (Terminal.png)
+    try {
+      this.diffTerminalSprite = this.add.image(this.diffTerminalZone.x, this.diffTerminalZone.y, 'diff_terminal');
+      this.diffTerminalSprite.setOrigin(0.5);
+      try { fitImageHeight(this, this.diffTerminalSprite, 24); } catch (_) {}
+    } catch (_) {}
+    // Difficulty terminal placeholder hidden (replaced by sprite)
 
     // Overlap detection
     this.physics.add.overlap(this.player, this.npcZone);

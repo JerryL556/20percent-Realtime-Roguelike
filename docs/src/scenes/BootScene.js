@@ -49,6 +49,8 @@ export default class BootScene extends Phaser.Scene {
       A('Bigwig', 'assets/Bigwig.png');
       A('Dandelion', 'assets/Dandelion.png');
       A('Hazel', 'assets/Hazel.png');
+      A('diff_terminal', 'assets/Terminal.png');
+      A('diff_terminal', 'assets/Terminal.png');
     } catch (_) {}
     // Generate simple textures used by bullets and optional sprites
     const g = this.make.graphics({ x: 0, y: 0, add: false });
