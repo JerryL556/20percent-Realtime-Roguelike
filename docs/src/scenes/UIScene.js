@@ -571,24 +571,24 @@ export default class UIScene extends Phaser.Scene {
         try {
           const id = gs.armour.id;
           if (id === 'exp_shield') {
-            // Experimental Shield Generator: 50 HP, 50 Shield
-            gs.maxHp = 50; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 50; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            // Experimental Shield Generator: 25 HP, 85 Shield
+            gs.maxHp = 25; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 85; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else if (id === 'proto_thrusters') {
-            // Prototype Thrusters: 90 HP, 15 Shield
-            gs.maxHp = 90; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 15; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            // Prototype Thrusters: 80 HP, 35 Shield
+            gs.maxHp = 80; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
+            gs.shieldMax = 35; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else if (id === 'wasp_bits') {
-            // BIT Carrier: 80 HP, 20 Shield
+            // BIT Carrier: 80 HP, 50 Shield
             gs.maxHp = 80; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.shieldMax = 50; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           } else {
-            // Standard Issue: 100 HP, 20 Shield
+            // Standard Issue: 100 HP, 50 Shield
             gs.maxHp = 100; if (gs.hp > gs.maxHp) gs.hp = gs.maxHp;
-            gs.shieldMax = 20; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
+            gs.shieldMax = 50; if (gs.shield > gs.shieldMax) gs.shield = gs.shieldMax;
             gs.shieldRegenDelayMs = 4000;
           }
         } catch (_) {}
@@ -605,8 +605,14 @@ export default class UIScene extends Phaser.Scene {
       const btn = makeTextButton(this, col3X + 210, wy + 8, 'Choose', () => {
         gs.armour = gs.armour || { id: null, mods: [null, null] };
         const owned = new Set((gs.ownedArmourMods || []).filter(Boolean));
+        // Prevent equipping the same armour mod in multiple slots:
+        // build a set of mods already equipped in other slots and exclude them from options.
+        const equippedMods = Array.isArray(gs.armour.mods) ? gs.armour.mods : [];
+        const takenElsewhere = new Set(
+          equippedMods.map((id, idx2) => (idx2 !== idx ? id : null)).filter((id) => !!id),
+        );
         const opts = armourMods
-          .filter((m) => (m.id === null) || owned.has(m.id))
+          .filter((m) => (m.id === null) || (owned.has(m.id) && !takenElsewhere.has(m.id)))
           .map((m) => ({ id: m.id, name: m.name, desc: m.desc }));
         const cur = gs.armour.mods[idx] || null;
         this.openChoicePopup(`Choose Armour Mod ${idx + 1}`, opts, cur, (chosenId) => {
@@ -704,7 +710,7 @@ export default class UIScene extends Phaser.Scene {
     this.input.on('wheel', onWheel); this._shopWheelHandler = onWheel;
 
     // Ensure cores default to unowned (purchasable)\r\n    try { if (!Array.isArray(gs.ownedWeaponCores)) gs.ownedWeaponCores = []; } catch (_) {}
-    const priceMod = 120; const priceCoreG = 150; const priceCoreDC = 1;
+    const priceMod = 120; const priceCoreG = 50; const priceCoreDC = 1;
     const renderList = () => {
       try {
         try { list.removeAll(true); } catch (_) {}
@@ -866,18 +872,23 @@ export default class UIScene extends Phaser.Scene {
         });
       } else if (cat === 'armours') {
         header.setText('Armours');
-        const prices = { exp_shield: 200, wasp_bits: 300, proto_thrusters: 400 };
+        const prices = { exp_shield: 300, wasp_bits: 300, proto_thrusters: 300 };
         (armourDefs || []).forEach((a) => {
           if (!a) return;
           const id = a.id;
-          if (id === null) return; // Standard Issue not in shop
-          const owned = Array.isArray(gs.ownedArmours) && gs.ownedArmours.includes(id);
+          const owned = id === null || (Array.isArray(gs.ownedArmours) && gs.ownedArmours.includes(id));
           const price = prices[id] ?? 200;
-          const head = owned ? `${a.name} (Owned)` : `Buy ${a.name} (${price}g)`;
+          const head = owned
+            ? `${a.name} (Owned)`
+            : `Buy ${a.name} (${price}g)`;
           const buyFn = owned ? null : () => {
             const g = this.registry.get('gameState');
             if (g.gold >= price) {
-              g.gold -= price; if (!Array.isArray(g.ownedArmours)) g.ownedArmours = []; if (!g.ownedArmours.includes(id)) g.ownedArmours.push(id); SaveManager.saveToLocal(g); renderList();
+              g.gold -= price;
+              if (!Array.isArray(g.ownedArmours)) g.ownedArmours = [];
+              if (!g.ownedArmours.includes(id)) g.ownedArmours.push(id);
+              SaveManager.saveToLocal(g);
+              renderList();
             }
           };
           pushRow(head, buyFn);
@@ -954,12 +965,12 @@ export default class UIScene extends Phaser.Scene {
             list.add(t); ly += Math.ceil(t.height) + 6;
           });
           ly += 12;
-          });
-          ly += 12;
+        });
+        ly += 12;
       } else if (cat === 'abilities') {
         header.setText('Abilities');
         // Pricing for purchasable abilities (ADS is owned by default)
-        const abilityPrices = { bits: 300, repulse: 300, caustic_cluster: 350, landmine_dispenser: 350 };
+        const abilityPrices = { bits: 250, repulse: 200, caustic_cluster: 160, landmine_dispenser: 180 };
         const owned = Array.isArray(gs.ownedAbilities) ? gs.ownedAbilities : ['ads'];
 
         abilityDefs.forEach((a) => {
@@ -1027,11 +1038,11 @@ export default class UIScene extends Phaser.Scene {
         const maxCharges = 5;
         const cur = gs.dashMaxCharges ?? 3;
         const canBuy = cur < maxCharges;
-        const label = canBuy ? `Dash Slot +1 (100g) [Now: ${cur}]` : `Dash Slots Maxed [${cur}]`;
+        const label = canBuy ? `Dash Slot +1 (200g) [Now: ${cur}]` : `Dash Slots Maxed [${cur}]`;
         const buyFn = canBuy ? () => {
           const g = this.registry.get('gameState');
-          if (g.gold >= 100 && g.dashMaxCharges < maxCharges) {
-            g.gold -= 100; g.dashMaxCharges = Math.min(maxCharges, (g.dashMaxCharges || 3) + 1); SaveManager.saveToLocal(g); renderList();
+          if (g.gold >= 200 && g.dashMaxCharges < maxCharges) {
+            g.gold -= 200; g.dashMaxCharges = Math.min(maxCharges, (g.dashMaxCharges || 3) + 1); SaveManager.saveToLocal(g); renderList();
           }
         } : null;
         pushRow(label, buyFn);

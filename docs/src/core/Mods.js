@@ -380,7 +380,7 @@ export const armourMods = [
   { id: null, name: 'Empty', desc: 'No changes', apply: (a) => a, applyEffect: (e) => e },
   {
     id: 'a_hp_up',
-    name: 'Steel Padding',
+    name: 'Steel Chassis',
     desc: '+40 max HP\n-10% movement speed',
     apply: (a) => ({ ...a, bonusHp: (a.bonusHp || 0) + 40, moveSpeedMult: (a.moveSpeedMult || 1) * 0.9 }),
     applyEffect: (e) => ({ ...e, bonusHp: (e.bonusHp || 0) + 40, moveSpeedMult: (e.moveSpeedMult || 1) * 0.9 }),
@@ -426,7 +426,7 @@ export const armourDefs = [
     name: 'Standard Issue',
     desc: [
       'HP: 100',
-      'Shield: 20',
+      'Shield: 50',
       // No special features
     ].join('\n'),
   },
@@ -434,8 +434,8 @@ export const armourDefs = [
     id: 'proto_thrusters',
     name: 'Prototype Thrusters',
     desc: [
-      'HP: 90',
-      'Shield: 15',
+      'HP: 80',
+      'Shield: 35',
       '+30% move speed; -30% dash cooldown',
     ].join('\n'),
   },
@@ -443,8 +443,8 @@ export const armourDefs = [
     id: 'exp_shield',
     name: 'Experimental Shield Generator',
     desc: [
-      'HP: 50',
-      'Shield: 50',
+      'HP: 25',
+      'Shield: 85',
     ].join('\n'),
   },
   {
@@ -452,7 +452,7 @@ export const armourDefs = [
     name: 'BIT Carrier',
     desc: [
       'HP: 80',
-      'Shield: 20',
+      'Shield: 50',
       '+ Spawns two WASP BITs that attack and stun nearby enemies',
     ].join('\n'),
   },

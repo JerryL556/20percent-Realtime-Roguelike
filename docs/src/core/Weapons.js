@@ -33,7 +33,7 @@ export const weaponDefs = [
     spreadDeg: 0,
     maxSpreadDeg: 0,
     color: 0xff3344,
-    price: 220,
+    price: 200,
     magSize: 1, // unused for laser; UI uses heat bar
     isLaser: true,
     reloadMs: 2000, // cooldown duration after overheat
@@ -54,7 +54,7 @@ export const weaponDefs = [
     spreadDeg: 0,
     maxSpreadDeg: 6,
     color: 0xffaa33,
-    price: 150,
+    price: 180,
     singleFire: true,
     projectile: 'rocket', // reuse explosive projectile behavior
     blastRadius: 52, // smaller than rocket (70)
@@ -75,7 +75,7 @@ export const weaponDefs = [
     spreadDeg: 8, // uncharged spread (deg)
     maxSpreadDeg: 8,
     color: 0x66aaff,
-    price: 200,
+    price: 220,
     singleFire: true,
     magSize: 3,
     isRailgun: true,
@@ -93,7 +93,7 @@ export const weaponDefs = [
     spreadDeg: 0,
     maxSpreadDeg: 8,
     color: 0x66ccff,
-    price: 60,
+    price: 100,
     magSize: 30,
   },
   {
@@ -127,7 +127,7 @@ export const weaponDefs = [
     spreadDeg: 12,
     maxSpreadDeg: 6,
     color: 0xffaa66,
-    price: 80,
+    price: 140,
     magSize: 8,
   },
   {
@@ -144,7 +144,7 @@ export const weaponDefs = [
     spreadDeg: 0,
     maxSpreadDeg: 14,
     color: 0x99ff99,
-    price: 90,
+    price: 80,
     magSize: 45,
   },
   {
@@ -160,7 +160,7 @@ export const weaponDefs = [
     pelletCount: 1,
     spreadDeg: 0,
     color: 0xff5533,
-    price: 120,
+    price: 150,
     singleFire: true,
     projectile: 'rocket',
     blastRadius: 80,
@@ -184,7 +184,7 @@ export const weaponDefs = [
     spreadDeg: 0,
     maxSpreadDeg: 0,
     color: 0xffaa33,
-    price: 180,
+    price: 200,
     singleFire: false,
     projectile: 'guided', // custom homing projectile
     blastRadius: 40,      // smaller than MGL (52)
@@ -206,7 +206,7 @@ export const weaponDefs = [
     spreadDeg: 0,
     maxSpreadDeg: 6,
     color: 0xffaa33,
-    price: 260,
+    price: 250,
     singleFire: false,
     projectile: 'smart',  // custom smart bullet (non-explosive)
     magSize: 40,
