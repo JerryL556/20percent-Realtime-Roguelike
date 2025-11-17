@@ -126,6 +126,12 @@ export default class HubScene extends Phaser.Scene {
     try {
       this.npcSprite = this.add.image(this.npcZone.x, this.npcZone.y, 'npc_shop');
       fitImageHeight(this, this.npcSprite, 24);
+      // Label: Shop
+      this.add.text(this.npcZone.x, this.npcZone.y - 24, 'Shop', {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: '#ffffff',
+      }).setOrigin(0.5);
     } catch (_) {}
 
     // Mode-select NPC (upper-right)
@@ -138,6 +144,12 @@ export default class HubScene extends Phaser.Scene {
     try {
       this.modeNpcSprite = this.add.image(this.modeNpcZone.x, this.modeNpcZone.y, 'npc_mode');
       fitImageHeight(this, this.modeNpcSprite, 24);
+      // Label: Mode Selection
+      this.add.text(this.modeNpcZone.x, this.modeNpcZone.y - 24, 'Mode Selection', {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: '#ffffff',
+      }).setOrigin(0.5);
     } catch (_) {}
 
     // Portal to Combat/Boss
@@ -146,7 +158,19 @@ export default class HubScene extends Phaser.Scene {
     this.portalZone.body.setAllowGravity(false);
     this.portalZone.body.setImmovable(true);
     this.portalG = this.add.graphics();
-    this.portalG.fillStyle(0x22ff88, 1).fillRect(this.portalZone.x - 10, this.portalZone.y - 20, 20, 40);
+    // Drill portal sprite (Drill.png)
+    try {
+      this.portalSprite = this.add.image(this.portalZone.x, this.portalZone.y, 'hub_drill');
+      this.portalSprite.setOrigin(0.5);
+      this.portalSprite.setFlipX(true);
+      try { fitImageHeight(this, this.portalSprite, 64); } catch (_) {}
+    } catch (_) {}
+    // Label: Drill To Combat
+    this.add.text(this.portalZone.x, this.portalZone.y - 28, 'Drill To Combat', {
+      fontFamily: 'monospace',
+      fontSize: 12,
+      color: '#ffffff',
+    }).setOrigin(0.5);
 
     // Bonus block (left side): grants 5000g + 20 DC on interact
     this.bonusZone = this.add.zone(24, height / 2, 20, 20);
@@ -169,6 +193,12 @@ export default class HubScene extends Phaser.Scene {
       this.diffTerminalSprite = this.add.image(this.diffTerminalZone.x, this.diffTerminalZone.y, 'diff_terminal');
       this.diffTerminalSprite.setOrigin(0.5);
       try { fitImageHeight(this, this.diffTerminalSprite, 24); } catch (_) {}
+      // Label: Difficulty Terminal
+      this.add.text(this.diffTerminalZone.x, this.diffTerminalZone.y - 24, 'Difficulty Terminal', {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: '#ffffff',
+      }).setOrigin(0.5);
     } catch (_) {}
     // Difficulty terminal placeholder hidden (replaced by sprite)
 
@@ -586,7 +616,13 @@ export default class HubScene extends Phaser.Scene {
     // Interaction
     const nearNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.npcZone.getBounds());
     const nearModeNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.modeNpcZone.getBounds());
-    const nearPortal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.portalZone.getBounds());
+    let nearPortal = false;
+    try {
+      const dxp = this.player.x - this.portalZone.x;
+      const dyp = this.player.y - this.portalZone.y;
+      const r = 80;
+      nearPortal = (dxp * dxp + dyp * dyp) <= (r * r);
+    } catch (_) {}
     const nearBonus = this.bonusZone ? Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.bonusZone.getBounds()) : false;
     const nearDiffTerminal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.diffTerminalZone.getBounds());
     if (nearBonus && !this.gs._bonusClaimed) this.prompt.setText('E: Claim Bonus');
