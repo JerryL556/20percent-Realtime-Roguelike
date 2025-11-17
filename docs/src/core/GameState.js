@@ -111,7 +111,6 @@ export class GameState {
     this.campaignCompleted = false;
     this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
     this.bossRushQueue = [];
-    this.bossRushCompleted = false;
     this.lastBossType = null;
     this.abilityId = 'ads';
     this.ownedAbilities = ['ads'];
@@ -207,7 +206,6 @@ export class GameState {
       this.gameMode = 'BossRush';
       // Fixed order: Bigwig (stage 1), Dandelion (stage 2), Hazel (stage 3)
       this.bossRushQueue = ['Bigwig', 'Dandelion', 'Hazel'];
-      this.bossRushCompleted = false;
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
       this.nextScene = 'Boss';
