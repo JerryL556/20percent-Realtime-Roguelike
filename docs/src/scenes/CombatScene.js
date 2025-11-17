@@ -31,6 +31,54 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure weapon images are loaded even if entering this scene directly
     try { preloadWeaponAssets(this); } catch (_) {}
   }
+
+  // Shared helper: brief red flash on an enemy's visual sprite when it takes damage
+  _flashEnemyHit(target) {
+    try {
+      if (!target) return;
+      const sprite = target._vis || target;
+      if (!sprite) return;
+      const tex = sprite.texture;
+      const key = tex && tex.key;
+      if (!key) return;
+
+      // Create a faint, overlay copy of the same texture so the flash matches the asset silhouette exactly.
+      const overlay = this.add.image(sprite.x, sprite.y, key);
+      try {
+        overlay.setOrigin(sprite.originX ?? 0.5, sprite.originY ?? 0.5);
+        overlay.setScale(sprite.scaleX ?? 1, sprite.scaleY ?? 1);
+        if (sprite.flipX) overlay.setFlipX(true);
+        if (sprite.flipY) overlay.setFlipY(true);
+        overlay.setDepth((sprite.depth ?? 0) + 1);
+        overlay.setBlendMode(Phaser.BlendModes.ADD);
+      } catch (_) {}
+      try { overlay.setTintFill(0xffffff); } catch (_) {}
+      overlay.setAlpha(0.22);
+
+      const startTime = this.time.now;
+      const duration = 80;
+      const updatePos = () => {
+        try {
+          if (!overlay.active || !sprite.active) return;
+          overlay.x = sprite.x;
+          overlay.y = sprite.y;
+        } catch (_) {}
+      };
+      this.events.on('update', updatePos, this);
+
+      this.tweens.add({
+        targets: overlay,
+        alpha: { from: 0.22, to: 0 },
+        duration,
+        ease: 'Quad.easeOut',
+        onUpdate: () => { updatePos(); },
+        onComplete: () => {
+          try { this.events.off('update', updatePos, this); } catch (_) {}
+          try { overlay.destroy(); } catch (_) {}
+        },
+      });
+    } catch (_) {}
+  }
   
   openTerminalPanel() {
     if (this.panel) return;
@@ -286,6 +334,7 @@ export default class CombatScene extends Phaser.Scene {
             } else {
               if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
               e.hp -= 10;
+              try { this._flashEnemyHit(e); } catch (_) {}
               if (e.hp <= 0) { try { this.killEnemy(e); } catch (_) {} }
               // Universal melee hit VFX on enemy
               try { impactBurst(this, e.x, e.y, { color: 0xffffff, size: 'small' }); } catch (_) {}
@@ -1422,39 +1471,21 @@ export default class CombatScene extends Phaser.Scene {
         }
         // Brief per-enemy hit feedback: flash sprite + small directional spark at impact
         try {
-          const target = e._vis || e;
-          if (target) {
-            // Simple bright flash on the visual sprite
-            if (!target._hitFlashUntil || this.time.now >= target._hitFlashUntil) {
-              // Cache original tint once
-              if (typeof target._baseTint === 'undefined') {
-                target._baseTint = (typeof target.tintTopLeft === 'number') ? target.tintTopLeft : null;
-              }
-              target.setTint(0xfff5aa);
-              target._hitFlashUntil = this.time.now + 140;
-              this.time.delayedCall(140, () => {
-                try {
-                  if (!target.active) return;
-                  if (typeof target._baseTint === 'number') target.setTint(target._baseTint);
-                  else target.clearTint();
-                } catch (_) {}
-              });
-            }
-            // Small spark burst at the bullet impact point
-            try {
-              pixelSparks(this, b.x, b.y, {
-                angleRad: Math.atan2(b.body?.velocity?.y || 0, b.body?.velocity?.x || 1),
-                count: 4,
-                spreadDeg: 40,
-                speedMin: 220,
-                speedMax: 360,
-                lifeMs: 160,
-                color: 0xffffcc,
-                size: 2,
-                alpha: 0.9,
-              });
-            } catch (_) {}
-          }
+          this._flashEnemyHit(e);
+          // Small spark burst at the bullet impact point
+          try {
+            pixelSparks(this, b.x, b.y, {
+              angleRad: Math.atan2(b.body?.velocity?.y || 0, b.body?.velocity?.x || 1),
+              count: 4,
+              spreadDeg: 40,
+              speedMin: 220,
+              speedMax: 360,
+              lifeMs: 160,
+              color: 0xffffcc,
+              size: 2,
+              alpha: 0.9,
+            });
+          } catch (_) {}
         } catch (_) {}
         // Apply ignite buildup from special cores (e.g., Rifle Incendiary)
         if (b._igniteOnHit && b._igniteOnHit > 0) {
@@ -1524,6 +1555,7 @@ export default class CombatScene extends Phaser.Scene {
             } else {
               if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
               other.hp -= splashDmg;
+              try { this._flashEnemyHit(other); } catch (_) {}
               if (other.hp <= 0) { this.killEnemy(other); }
             }
           }
@@ -2701,7 +2733,7 @@ export default class CombatScene extends Phaser.Scene {
                   if ((ddx * ddx + ddy * ddy) <= r2) {
                     const aoe = (b._aoeDamage || b.damage || 10);
                     if (other.isDummy) { this._dummyDamage = (this._dummyDamage || 0) + aoe; }
-                    else { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= aoe; if (other.hp <= 0) { this.killEnemy(other); } }
+                    else { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= aoe; try { this._flashEnemyHit(other); } catch (_) {} if (other.hp <= 0) { this.killEnemy(other); } }
                   }
                 });
                 this.damageSoftBarricadesInRadius(ex, ey, radius, (b._aoeDamage || b.damage || 10));
@@ -3590,6 +3622,7 @@ export default class CombatScene extends Phaser.Scene {
           if (!e.isDummy) {
             if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
             e.hp -= dmg;
+            try { this._flashEnemyHit(e); } catch (_) {}
             if (e.hp <= 0) this.killEnemy(e);
           } else {
             this._dummyDamage = (this._dummyDamage || 0) + dmg;
@@ -3628,6 +3661,7 @@ export default class CombatScene extends Phaser.Scene {
             } else {
               if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
               e.hp -= dmgInt;
+              try { this._flashEnemyHit(e); } catch (_) {}
               if (e.hp <= 0) this.killEnemy(e);
             }
           }
@@ -3868,6 +3902,7 @@ export default class CombatScene extends Phaser.Scene {
                 else {
                   if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
                   e.hp -= 5;
+                  try { this._flashEnemyHit(e); } catch (_) {}
                   if (e.hp <= 0) { try { this.killEnemy(e); } catch (_) {} }
                 }
               }
@@ -7441,6 +7476,7 @@ export default class CombatScene extends Phaser.Scene {
           } else {
             if (typeof e.hp !== 'number') e.hp = e.maxHp || 20;
             e.hp -= (b.damage || 10);
+            try { this._flashEnemyHit(e); } catch (_) {}
             if (b._stunOnHit && b._stunOnHit > 0) {
               const nowS = this.time.now;
               e._stunValue = Math.min(10, (e._stunValue || 0) + b._stunOnHit);

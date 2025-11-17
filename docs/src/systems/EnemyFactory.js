@@ -119,6 +119,7 @@ function _applyTextureAndScale(e, key, bodyW, bodyH) {
                     } else {
                       if (typeof owner.hp !== 'number') owner.hp = owner.maxHp || 20;
                       owner.hp -= baseDmg;
+                      try { sc._flashEnemyHit?.(owner); } catch (_) {}
                     }
                     const nowT = sc.time.now;
                     if (!owner.isDummy && b._igniteOnHit > 0) { owner._igniteValue = Math.min(10, (owner._igniteValue || 0) + b._igniteOnHit); if ((owner._igniteValue || 0) >= 10) { owner._ignitedUntil = nowT + 2000; owner._igniteValue = 0; } }
@@ -128,7 +129,7 @@ function _applyTextureAndScale(e, key, bodyW, bodyH) {
                       const radius = b._blastRadius || 20; const r2 = radius * radius;
                       const arr = sc.enemies?.getChildren?.() || [];
                       for (let i = 0; i < arr.length; i += 1) {
-                        const other = arr[i]; if (!other?.active) continue; const dx = other.x - b.x; const dy = other.y - b.y; if (dx * dx + dy * dy <= r2) { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= b._rocket ? (b._aoeDamage || b.damage || 10) : Math.ceil((b.damage || 10) * 0.5); if (other.hp <= 0) sc.killEnemy?.(other); }
+                        const other = arr[i]; if (!other?.active) continue; const dx = other.x - b.x; const dy = other.y - b.y; if (dx * dx + dy * dy <= r2) { if (typeof other.hp !== 'number') other.hp = other.maxHp || 20; other.hp -= b._rocket ? (b._aoeDamage || b.damage || 10) : Math.ceil((b.damage || 10) * 0.5); try { sc._flashEnemyHit?.(other); } catch (_) {} if (other.hp <= 0) sc.killEnemy?.(other); }
                       }
                       sc.damageSoftBarricadesInRadius?.(b.x, b.y, radius, (b.damage || 10));
                     }
