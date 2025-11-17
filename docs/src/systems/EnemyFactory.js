@@ -475,7 +475,7 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 10, speed =
 }
 
 // Stationary turret enemy: built by Bigwig, cannot move, fires continuous bursts at the player
-export function createTurretEnemy(scene, x, y, hp = 150, damage = 10) {
+export function createTurretEnemy(scene, x, y, hp = 80, damage = 10) {
   const t = scene.physics.add.sprite(x, y, 'enemy_square');
   t.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   t.hp = hp;

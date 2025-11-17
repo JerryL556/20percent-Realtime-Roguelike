@@ -1637,6 +1637,13 @@ export default class CombatScene extends Phaser.Scene {
     // Exit appears when all enemies dead
     this.exitActive = false;
     this.exitG = this.add.graphics();
+    // Clear any previous exit sprite between rooms (e.g., DeepDive)
+    try {
+      if (this.exitSprite) {
+        this.exitSprite.destroy();
+        this.exitSprite = null;
+      }
+    } catch (_) {}
     // In-game prompt; hide default hint in boss rooms
     const defaultPrompt = this._isBossRoom ? '' : 'Clear enemies';
     this.prompt = this.add.text(width / 2, 40, defaultPrompt, { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
@@ -4631,11 +4638,11 @@ export default class CombatScene extends Phaser.Scene {
           e._turretMuzzleX = hx;
           e._turretMuzzleY = hy;
         } catch (_) {}
-        // Firing: continuous 3-shot bursts, each burst ~0.75s, 0.75s between bursts
-        const burstShots = 3;
-        const burstDurationMs = 750;
-        const interBurstMs = 1100; // longer pause between bursts
-        const shotGapMs = Math.floor(burstDurationMs / Math.max(1, burstShots - 1)); // ~375ms
+        // Firing: very fast 5-shot bursts, tighter spacing and shorter pauses
+        const burstShots = 5;
+        const burstDurationMs = 400;
+        const interBurstMs = 600; // shorter pause between bursts
+        const shotGapMs = Math.floor(burstDurationMs / Math.max(1, burstShots - 1)); // ~100ms
         if (!e._tBurstLeft) e._tBurstLeft = 0;
         if (!e._tBurstCooldownUntil) e._tBurstCooldownUntil = 0;
         if (e._tBurstLeft <= 0 && nowT >= (e._tBurstCooldownUntil || 0)) {
@@ -4649,7 +4656,7 @@ export default class CombatScene extends Phaser.Scene {
           const hy = (typeof e._turretMuzzleY === 'number') ? e._turretMuzzleY : (head ? head.y : e.y);
           // Precise aim: no spread for turret shots
           const angShot = Math.atan2(this.player.y - hy, this.player.x - hx);
-          const speed = 320; // faster turret bullets
+          const speed = 420; // much faster turret bullets
           const vx = Math.cos(angShot) * speed;
           const vy = Math.sin(angShot) * speed;
           const b = this.enemyBullets.get(hx, hy, 'bullet');
@@ -5596,15 +5603,20 @@ export default class CombatScene extends Phaser.Scene {
       this.exitActive = true;
       this.prompt.setText('Room clear! E to exit');
       this.exitRect = new Phaser.Geom.Rectangle(this.scale.width - 50, this.scale.height / 2 - 30, 40, 60);
-        try {
-          if (!this.exitSprite) {
-            this.exitSprite = this.add.image(this.exitRect.x + this.exitRect.width / 2, this.exitRect.y + this.exitRect.height / 2, 'hub_drill');
-            this.exitSprite.setOrigin(0.5);
-            this.exitSprite.setFlipX(true);
-            fitImageHeight(this, this.exitSprite, 64);
-            this.exitSprite.setDepth(9000);
-          }
-        } catch (_) {}
+      try {
+        const cx = this.exitRect.x + this.exitRect.width / 2;
+        const cy = this.exitRect.y + this.exitRect.height / 2;
+        if (!this.exitSprite) {
+          this.exitSprite = this.add.image(cx, cy, 'hub_drill');
+          this.exitSprite.setOrigin(0.5);
+          this.exitSprite.setFlipX(true);
+          fitImageHeight(this, this.exitSprite, 64);
+        } else {
+          this.exitSprite.setPosition(cx, cy);
+          this.exitSprite.setVisible(true);
+        }
+        this.exitSprite.setDepth(9000);
+      } catch (_) {}
 
       this.exitG.clear();
     }
@@ -6850,7 +6862,7 @@ export default class CombatScene extends Phaser.Scene {
           if (turretCount < 5) {
             try {
               const mods = this.gs?.getDifficultyMods?.() || {};
-              const hp = Math.max(1, Math.floor(150 * (mods.enemyHp || 1)));
+              const hp = Math.max(1, Math.floor(80 * (mods.enemyHp || 1)));
               const dmg = Math.max(1, Math.floor(10 * (mods.enemyDamage || 1)));
               const turret = createTurretEnemy(this, e.x, e.y, hp, dmg);
               if (turret) this.enemies.add(turret);

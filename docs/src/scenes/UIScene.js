@@ -335,7 +335,10 @@ export default class UIScene extends Phaser.Scene {
     const gs = this.registry.get('gameState');
     if (!gs || this.loadout.panel) return;
     const { width, height } = this.scale;
-    const nodes = [];
+      const nodes = [];
+      // Full-screen input blocker so clicks don't hit underlying scenes/UI while loadout is open
+      const blocker = this.add.zone(0, 0, width, height).setOrigin(0, 0).setInteractive();
+      nodes.push(blocker);
     const panel = this.add.graphics();
 
     // 3-column layout panel
@@ -347,6 +350,12 @@ export default class UIScene extends Phaser.Scene {
     panel.fillStyle(0x111111, 0.92).fillRect(left, top, panelW, panelH);
     panel.lineStyle(2, 0xffffff, 1).strokeRect(left, top, panelW, panelH);
     nodes.push(this.add.text(width / 2, top + 12, 'Loadout & Stats (Tab to close)', { fontFamily: 'monospace', fontSize: 18, color: '#ffffff' }).setOrigin(0.5));
+    // Close button in top-right corner of loadout panel
+    const closeX = left + panelW - 40;
+    const closeY = top + 18;
+    nodes.push(makeTextButton(this, closeX, closeY, 'X', () => {
+      this.closeLoadout();
+    }));
 
     // Columns (Stats removed)
     const col2X = left + 40;    // Weapons + Mods/Core (wider)
@@ -1110,6 +1119,8 @@ export default class UIScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, width, height);
+    // Block input to underlying UI while popup is open
+    overlay.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
     const panel = this.add.graphics();
     const w = 420;
     // Measure total content height (name + descriptions + spacing per option)
