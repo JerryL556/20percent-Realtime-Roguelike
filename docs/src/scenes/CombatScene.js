@@ -8190,8 +8190,8 @@ export default class CombatScene extends Phaser.Scene {
       mine.body.setVelocity(0, 0);
       mine.isDnMine = true;
       mine.isEnemy = true;
-      mine.hp = 30;
-      mine.maxHp = 30;
+      mine.hp = 10;
+      mine.maxHp = 10;
       mine._sensorRadius = 50;
       mine._blastRadius = 70;
       mine._sensorTriggered = false;

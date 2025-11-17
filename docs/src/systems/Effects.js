@@ -467,23 +467,118 @@ export function getScrapTintForEnemy(e) {
 // Small, purely visual death effect: a tiny pop and colored scrap sparks
 export function spawnDeathVfxForEnemy(scene, e, scale = 1) {
   try {
-    const tint = getScrapTintForEnemy(e);
-    const x = e?.x ?? 0, y = e?.y ?? 0;
-    const r = Math.max(10, Math.floor(14 * scale));
-    // Explosion pop: unified red
-    impactBurst(scene, x, y, { color: 0xff3333, size: 'small', radius: Math.floor(r * 0.8) });
-    // Scrap debris in parabolic arcs
-    const scraps = Math.max(8, Math.floor((e?.isBoss ? 18 : 12) * scale));
-    spawnScrapDebris(scene, x, y, { tint, count: scraps, power: 1 });
-    // Optional soft smoke (very light)
+    const x = e?.x ?? 0;
+    const y = e?.y ?? 0;
+    const isBoss = !!e?.isBoss || !!e?.bossType;
+
+    if (!isBoss) {
+      // Normal enemy death (unchanged)
+      const tint = getScrapTintForEnemy(e);
+      const r = Math.max(10, Math.floor(14 * scale));
+      impactBurst(scene, x, y, { color: 0xff3333, size: 'small', radius: Math.floor(r * 0.8) });
+      const scraps = Math.max(8, Math.floor(12 * scale));
+      spawnScrapDebris(scene, x, y, { tint, count: scraps, power: 1 });
+      try {
+        const key = ensureCircleParticle(scene, 'death_smoke_particle', 0x999999, 3);
+        for (let i = 0; i < 2; i += 1) {
+          const img = scene.add.image(x, y, key).setDepth(8500).setAlpha(0.18);
+          const dx = Phaser.Math.Between(-6, 6), dy = Phaser.Math.Between(-10, 0);
+          const sc = Phaser.Math.FloatBetween(0.8, 1.1) * (1 + 0.2 * scale);
+          scene.tweens.add({
+            targets: img,
+            x: x + dx,
+            y: y + dy,
+            alpha: 0,
+            scale: sc,
+            duration: 260,
+            ease: 'Cubic.Out',
+            onComplete: () => { try { img.destroy(); } catch (_) {} },
+          });
+        }
+      } catch (_) {}
+      return;
+    }
+
+    // Boss death: more intense explosions and boss-tinted scrap
+    const bossType = e?.bossType || e?._bossId || '';
+    let bossColor = 0xff3333;
+    if (bossType === 'Bigwig') bossColor = 0xffdd33;      // yellow/orange
+    else if (bossType === 'Dandelion') bossColor = 0xff4444; // red
+    else if (bossType === 'Hazel') bossColor = 0xaa66ff;     // purple
+
+    const baseTint = getScrapTintForEnemy(e);
+    const r = Math.max(18, Math.floor(20 * scale));
+
+    // Initial large explosion
+    impactBurst(scene, x, y, { color: bossColor, size: 'large', radius: Math.floor(r * 1.2) });
+
+    // Secondary explosions in a loose ring around the boss
+    try {
+      const ringCount = 4;
+      for (let i = 0; i < ringCount; i += 1) {
+        const ang = (i / ringCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.2, 0.2);
+        const dist = Phaser.Math.Between(20, 40);
+        const ex = x + Math.cos(ang) * dist;
+        const ey = y + Math.sin(ang) * dist;
+        const delay = Phaser.Math.Between(80, 200);
+        scene.time.delayedCall(delay, () => {
+          try {
+            impactBurst(scene, ex, ey, { color: bossColor, size: 'small', radius: Math.floor(r * 0.7) });
+          } catch (_) {}
+        });
+      }
+    } catch (_) {}
+
+    // Boss scrap debris: more pieces, stronger power
+    const bossScraps = Math.max(18, Math.floor(28 * scale));
+    // Scrap metal keeps the same tint as normal enemies but lives longer for bosses
+    spawnScrapDebris(scene, x, y, { tint: baseTint, count: bossScraps, power: 1.4, lifeScale: 1.6 });
+
+    // Extra boss-specific pixel sparks in a short burst
+    try {
+      const sparkCount = 24;
+      for (let i = 0; i < sparkCount; i += 1) {
+        const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const sp = Phaser.Math.Between(140, 240);
+        pixelSparks(scene, x, y, {
+          angleRad: a,
+          count: 1,
+          spreadDeg: 10,
+          speedMin: sp,
+          speedMax: sp + 40,
+          lifeMs: Phaser.Math.Between(220, 320),
+          color: bossColor,
+          size: 2,
+          alpha: 0.95,
+        });
+      }
+    } catch (_) {}
+
+    // Soft smoke + a bit more for boss deaths
     try {
       const key = ensureCircleParticle(scene, 'death_smoke_particle', 0x999999, 3);
-      for (let i = 0; i < 2; i += 1) {
-        const img = scene.add.image(x, y, key).setDepth(8500).setAlpha(0.18);
-        const dx = Phaser.Math.Between(-6, 6), dy = Phaser.Math.Between(-10, 0);
-        const sc = Phaser.Math.FloatBetween(0.8, 1.1) * (1 + 0.2 * scale);
-        scene.tweens.add({ targets: img, x: x + dx, y: y + dy, alpha: 0, scale: sc, duration: 260, ease: 'Cubic.Out', onComplete: () => { try { img.destroy(); } catch (_) {} } });
+      for (let i = 0; i < 4; i += 1) {
+        const img = scene.add.image(x, y, key).setDepth(8500).setAlpha(0.22);
+        const dx = Phaser.Math.Between(-12, 12);
+        const dy = Phaser.Math.Between(-18, -4);
+        const sc = Phaser.Math.FloatBetween(1.0, 1.4) * (1 + 0.25 * scale);
+        scene.tweens.add({
+          targets: img,
+          x: x + dx,
+          y: y + dy,
+          alpha: 0,
+          scale: sc,
+          duration: 320,
+          ease: 'Cubic.Out',
+          onComplete: () => { try { img.destroy(); } catch (_) {} },
+        });
       }
+    } catch (_) {}
+
+    // Short camera shake for boss kills
+    try {
+      const cam = scene.cameras?.main;
+      cam?.shake?.(220, 0.007);
     } catch (_) {}
   } catch (_) {}
 }
@@ -523,6 +618,7 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
     const count = Math.max(1, opts.count || 10);
     const tint = opts.tint ?? 0x888888;
     const power = opts.power ?? 1;
+    const lifeScale = typeof opts.lifeScale === 'number' && opts.lifeScale > 0 ? opts.lifeScale : 1;
     for (let i = 0; i < count; i += 1) {
       const key = `scrap_shape_${Phaser.Math.Between(0, 5)}`;
       const img = scene.add.image(x, y, key);
@@ -541,7 +637,7 @@ export function spawnScrapDebris(scene, x, y, opts = {}) {
       const zScale = 0.42; // less vertical projection for a flatter look
       const dragPerSecond = 0.65; // a bit lighter drag for wider spread
       let sx = x, sy = y; // ground-projected positions
-      const maxLife = 1250; // concise lifespan
+      const maxLife = 1250 * lifeScale; // lifespan scaled by caller
       let lived = 0;
       const rotSpd = Phaser.Math.FloatBetween(-6, 6);
       const x0 = x, y0 = y;
