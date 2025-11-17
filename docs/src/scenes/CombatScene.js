@@ -1420,6 +1420,42 @@ export default class CombatScene extends Phaser.Scene {
           const primaryDmg = (b._core === 'blast' && !b._rocket) ? Math.ceil(baseDmg * 0.8) : baseDmg;
           e.hp -= primaryDmg;
         }
+        // Brief per-enemy hit feedback: flash sprite + small directional spark at impact
+        try {
+          const target = e._vis || e;
+          if (target) {
+            // Simple bright flash on the visual sprite
+            if (!target._hitFlashUntil || this.time.now >= target._hitFlashUntil) {
+              // Cache original tint once
+              if (typeof target._baseTint === 'undefined') {
+                target._baseTint = (typeof target.tintTopLeft === 'number') ? target.tintTopLeft : null;
+              }
+              target.setTint(0xfff5aa);
+              target._hitFlashUntil = this.time.now + 140;
+              this.time.delayedCall(140, () => {
+                try {
+                  if (!target.active) return;
+                  if (typeof target._baseTint === 'number') target.setTint(target._baseTint);
+                  else target.clearTint();
+                } catch (_) {}
+              });
+            }
+            // Small spark burst at the bullet impact point
+            try {
+              pixelSparks(this, b.x, b.y, {
+                angleRad: Math.atan2(b.body?.velocity?.y || 0, b.body?.velocity?.x || 1),
+                count: 4,
+                spreadDeg: 40,
+                speedMin: 220,
+                speedMax: 360,
+                lifeMs: 160,
+                color: 0xffffcc,
+                size: 2,
+                alpha: 0.9,
+              });
+            } catch (_) {}
+          }
+        } catch (_) {}
         // Apply ignite buildup from special cores (e.g., Rifle Incendiary)
         if (b._igniteOnHit && b._igniteOnHit > 0) {
           const add = b._igniteOnHit;
