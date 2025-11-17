@@ -547,6 +547,12 @@ export default class UIScene extends Phaser.Scene {
           label.setText(`Slot ${slotIdx + 1}: ${getName()}`);
           try { label.setStyle({ color: chosenId ? '#ffff33' : '#cccccc' }); } catch (e) {}
           SaveManager.saveToLocal(gs);
+          // If active weapon changed as a result of this slot update, rebuild the loadout UI
+          try {
+            if (gs.activeWeapon === chosenId && typeof this.reopenLoadout === 'function') {
+              this.time.delayedCall(0, () => { this.reopenLoadout(); });
+            }
+          } catch (_) {}
         });
       }).setOrigin(0, 0.5);
       nodes.push(btn);
