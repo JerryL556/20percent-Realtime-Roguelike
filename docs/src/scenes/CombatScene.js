@@ -1,4 +1,4 @@
-﻿import { SceneKeys } from '../core/SceneKeys.js';
+import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
@@ -195,7 +195,7 @@ export default class CombatScene extends Phaser.Scene {
     });
     nodes.push(bClear);
 
-    // Prototype Drones (Bosses) — allow spawning bosses in training ground (no cutscene)
+    // Prototype Drones (Bosses) 闂?allow spawning bosses in training ground (no cutscene)
     if (this.gs?.shootingRange) {
       const protoY = r0 + rLine * (miscRow + r + 1.0);
       const protoHeader = this.add.text(col3X, protoY, 'Prototype Drones', headerStyle).setOrigin(0.5, 0);
@@ -254,7 +254,7 @@ export default class CombatScene extends Phaser.Scene {
     extras.forEach((o) => { try { o?.destroy?.(); } catch (_) {} });
   }
 
-  // Player melee implementation: 150掳 cone, 48px range, 10 damage (90ms swing, 45ms hit)
+  // Player melee implementation: 150闂?cone, 48px range, 10 damage (90ms swing, 45ms hit)
   performPlayerMelee() {
     const caster = this.player;
     if (!caster) return;
@@ -408,7 +408,7 @@ export default class CombatScene extends Phaser.Scene {
           beam.x = caster.x; beam.y = caster.y;
           const now = this.time.now;
           const t = Phaser.Math.Clamp((now - startAt) / Math.max(1, dur), 0, 1);
-          // Linear interpolate angles (range is <= 180锟? safe for lerp)
+          // Linear interpolate angles (range is <= 180闂? safe for lerp)
           const cur = start + (end - start) * t;
           const tipX = Math.cos(cur) * r;
           const tipY = Math.sin(cur) * r;
@@ -1288,7 +1288,7 @@ export default class CombatScene extends Phaser.Scene {
         try { b.destroy(); } catch (_) {}
         return;
       }
-      // Rook shield: block non-rail bullets (including rockets) within 90掳 front arc
+      // Rook shield: block non-rail bullets (including rockets) within 90闂?front arc
       if (e.isRook && !b._rail) {
         try {
           const r = (e._shieldRadius || 60);
@@ -1709,7 +1709,7 @@ export default class CombatScene extends Phaser.Scene {
   _spawnHazelMissile(boss) {
     if (!this.enemies) return;
     const m = this.physics.add.sprite(boss.x, boss.y, 'bullet');
-    // Spawn at a random position in a small ring around Hazel (360°)
+    // Spawn at a random position in a small ring around Hazel (360闂?
     try {
       const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const dist = Phaser.Math.Between(10, 26);
@@ -1728,7 +1728,7 @@ export default class CombatScene extends Phaser.Scene {
     m._angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     m._hzStraightUntil = now + 300; // ms of straight travel before enabling turn
     m._speed = 230; // px/s
-    m._maxTurn = Phaser.Math.DegToRad(2); // further reduced turn rate (~2°/frame baseline, time-scaled)
+    m._maxTurn = Phaser.Math.DegToRad(2); // further reduced turn rate (~2闂?frame baseline, time-scaled)
     this.enemies.add(m);
     // Purple guided-missile-style tracer
     try {
@@ -1840,7 +1840,20 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     } catch (_) {}
-    // Death VFX (purely visual)
+      // If Dandelion died, destroy all remaining Dandelion mines so the arena can clear
+      try {
+        if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
+          if (this._dnMines && this._dnMines.length) {
+            for (let i = 0; i < this._dnMines.length; i += 1) {
+              const m = this._dnMines[i];
+              if (!m) continue;
+              try { m._g?.destroy?.(); } catch (_) {}
+              try { m.destroy?.(); } catch (_) {}
+            }
+          }
+          this._dnMines = [];
+        }
+      } catch (_) {}    // Death VFX (purely visual)
     try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
     // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
@@ -2347,12 +2360,12 @@ export default class CombatScene extends Phaser.Scene {
         // Homing params (more limited than Smart Missiles core)
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0);
-        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2锟?frame (more limited)
+        b._maxTurn = Phaser.Math.DegToRad(2) * 0.1; // ~0.2闂?frame (more limited)
         b._fov = Phaser.Math.DegToRad(60); // narrower lock cone
-        // Slightly increase Smart HMG homing: ~0.75锟斤拷/frame (~45锟斤拷/s)
+        // Slightly increase Smart HMG homing: ~0.75闂傚倸鍊峰ù鍥р枖閺囥垹绐楅柟鐗堟緲閸戠姴鈹戦悩瀹犲缂?frame (~45闂傚倸鍊峰ù鍥р枖閺囥垹绐楅柟鐗堟緲閸戠姴鈹戦悩瀹犲缂?s)
         b._maxTurn = Phaser.Math.DegToRad(0.75);
         b._noTurnUntil = this.time.now + 120; // brief straight launch
-        // Override: interpret _maxTurn as deg/s for time-based turn; 0.75 deg/frame @60 FPS ≈ 45 deg/s
+        // Override: interpret _maxTurn as deg/s for time-based turn; 0.75 deg/frame @60 FPS 闂?45 deg/s
         b._maxTurn = Phaser.Math.DegToRad(45);
 
         b.setVelocity(Math.cos(b._angle) * b._speed, Math.sin(b._angle) * b._speed);
@@ -2411,7 +2424,7 @@ export default class CombatScene extends Phaser.Scene {
         b._angle = angle0;
         b._speed = Math.max(40, weapon.bulletSpeed | 0); // low velocity
         // Max turn per frame baseline is increased for no-core missiles (effectively time-scaled later)
-        // Drastically higher base homing for no-core: 8 deg/frame (~480锟斤拷/s at 60 FPS)
+        // Drastically higher base homing for no-core: 8 deg/frame (~480闂傚倸鍊峰ù鍥р枖閺囥垹绐楅柟鐗堟緲閸戠姴鈹戦悩瀹犲缂?s at 60 FPS)
         b._maxTurn = Phaser.Math.DegToRad(8);
         // Apply optional guided turn-rate multiplier from cores
         if (typeof weapon._guidedTurnMult === 'number') {
@@ -2422,8 +2435,8 @@ export default class CombatScene extends Phaser.Scene {
         b._smart = !!weapon._smartMissiles;
         if (b._smart) {
           const mult = (typeof weapon._smartTurnMult === 'number') ? Math.max(0.1, weapon._smartTurnMult) : 0.5;
-          b._maxTurn = b._maxTurn * mult; // e.g., 1锟?frame
-          b._fov = Phaser.Math.DegToRad(90); // 90锟?cone total
+          b._maxTurn = b._maxTurn * mult; // e.g., 1闂?frame
+          b._fov = Phaser.Math.DegToRad(90); // 90闂?cone total
         }
         // Preserve Smart Core homing but treat as time-based: fixed 120 deg/s, scaled by smartTurnMult if provided
         if (b._smart) {
@@ -2456,7 +2469,7 @@ export default class CombatScene extends Phaser.Scene {
               if (b._smart) {
                 // Maintain/refresh target within FOV; otherwise go straight
                 const enemies = this.enemies?.getChildren?.() || [];
-                const half = (b._fov || Math.PI / 2) / 2; // 45锟?half-angle
+                const half = (b._fov || Math.PI / 2) / 2; // 45闂?half-angle
                 const norm = (a) => Phaser.Math.Angle.Wrap(a);
                 const ang = norm(b._angle);
                 // Validate existing target
@@ -4215,7 +4228,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Player melee: C key, 150锟? 48px, 10 dmg
+    // Player melee: C key, 150闂? 48px, 10 dmg
     try {
       if (this.inputMgr?.pressedMelee) this.performPlayerMelee?.();
     } catch (_) {}
@@ -4404,7 +4417,7 @@ export default class CombatScene extends Phaser.Scene {
           g.lineStyle(3, 0xaa66ff, 0.85).strokeCircle(0, 0, outer);
           g.lineStyle(1, 0xddaaff, 0.9).strokeCircle(0, 0, inner);
         } catch (_) {}
-        // Block player bullets in the band, like a 360° Rook shield (skip railgun)
+        // Block player bullets in the band, like a 360闂?Rook shield (skip railgun)
         try {
           const cx = p.x; const cy = p.y;
           const band = p.band || 12;
@@ -4724,7 +4737,7 @@ export default class CombatScene extends Phaser.Scene {
         let speed = e.speed || 60;
         // Global speed boost for all enemies
         speed *= 1.5;
-        // Rook: update and draw shield; turn slowly toward player (30掳/s)
+        // Rook: update and draw shield; turn slowly toward player (30闂?s)
         if (e.isRook) {
           try {
             const targetAng = Math.atan2(dy, dx);
@@ -4786,7 +4799,7 @@ export default class CombatScene extends Phaser.Scene {
         }
         // Melee attack state machine (for base + runner + rook)
         if (e.isMelee && !e.isShooter && !e.isSniper && !e.isGrenadier) {
-          // Align enemy melee FOV with player melee (150掳 total => 75掳 half-angle)
+          // Align enemy melee FOV with player melee (150闂?total => 75闂?half-angle)
           // Shorter timings for snappier combat: reduced windup, sweep, and recovery
           let cfg = e.isRunner ? { range: 64, half: Phaser.Math.DegToRad(75), wind: 170, sweep: 90, recover: 420 } : { range: 56, half: Phaser.Math.DegToRad(75), wind: 120, sweep: 90, recover: 500 };
           if (e.isRook) { cfg = { range: 90, half: Phaser.Math.DegToRad(75), wind: 250, sweep: 90, recover: 650 }; }
@@ -4801,7 +4814,7 @@ export default class CombatScene extends Phaser.Scene {
           if (e._mState === 'windup') {
             vx = 0; vy = 0;
             if (now >= (e._meleeUntil || 0)) {
-              // Start sweep (VFX matches player's 150掳 cone)
+              // Start sweep (VFX matches player's 150闂?cone)
               e._mState = 'sweep'; e._meleeDidHit = false; e._meleeUntil = now + cfg.sweep;
               // Enemy slash VFX fixed at 90ms to match player
               try { this.spawnMeleeVfx(e, e._meleeFacing, 150, 90, 0xff3333, cfg.range, e._meleeAlt); } catch (_) {}
@@ -5115,7 +5128,7 @@ export default class CombatScene extends Phaser.Scene {
           // handled in updateBossAI()
         } else if (e.isPrism) {
           const nowT = this.time.now;
-          // Prism: two behaviors 锟?sweeping beam, and special aim-then-beam
+          // Prism: two behaviors 闂?sweeping beam, and special aim-then-beam
           // Freeze during aim/beam
           if (e._prismState === 'aim' || e._prismState === 'beam') {
             try { e.body?.setVelocity?.(0, 0); } catch (_) {}
@@ -6175,20 +6188,34 @@ export default class CombatScene extends Phaser.Scene {
               const px = this.player.x; const py = this.player.y;
               const dxp = px - e.x; const dyp = py - e.y;
               const baseAng = Math.atan2(dyp, dxp);
-              const distToPlayer = Math.hypot(dxp, dyp) || 1;
-              const spread = Phaser.Math.DegToRad(15); // total 30° fan (±15°)
-                const rFan = (distToPlayer > 120) ? Math.min(140, distToPlayer - 60) : 70;
-              // Middle mine at Dandelion's current position
-              try { this._spawnDandelionMineWithVfx?.(e.x, e.y); } catch (_) {}
-              // Side mines at ±15° at 70px
+              const spread = Phaser.Math.DegToRad(35); // total 70 fan (35)
+              const rFan = 70;
+
+              // Compute fan points in front of Dandelion (toward the player)
+              const midX = e.x + Math.cos(baseAng) * rFan;
+              const midY = e.y + Math.sin(baseAng) * rFan;
               const angL = baseAng - spread;
               const angR = baseAng + spread;
-              const lx = e.x + Math.cos(angL) * rFan;
-              const ly = e.y + Math.sin(angL) * rFan;
-              const rx = e.x + Math.cos(angR) * rFan;
-              const ry = e.y + Math.sin(angR) * rFan;
-              try { this._spawnDandelionMineWithVfx?.(lx, ly); } catch (_) {}
-              try { this._spawnDandelionMineWithVfx?.(rx, ry); } catch (_) {}
+              const leftX = e.x + Math.cos(angL) * rFan;
+              const leftY = e.y + Math.sin(angL) * rFan;
+              const rightX = e.x + Math.cos(angR) * rFan;
+              const rightY = e.y + Math.sin(angR) * rFan;
+
+              // Shift the entire fan 70px behind Dandelion (away from the player)
+              const backOffset = 70;
+              const offX = -Math.cos(baseAng) * backOffset;
+              const offY = -Math.sin(baseAng) * backOffset;
+              const cx = midX + offX;
+              const cy = midY + offY;
+              const lx = leftX + offX;
+              const ly = leftY + offY;
+              const rx = rightX + offX;
+              const ry = rightY + offY;
+
+              // Spawn mines at shifted fan positions with Hazel-style phase VFX
+              this._spawnDandelionMineWithVfx?.(cx, cy);
+              this._spawnDandelionMineWithVfx?.(lx, ly);
+              this._spawnDandelionMineWithVfx?.(rx, ry);
             } catch (_) {}
             // After each fan, schedule next burst in 100ms
             e._dnAssaultNextMineAt = nowDn + (e._dnAssaultMineInterval || 100);
@@ -6287,7 +6314,7 @@ export default class CombatScene extends Phaser.Scene {
           } catch (_) {}
           // Fire one laser shot
           const base = Math.atan2(tyP - e.y, txP - e.x);
-          const spreadRad = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1)); // ±1° (~2° total)
+          const spreadRad = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1)); // 闂?闂?(~2闂?total)
           const shotAng = base + spreadRad;
           try {
             const hit = this.computeEnemyLaserEnd(e.x, e.y, shotAng);
@@ -6456,7 +6483,7 @@ export default class CombatScene extends Phaser.Scene {
           e._dnDashState = 'dashing';
           e._dnDashUntil = now + dashDurMs;
           e._dnDashTrailLast = { x: e.x, y: e.y };
-          // Next dash no sooner than 3s later plus a small random delay for variability (0–2s)
+          // Next dash no sooner than 3s later plus a small random delay for variability (0闂?s)
           const extra = Phaser.Math.Between(0, 2000);
           e._dnDashNextAt = now + 3000 + extra;
         } catch (_) {}
@@ -6520,7 +6547,7 @@ export default class CombatScene extends Phaser.Scene {
             }
           } catch (_) {}
           const base = Math.atan2(tyP - e.y, txP - e.x);
-          const spreadRad = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1)); // ±1° (~2° total)
+          const spreadRad = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1)); // 闂?闂?(~2闂?total)
           const shotAng = base + spreadRad;
           try {
             const hit = this.computeEnemyLaserEnd(e.x, e.y, shotAng);
@@ -7583,7 +7610,7 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
     }
-    // Hazel teleport pulses: treat as circular blockers like moving shields (360°)
+    // Hazel teleport pulses: treat as circular blockers like moving shields (360闂?
     try {
       const pulses = this._hzPulses || [];
       const dxr = Math.cos(angle), dyr = Math.sin(angle);
@@ -7616,7 +7643,7 @@ export default class CombatScene extends Phaser.Scene {
     const enemies = this.enemies?.getChildren?.() || [];
     for (let i = 0; i < enemies.length; i += 1) {
       const e = enemies[i]; if (!e?.active) continue;
-      // Rook shield: treat 90掳 arc as obstacle if facing the beam source
+      // Rook shield: treat 90闂?arc as obstacle if facing the beam source
       if (e.isRook) {
         try {
           const r = (e._shieldRadius || 60);
@@ -8099,7 +8126,7 @@ export default class CombatScene extends Phaser.Scene {
       const facing = Math.atan2(dy, dx);
       // Alternate start angle just like the shared boss melee
       e._bmAlt = !e._bmAlt;
-      // Use the same slash VFX as boss melee/Rook: 150° cone, 90ms duration, red
+      // Use the same slash VFX as boss melee/Rook: 150闂?cone, 90ms duration, red
       try { this.spawnMeleeVfx(e, facing, 150, 90, 0xff3333, cfg.range, e._bmAlt); } catch (_) {}
       // Damage tick at ~45ms with same geometry and damage rules
       this.time.delayedCall(45, () => {

@@ -10,7 +10,17 @@ export default class StartScene extends Phaser.Scene {
     // Ensure in-game UI is not visible on the start menu
     try { this.scene.stop(SceneKeys.UI); } catch (e) { /* ignore if not running */ }
     const { width, height } = this.scale;
-    this.add.text(width / 2, height / 2 - 80, 'Roguelike Action', { fontFamily: 'monospace', fontSize: 28, color: '#ffffff' }).setOrigin(0.5);
+    // Title logo image (scaled down)
+    try {
+      const logo = this.add.image(width / 2, height / 2 - 80, 'title_logo');
+      logo.setOrigin(0.5);
+      const desiredWidth = Math.min(width * 0.6, logo.width);
+      const scale = desiredWidth / logo.width;
+      logo.setScale(scale);
+    } catch (e) {
+      // Fallback to text if texture missing
+      this.add.text(width / 2, height / 2 - 80, 'Roguelike Action', { fontFamily: 'monospace', fontSize: 28, color: '#ffffff' }).setOrigin(0.5);
+    }
 
     makeTextButton(this, width / 2, height / 2, 'New Run', () => {
       // Respect previously chosen difficulty from registry or saved data

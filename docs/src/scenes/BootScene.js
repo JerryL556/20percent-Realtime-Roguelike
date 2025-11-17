@@ -12,6 +12,8 @@ export default class BootScene extends Phaser.Scene {
       A('player_inle', 'assets/Inle.png');
       A('npc_shop', 'assets/Shop.png');
       A('npc_mode', 'assets/Mode.png');
+      A('title_logo', 'assets/TITLE.png');
+
       A('dummy_target', 'assets/Dummy.png');
       A('turret_base', 'assets/Turret Base.png');
       A('turret_head', 'assets/Turret Head.png');
