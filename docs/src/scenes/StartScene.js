@@ -22,7 +22,7 @@ export default class StartScene extends Phaser.Scene {
       this.add.text(width / 2, height / 2 - 80, 'Roguelike Action', { fontFamily: 'monospace', fontSize: 28, color: '#ffffff' }).setOrigin(0.5);
     }
 
-    makeTextButton(this, width / 2, height / 2, 'New Run', () => {
+    makeTextButton(this, width / 2, height / 2 + 80, 'New Run', () => {
       // Respect previously chosen difficulty from registry or saved data
       const saved = SaveManager.loadFromLocal();
       const prev = saved || this.registry.get('gameState');
@@ -37,7 +37,7 @@ export default class StartScene extends Phaser.Scene {
       this.scene.start(SceneKeys.Hub);
     });
 
-    makeTextButton(this, width / 2, height / 2 + 40, 'Continue', () => {
+    makeTextButton(this, width / 2, height / 2 + 130, 'Continue', () => {
       const loaded = SaveManager.loadFromLocal();
       if (loaded) {
         this.registry.set('gameState', loaded);
@@ -48,7 +48,7 @@ export default class StartScene extends Phaser.Scene {
       }
     });
 
-    makeTextButton(this, width / 2, height / 2 + 80, 'Menu', () => {
+    makeTextButton(this, width / 2, height / 2 + 180, 'Menu', () => {
       this.scene.start(SceneKeys.Menu);
     });
 
