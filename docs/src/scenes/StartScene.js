@@ -22,7 +22,7 @@ export default class StartScene extends Phaser.Scene {
       this.add.text(width / 2, height / 2 - 80, 'Roguelike Action', { fontFamily: 'monospace', fontSize: 28, color: '#ffffff' }).setOrigin(0.5);
     }
 
-    makeTextButton(this, width / 2, height / 2 + 80, 'New Run', () => {
+    makeTextButton(this, width / 2, height / 2 + 80, 'New Game', () => {
       // Respect previously chosen difficulty from registry or saved data
       const saved = SaveManager.loadFromLocal();
       const prev = saved || this.registry.get('gameState');
@@ -48,28 +48,14 @@ export default class StartScene extends Phaser.Scene {
       }
     });
 
-    makeTextButton(this, width / 2, height / 2 + 180, 'Menu', () => {
-      this.scene.start(SceneKeys.Menu);
-    });
-
-    // Manual save management at title screen
-    const baseX = width - 240;
-    const topY = 20;
-    const getState = () => this.registry.get('gameState') || SaveManager.loadFromLocal();
-    makeTextButton(this, baseX, topY, 'Save', () => {
-      const gs = this.registry.get('gameState');
-      if (gs) SaveManager.saveToLocal(gs);
-    }).setOrigin(0, 0);
-    makeTextButton(this, baseX + 70, topY, 'Download', () => {
-      const gs = getState();
-      if (gs) SaveManager.download(gs);
-    }).setOrigin(0, 0);
-    makeTextButton(this, baseX + 170, topY, 'Load', async () => {
+    makeTextButton(this, width / 2, height / 2 + 180, 'Load Save', async () => {
       const gs = await SaveManager.uploadFromFile();
       if (gs) {
         this.registry.set('gameState', gs);
         SaveManager.saveToLocal(gs);
+        const next = gs.nextScene || SceneKeys.Hub;
+        this.scene.start(next);
       }
-    }).setOrigin(0, 0);
+    });
   }
 }
