@@ -913,8 +913,8 @@ export default class CombatScene extends Phaser.Scene {
         const rng = this.gs.rng;
         const all = generateBarricades(rng, this.arenaRect, 'soft_many') || [];
         const softOnly = all.filter((b) => b && b.kind === 'soft');
-        // Reduce count to ~50% of soft_many (at least 4 for some cover)
-        const target = Math.max(4, Math.floor(softOnly.length * 0.5));
+        // Reduce count to ~35% of soft_many (at least 4 for some cover)
+        const target = Math.max(4, Math.floor(softOnly.length * 0.35));
         const used = new Set();
         const picks = [];
         for (let i = 0; i < target && softOnly.length > 0; i += 1) {
@@ -935,10 +935,26 @@ export default class CombatScene extends Phaser.Scene {
           this.barricadesSoft.add(s);
         });
       } else {
-        // Normal rooms: preserve existing variant selection logic
+        // Normal rooms: slightly reduce intensity of soft-only layouts
         const brRoll = this.gs.rng.next();
-        const variant = (brRoll < 0.34) ? 'normal' : (brRoll < 0.67) ? 'soft_many' : 'hard_sparse';
-        const barricades = generateBarricades(this.gs.rng, this.arenaRect, variant);
+        let variant = (brRoll < 0.34) ? 'normal' : (brRoll < 0.67) ? 'soft_many' : 'hard_sparse';
+        let barricades = generateBarricades(this.gs.rng, this.arenaRect, variant);
+        // If using the soft_many pattern, randomly drop some tiles to reduce density
+        if (variant === 'soft_many' && Array.isArray(barricades) && barricades.length) {
+          const rng = this.gs.rng;
+          const filtered = [];
+          for (let i = 0; i < barricades.length; i += 1) {
+            const b = barricades[i];
+            // Keep hard tiles (should not appear in soft_many, but safe) and randomly skip some soft tiles
+            if (b.kind === 'hard') {
+              filtered.push(b);
+            } else {
+              // Keep ~60% of soft tiles, drop ~40% to thin out the maze
+              if (rng.next() < 0.6) filtered.push(b);
+            }
+          }
+          barricades = filtered;
+        }
         barricades.forEach((b) => {
           if (b.kind === 'hard') {
             const s = this.physics.add.staticImage(b.x, b.y, 'barricade_hard');
@@ -1881,7 +1897,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!this._hzPulses) this._hzPulses = [];
     const g = this.add.graphics({ x, y });
     try { g.setDepth(9000); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
-    const pulse = { x, y, r: 0, maxR: 200, band: 12, speed: 200, g, atMaxSince: null };
+    const pulse = { x, y, r: 0, maxR: 260, band: 22, speed: 260, g, atMaxSince: null };
     this._hzPulses.push(pulse);
   }
 
@@ -4410,30 +4426,49 @@ export default class CombatScene extends Phaser.Scene {
       this._hzPulses = this._hzPulses.filter((p) => {
         if (!p || !p.g) return false;
         const maxR = p.maxR || 100;
-        // Grow until max radius, then persist for a short duration before disappearing
-        if (p.r < maxR) {
+        const stayMs = 1200; // time to remain at max radius before collapsing
+
+        // Grow until max radius
+        if (!p.atMaxSince) {
           p.r += (p.speed || 300) * dt;
           if (p.r >= maxR) {
             p.r = maxR;
-            p.atMaxSince = p.atMaxSince || this.time.now;
+            p.atMaxSince = this.time.now;
           }
         } else {
-          p.r = maxR;
-          p.atMaxSince = p.atMaxSince || this.time.now;
+          // At max radius: hold for stayMs, then start collapsing
+          const elapsed = this.time.now - (p.atMaxSince || 0);
+          if (elapsed <= stayMs) {
+            p.r = maxR;
+          } else {
+            // Collapse phase after staying at max
+            const collapseSpeed = (p.speed || 300) * 1.4;
+            p.r -= collapseSpeed * dt;
+            if (p.r <= 0) {
+              try { p.g.destroy(); } catch (_) {}
+              return false;
+            }
+          }
         }
-        if (p.atMaxSince && (this.time.now - p.atMaxSince) >= 5000) {
-          try { p.g.destroy(); } catch (_) {}
-          return false;
-        }
+
         const g = p.g;
         try {
           g.clear();
           const band = p.band || 12;
           const inner = Math.max(4, p.r - band);
           const outer = p.r;
-          // Hollow ring similar to player pulse, but purple
-          g.lineStyle(3, 0xaa66ff, 0.85).strokeCircle(0, 0, outer);
-          g.lineStyle(1, 0xddaaff, 0.9).strokeCircle(0, 0, inner);
+          // Alpha based on collapse progress: fully opaque at max, fade only while shrinking
+          let alpha = 0.9;
+          if (p.atMaxSince) {
+            const elapsed = this.time.now - (p.atMaxSince || 0);
+            if (elapsed > stayMs) {
+              const collapseFrac = Math.max(0, Math.min(1, 1 - (p.r / maxR)));
+              alpha = 0.9 * (1 - collapseFrac * 0.7);
+            }
+          }
+          // Hollow ring similar to player pulse, but purple and wider
+          g.lineStyle(4, 0xaa66ff, alpha).strokeCircle(0, 0, outer);
+          g.lineStyle(2, 0xddaaff, alpha).strokeCircle(0, 0, inner);
         } catch (_) {}
         // Block player bullets in the band, like a 360闂?Rook shield (skip railgun)
         try {
