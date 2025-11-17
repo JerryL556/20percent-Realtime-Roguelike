@@ -1088,11 +1088,17 @@ export default class CombatScene extends Phaser.Scene {
 
       // Portal back to Hub (right side)
       const px = width - 40; const py = height / 2;
-      this.portal = this.physics.add.staticImage(px, py, 'portal');
+      this.portal = this.physics.add.staticImage(px, py, 'hub_drill');
       this.portal.setSize(24, 24).setOffset(0, 0);
+      try {
+        this.portal.setOrigin(0.5, 0.5);
+        this.portal.setFlipX(true);
+        fitImageHeight(this, this.portal, 64);
+        this.portal.setDepth(9000);
+      } catch (_) {}
 
       // Helper text
-      this.rangeText = this.add.text(width / 2, 28, 'Shooting Range: E near Terminal/Dummy/Portal', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
+      this.rangeText = this.add.text(width / 2, 28, 'Shooting Range: E near Terminal/Dummy/Drill', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
     }
 
     // Colliders
@@ -5590,8 +5596,17 @@ export default class CombatScene extends Phaser.Scene {
       this.exitActive = true;
       this.prompt.setText('Room clear! E to exit');
       this.exitRect = new Phaser.Geom.Rectangle(this.scale.width - 50, this.scale.height / 2 - 30, 40, 60);
+        try {
+          if (!this.exitSprite) {
+            this.exitSprite = this.add.image(this.exitRect.x + this.exitRect.width / 2, this.exitRect.y + this.exitRect.height / 2, 'hub_drill');
+            this.exitSprite.setOrigin(0.5);
+            this.exitSprite.setFlipX(true);
+            fitImageHeight(this, this.exitSprite, 64);
+            this.exitSprite.setDepth(9000);
+          }
+        } catch (_) {}
+
       this.exitG.clear();
-      this.exitG.fillStyle(0x22ff88, 1).fillRect(this.exitRect.x, this.exitRect.y, this.exitRect.width, this.exitRect.height);
     }
 
     if (this.exitActive) {
