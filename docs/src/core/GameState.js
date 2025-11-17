@@ -25,9 +25,9 @@ export class GameState {
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
-    // Energy Shield
-    this.shieldMax = 20;
-    this.shield = 20;
+    // Energy Shield (Standard Issue baseline)
+    this.shieldMax = 50;
+    this.shield = 50;
     this.shieldRegenPerSec = 4; // points per second
     this.shieldRegenDelayMs = 4000; // delay before regen starts
     this.lastDamagedAt = 0; // timestamp when last damaged (ms)
@@ -84,8 +84,8 @@ export class GameState {
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
-    this.shieldMax = 20;
-    this.shield = 20;
+    this.shieldMax = 50;
+    this.shield = 50;
     this.shieldRegenPerSec = 4;
     this.shieldRegenDelayMs = 4000;
     this.lastDamagedAt = 0;
