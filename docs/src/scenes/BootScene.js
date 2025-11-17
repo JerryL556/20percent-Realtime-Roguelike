@@ -43,7 +43,7 @@ export default class BootScene extends Phaser.Scene {
       if (!this.textures.exists('bg_normal')) this.load.image('bg_normal', 'assets/Normal Background.png');
       if (!this.textures.exists('bg_boss')) this.load.image('bg_boss', 'assets/Boss Background.png');
     } catch (_) {}
-    // Boss intro art (keys exactly the boss IDs) and shared terminals
+    // Boss intro art (keys exactly the boss IDs) and shared terminals/NPCs
     try {
       const A = (k, p) => { if (!this.textures.exists(k)) this.load.image(k, p); };
       A('Bigwig', 'assets/Bigwig.png');
@@ -51,6 +51,7 @@ export default class BootScene extends Phaser.Scene {
       A('Hazel', 'assets/Hazel.png');
       A('diff_terminal', 'assets/Terminal.png');
       A('hub_drill', 'assets/Drill.png');
+      A('Woundwort', 'assets/Woundwort.png');
     } catch (_) {}
     // Generate simple textures used by bullets and optional sprites
     const g = this.make.graphics({ x: 0, y: 0, add: false });

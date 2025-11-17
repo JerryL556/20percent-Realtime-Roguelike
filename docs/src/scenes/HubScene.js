@@ -202,10 +202,28 @@ export default class HubScene extends Phaser.Scene {
     } catch (_) {}
     // Difficulty terminal placeholder hidden (replaced by sprite)
 
+    // Hint NPC (Woundwort) placed left and below difficulty terminal
+    const hintX = termX - 80;
+    const hintY = termY + 110;
+    this.hintNpcZone = this.add.zone(hintX, hintY, 40, 40);
+    this.physics.world.enable(this.hintNpcZone);
+    this.hintNpcZone.body.setAllowGravity(false);
+    this.hintNpcZone.body.setImmovable(true);
+    try {
+      this.hintNpcSprite = this.add.image(this.hintNpcZone.x, this.hintNpcZone.y, 'Woundwort');
+      fitImageHeight(this, this.hintNpcSprite, 24);
+      this.add.text(this.hintNpcZone.x, this.hintNpcZone.y - 24, 'Hints', {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: '#ffffff',
+      }).setOrigin(0.5);
+    } catch (_) {}
+
     // Overlap detection
     this.physics.add.overlap(this.player, this.npcZone);
     this.physics.add.overlap(this.player, this.modeNpcZone);
     this.physics.add.overlap(this.player, this.portalZone);
+    this.physics.add.overlap(this.player, this.hintNpcZone);
 
     // UI prompt (top): show selected mode instead of generic WASD hint
     const modeLabel = () => {
@@ -244,11 +262,12 @@ export default class HubScene extends Phaser.Scene {
           const ptr = this.input?.activePointer;
           if (ptr && this.player) this.player.setFlipX(ptr.worldX < this.player.x);
         } catch (_) {}
-        // Make NPCs face the player (left/right only)
-        try {
-          if (this.npcSprite) this.npcSprite.setFlipX(this.player.x < this.npcSprite.x);
-          if (this.modeNpcSprite) this.modeNpcSprite.setFlipX(this.player.x < this.modeNpcSprite.x);
-        } catch (_) {}
+          // Make NPCs face the player (left/right only)
+          try {
+            if (this.npcSprite) this.npcSprite.setFlipX(this.player.x < this.npcSprite.x);
+            if (this.modeNpcSprite) this.modeNpcSprite.setFlipX(this.player.x < this.modeNpcSprite.x);
+            if (this.hintNpcSprite) this.hintNpcSprite.setFlipX(this.player.x < this.hintNpcSprite.x);
+          } catch (_) {}
       });
     } catch (_) {}
 
@@ -509,8 +528,93 @@ export default class HubScene extends Phaser.Scene {
       this.closePanel([title, easyBtn, normalBtn, hardBtn, currentLabel, descLabel, closeBtn]);
     });
 
-    this.panel._extra = [title, easyBtn, normalBtn, hardBtn, currentLabel, descLabel, closeBtn];
-  }
+      this.panel._extra = [title, easyBtn, normalBtn, hardBtn, currentLabel, descLabel, closeBtn];
+    }
+
+    openHintPanel() {
+      // If a panel is already open, only allow one at a time
+      if (this.panel && this.panel._type !== 'hint') {
+        this.closePanel();
+      } else if (this.panel && this.panel._type === 'hint') {
+        return;
+      }
+
+      // Always refresh the hint list so code edits are reflected immediately
+      // Order: general/modes -> weapons/cores -> survival/resources/abilities -> enemies/details
+      this.hints = [
+        // General game / modes
+        '1#: Utilize the Shooting Range: you can spawn all kinds of enemies and use the dummy to test how different weapons perform.',
+        '2#: Explore multiple modes: Campaign offers the most authentic experience, Deep Dive focuses on clearing waves, and Boss Rush is dedicated to consecutive boss fights.',
+
+        // Weapons, mods, cores
+        '3#: Armor and armor mods are your main defensive upgrades. Investing in them can reduce incoming damage, improve survivability, and make mistakes more forgiving.',
+        '4#: Each weapon handles differently. Some excel up close, others at long range—swap weapons when a room\'s layout doesn\'t suit your current gun.',
+        '5#: Weapons with high fire rate develop heavy bullet spread during continuous fire. Use short, controlled bursts if you want to hit enemies from far away.',
+        '6#: Explosive weapons are excellent at hitting groups of enemies. Aim at the ground or clustered targets to catch multiple enemies in a single blast.',
+        '7#: Weapon cores can completely change a weapon\'s properties. Always read both the positive and negative effects of a core before committing it to a gun.',
+        '8#: Guided weapons can be very precise. They may launch micromissiles that auto-lock on enemies, or require you to guide them manually toward their targets.',
+
+        // Survival, resources, abilities
+        '9#: Dash makes you briefly invincible. Use it to pass through continuous barrages or lasers instead of sidestepping them.',
+        '10#: Your shield regenerates slowly over time. When the shield bar is emptied, get to cover immediately and wait for it to recharge before re-engaging.',
+        '11#: You can increase your dash charges and reduce dash cooldown by purchasing dash slots, armor, and armor mods in the shop.',
+        '12#: Abilities are crucial tools for surviving tough fights. Use them for crowd control, neutralizing projectiles, or finishing enemies up close.',
+
+        // Enemies and behavior details
+        '13#: Enemies that show an aim line before attacking usually have very precise or high-damage attacks. Use dash or barricades to avoid them.',
+        '14#: Commanders can spawn extra enemies. When this happens, a purple halo appears on the map—track it down and destroy the Commander as soon as possible.',
+        '15#: Chargers are extremely dangerous up close: they move very fast and deal high melee damage. If a Charger gets inside your minimal firing distance, dash aggressively to keep space and use melee to finish it when it closes the gap.',
+        '16#: Rooks have an indestructible shield that covers a 90-degree arc. Rotate around to hit their backs, or use railguns and piercing shots to punch through the shield.',
+        '17#: Prism can sweep the field with a high-damage laser. Dash through the laser to avoid damage, or stay behind barricades until the beam passes.',
+        '18#: Bombardiers are deadly up close, but their grenades have short range. Fight them from a distance and be ready to dodge their suicide run when they are low on health.',
+        '19#: Bigwig is a devastating boss that uses machineguns, grenade launchers, turrets, and area bombardment to control the arena. Always stay on the move, destroy turrets as soon as they appear, and get out of bombardment zones immediately.',
+        '20#: Dandelion is a precise yet deadly menace. Keep moving and dashing to evade its laser machinegun, and be ready to dash when it charges in for a melee attack. Watch for the landmines it drops after dashing back, clear a safe path, and focus fire on any healing drones that appear.',
+        '21#: Hazel is an experimental prototype drone that constantly uses teleportation. It can launch missiles that lock on to you—shoot them down, dodge them, or lure them into crashing on barricades. Hazel also teleports phase bombs nearby, so keep moving, and it warps in attack drones that must be destroyed before they overwhelm you. When you get too close, Hazel will teleport away, so be ready to chase or reposition.',
+      ];
+
+      // Ensure hintIndex is valid; choose random starting hint if not
+      if (typeof this.hintIndex !== 'number' || this.hintIndex < 0 || this.hintIndex >= this.hints.length) {
+        this.hintIndex = Math.floor(Math.random() * this.hints.length);
+      }
+
+      const { width } = this.scale;
+      const panelW = 360; const panelH = 200; const panelX = width / 2 - panelW / 2; const panelY = 110;
+      this.panel = drawPanel(this, panelX, panelY, panelW, panelH);
+      this.panel._type = 'hint';
+
+      const title = this.add.text(width / 2, panelY + 18, 'Hints', {
+        fontFamily: 'monospace', fontSize: 16, color: '#ffffff',
+      }).setOrigin(0.5);
+
+      const cx = width / 2;
+      const hintText = this.add.text(cx, panelY + 46, this.hints[this.hintIndex] || '', {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: '#cccccc',
+        wordWrap: { width: panelW - 40 },
+        align: 'left',
+        lineSpacing: 2,
+      }).setOrigin(0.5, 0);
+
+      const btnY = panelY + panelH - 26;
+      const prevBtn = makeTextButton(this, cx - 90, btnY, '<', () => {
+        if (!this.hints.length) return;
+        this.hintIndex = (this.hintIndex - 1 + this.hints.length) % this.hints.length;
+        try { hintText.setText(this.hints[this.hintIndex] || ''); } catch (_) {}
+      });
+
+      const nextBtn = makeTextButton(this, cx + 90, btnY, '>', () => {
+        if (!this.hints.length) return;
+        this.hintIndex = (this.hintIndex + 1) % this.hints.length;
+        try { hintText.setText(this.hints[this.hintIndex] || ''); } catch (_) {}
+      });
+
+      const closeBtn = makeTextButton(this, cx, btnY, 'Close', () => {
+        this.closePanel([title, hintText, prevBtn, nextBtn, closeBtn]);
+      });
+
+      this.panel._extra = [title, hintText, prevBtn, nextBtn, closeBtn];
+    }
 
   openCampaignStageMenu() {
     // Close existing menu if any
@@ -625,10 +729,12 @@ export default class HubScene extends Phaser.Scene {
     } catch (_) {}
     const nearBonus = this.bonusZone ? Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.bonusZone.getBounds()) : false;
     const nearDiffTerminal = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.diffTerminalZone.getBounds());
+    const nearHintNpc = Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), this.hintNpcZone.getBounds());
     if (nearBonus && !this.gs._bonusClaimed) this.prompt.setText('E: Claim Bonus');
     else if (nearNpc) this.prompt.setText('E: Shop');
     else if (nearModeNpc) this.prompt.setText('E: Select Mode');
     else if (nearDiffTerminal) this.prompt.setText('E: Difficulty');
+    else if (nearHintNpc) this.prompt.setText('E: Hint');
     else if (nearPortal) {
       if (this.gs?.gameMode === 'BossRush') this.prompt.setText('E: Enter Boss');
       else if (this.gs?.shootingRange) this.prompt.setText('E: Enter Range');
@@ -716,9 +822,10 @@ export default class HubScene extends Phaser.Scene {
         try { SaveManager.saveToLocal(this.gs); } catch (_) {}
         try { this.bonusG.clear(); this.bonusG.fillStyle(0x444444, 1).fillRect(this.bonusZone.x - 10, this.bonusZone.y - 10, 20, 20); } catch (_) {}
       }
-      if (nearNpc) this.openNpcPanel();
-      if (nearModeNpc) this.openModePanel();
-      if (nearDiffTerminal) this.openDifficultyPanel();
+        if (nearNpc) this.openNpcPanel();
+        if (nearModeNpc) this.openModePanel();
+        if (nearDiffTerminal) this.openDifficultyPanel();
+        if (nearHintNpc) this.openHintPanel();
       if (nearPortal) {
         let next = (this.gs?.gameMode === 'BossRush') ? SceneKeys.Combat : SceneKeys.Combat;
         // Ensure Boss Rush queue is ready when entering boss portal
@@ -751,3 +858,4 @@ export default class HubScene extends Phaser.Scene {
     }
   }
 }
+
