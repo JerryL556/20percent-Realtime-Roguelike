@@ -308,20 +308,23 @@ export default class CombatScene extends Phaser.Scene {
       const s = Math.max(0, Math.floor(gs.shield || 0));
       const hadShield = s > 0;
       let shieldBroke = false;
+      let shieldDamaged = false;
       if (s > 0) {
         const absorbed = Math.min(s, remaining);
+        if (absorbed > 0) shieldDamaged = true;
         gs.shield = s - absorbed;
         remaining -= absorbed;
         if (s > 0 && gs.shield === 0) shieldBroke = true;
       }
+      const beforeHp = gs.hp | 0;
       if (remaining > 0) {
         let allow = (gs.allowOverrun !== false);
         try { const eff = getPlayerEffects(gs) || {}; if (hadShield && eff.preventShieldOverflow) allow = false; } catch (_) {}
         if (allow) gs.hp = Math.max(0, (gs.hp | 0) - remaining);
       }
-      // If shield just broke and the Emergency Pulse mod is active, auto-release a Repulsion Pulse
-      try {
-        if (shieldBroke) {
+        // If shield just broke and the Emergency Pulse mod is active, auto-release a Repulsion Pulse
+        try {
+          if (shieldBroke) {
           const eff = getPlayerEffects(gs) || {};
           if (eff.preventShieldOverflow) {
             const nowT = this.time.now;
@@ -337,7 +340,23 @@ export default class CombatScene extends Phaser.Scene {
       gs.lastDamagedAt = this.time.now;
       // On death in Deep Dive: record best then reset run so level/stage restart when returning to hub
       try {
-        if ((gs.hp | 0) <= 0 && gs.gameMode === 'DeepDive') {
+        const afterHp = gs.hp | 0;
+        // Trigger HP-hit screen vignette only if HP actually went down this frame
+        try {
+          if (afterHp < beforeHp) {
+            const ui = this.scene.get(SceneKeys.UI);
+            if (ui && typeof ui.showHpHitVfx === 'function') ui.showHpHitVfx();
+          }
+        } catch (_) {}
+        // Trigger subtle blue vignette if only shield took damage (no HP loss)
+        try {
+          const afterHp = gs.hp | 0;
+          if (shieldDamaged && afterHp === beforeHp) {
+            const ui = this.scene.get(SceneKeys.UI);
+            if (ui && typeof ui.showShieldHitVfx === 'function') ui.showShieldHitVfx();
+          }
+        } catch (_) {}
+        if (afterHp <= 0 && gs.gameMode === 'DeepDive') {
           try {
             const cur = gs.deepDive || { level: 1, stage: 1 };
             const best = gs.deepDiveBest || { level: 0, stage: 0 };
@@ -1112,7 +1131,6 @@ export default class CombatScene extends Phaser.Scene {
         fitImageHeight(this, this.portal, 64);
         this.portal.setDepth(9000);
       } catch (_) {}
-
       // Helper text
       this.rangeText = this.add.text(width / 2, 28, 'Shooting Range: E near Terminal/Dummy/Drill', { fontFamily: 'monospace', fontSize: 14, color: '#ffffff' }).setOrigin(0.5);
     }

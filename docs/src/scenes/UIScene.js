@@ -47,6 +47,31 @@ export default class UIScene extends Phaser.Scene {
     // Resource toast stack (top of screen)
     this._resourceToasts = [];
 
+    // HP hit vignette overlay (red screen-edge flash when HP is damaged)
+    try {
+      const g = this.add.graphics();
+      g.setScrollFactor(0);
+      g.setDepth(9999);
+      g.setVisible(false);
+      this.hpHitOverlay = g;
+      this.hpHitTween = null;
+    } catch (_) {
+      this.hpHitOverlay = null;
+      this.hpHitTween = null;
+    }
+    // Shield hit vignette overlay (blue, very subtle)
+    try {
+      const g2 = this.add.graphics();
+      g2.setScrollFactor(0);
+      g2.setDepth(9998);
+      g2.setVisible(false);
+      this.shieldHitOverlay = g2;
+      this.shieldHitTween = null;
+    } catch (_) {
+      this.shieldHitOverlay = null;
+      this.shieldHitTween = null;
+    }
+
     // Reload bar graphics (lazy show/hide during reload)
     this.reloadBar = { g: null, tween: null, wasActive: false };
     // Hint to open loadout with Tab (top-left)
@@ -111,6 +136,98 @@ export default class UIScene extends Phaser.Scene {
         this._refreshSaveButtons = null;
       }
     });
+  }
+
+  // Show a brief red vignette when the player takes HP damage (not just shield)
+  showHpHitVfx() {
+    try {
+      if (!this.hpHitOverlay) return;
+      const g = this.hpHitOverlay;
+      // Stop any existing tween and reset alpha
+      if (this.hpHitTween) {
+        try { this.hpHitTween.stop(); } catch (_) {}
+        this.hpHitTween = null;
+      }
+      const w = this.scale.width;
+      const h = this.scale.height;
+      g.clear();
+      const base = Math.min(w, h);
+      const outer = Math.max(8, Math.floor(base * 0.05));
+      const inner = Math.max(4, Math.floor(outer * 0.5));
+      // Outer soft band
+      g.fillStyle(0xff0000, 0.26);
+      g.fillRect(0, 0, w, outer);
+      g.fillRect(0, h - outer, w, outer);
+      g.fillRect(0, 0, outer, h);
+      g.fillRect(w - outer, 0, outer, h);
+      // Inner feather band
+      g.fillStyle(0xff0000, 0.12);
+      g.fillRect(0, outer, w, inner);
+      g.fillRect(0, h - outer - inner, w, inner);
+      g.fillRect(outer, 0, inner, h);
+      g.fillRect(w - outer - inner, 0, inner, h);
+      g.setVisible(true);
+      // Fade out quickly
+      this.hpHitTween = this.tweens.add({
+        targets: g,
+        alpha: { from: 1, to: 0 },
+        duration: 180,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          try {
+            g.setVisible(false);
+            g.setAlpha(1);
+            g.clear();
+          } catch (_) {}
+          this.hpHitTween = null;
+        },
+      });
+    } catch (_) {}
+  }
+
+  // Very subtle blue vignette when only shield takes damage
+  showShieldHitVfx() {
+    try {
+      if (!this.shieldHitOverlay) return;
+      const g = this.shieldHitOverlay;
+      if (this.shieldHitTween) {
+        try { this.shieldHitTween.stop(); } catch (_) {}
+        this.shieldHitTween = null;
+      }
+      const w = this.scale.width;
+      const h = this.scale.height;
+      g.clear();
+      const base = Math.min(w, h);
+      const outer = Math.max(6, Math.floor(base * 0.04));
+      const inner = Math.max(3, Math.floor(outer * 0.5));
+      // Outer soft band (blue, low alpha)
+      g.fillStyle(0x66aaff, 0.18);
+      g.fillRect(0, 0, w, outer);
+      g.fillRect(0, h - outer, w, outer);
+      g.fillRect(0, 0, outer, h);
+      g.fillRect(w - outer, 0, outer, h);
+      // Inner feather band (even lower alpha)
+      g.fillStyle(0x66aaff, 0.06);
+      g.fillRect(0, outer, w, inner);
+      g.fillRect(0, h - outer - inner, w, inner);
+      g.fillRect(outer, 0, inner, h);
+      g.fillRect(w - outer - inner, 0, inner, h);
+      g.setVisible(true);
+      this.shieldHitTween = this.tweens.add({
+        targets: g,
+        alpha: { from: 1, to: 0 },
+        duration: 150,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          try {
+            g.setVisible(false);
+            g.setAlpha(1);
+            g.clear();
+          } catch (_) {}
+          this.shieldHitTween = null;
+        },
+      });
+    } catch (_) {}
   }
 
   update() {
@@ -247,6 +364,47 @@ export default class UIScene extends Phaser.Scene {
             lbl?.setStyle({ color: hasAm ? '#ffff33' : '#cccccc' });
           });
         } catch (e) { /* no-op */ }
+      }
+
+      // If HP hit overlay is visible and no tween is managing it, ensure geometry matches screen size
+      if (this.hpHitOverlay && this.hpHitOverlay.visible && !this.hpHitTween) {
+        const w = this.scale.width;
+        const h = this.scale.height;
+        const base = Math.min(w, h);
+        const outer = Math.max(8, Math.floor(base * 0.05));
+        const inner = Math.max(4, Math.floor(outer * 0.5));
+        this.hpHitOverlay.clear();
+        // Outer, softer band
+        this.hpHitOverlay.fillStyle(0xff0000, 0.2);
+        this.hpHitOverlay.fillRect(0, 0, w, outer);
+        this.hpHitOverlay.fillRect(0, h - outer, w, outer);
+        this.hpHitOverlay.fillRect(0, 0, outer, h);
+        this.hpHitOverlay.fillRect(w - outer, 0, outer, h);
+        // Inner, very subtle band to feather toward the center
+        this.hpHitOverlay.fillStyle(0xff0000, 0.08);
+        this.hpHitOverlay.fillRect(0, outer, w, inner);
+        this.hpHitOverlay.fillRect(0, h - outer - inner, w, inner);
+        this.hpHitOverlay.fillRect(outer, 0, inner, h);
+        this.hpHitOverlay.fillRect(w - outer - inner, 0, inner, h);
+      }
+      // Keep shield hit overlay responsive as well (very subtle blue frame)
+      if (this.shieldHitOverlay && this.shieldHitOverlay.visible && !this.shieldHitTween) {
+        const w = this.scale.width;
+        const h = this.scale.height;
+        const base = Math.min(w, h);
+        const outer = Math.max(6, Math.floor(base * 0.04));
+        const inner = Math.max(3, Math.floor(outer * 0.5));
+        this.shieldHitOverlay.clear();
+        this.shieldHitOverlay.fillStyle(0x66aaff, 0.14);
+        this.shieldHitOverlay.fillRect(0, 0, w, outer);
+        this.shieldHitOverlay.fillRect(0, h - outer, w, outer);
+        this.shieldHitOverlay.fillRect(0, 0, outer, h);
+        this.shieldHitOverlay.fillRect(w - outer, 0, outer, h);
+        this.shieldHitOverlay.fillStyle(0x66aaff, 0.05);
+        this.shieldHitOverlay.fillRect(0, outer, w, inner);
+        this.shieldHitOverlay.fillRect(0, h - outer - inner, w, inner);
+        this.shieldHitOverlay.fillRect(outer, 0, inner, h);
+        this.shieldHitOverlay.fillRect(w - outer - inner, 0, inner, h);
       }
     }
 
