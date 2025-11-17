@@ -532,12 +532,20 @@ export default class UIScene extends Phaser.Scene {
       nodes.push(label);
       try { this.loadout.weaponLabels[slotIdx] = label; label.setStyle({ color: (gs.equippedWeapons && gs.equippedWeapons[slotIdx]) ? '#ffff33' : '#cccccc' }); } catch (e) {}
       const btn = makeTextButton(this, col2X + 210, wy + 8, 'Choose', () => {
-        const list = (gs.ownedWeapons || []).map((id) => {
-          const w = getWeaponById(id) || { id, name: id };
-          // Loadout menu: show only the verbal description (no stat lines)
-          const descOnly = w.desc ? String(w.desc).split('\n').map((s) => `(desc) ${s}`).join('\n') : '';
-          return ({ id: w.id, name: w.name, desc: descOnly });
-        });
+        const equipped = Array.isArray(gs.equippedWeapons) ? gs.equippedWeapons : [];
+        const list = (gs.ownedWeapons || [])
+          .filter((id) => {
+            // Prevent equipping the same weapon in multiple slots:
+            // allow the current slot's weapon, but exclude weapons already equipped in other slots.
+            const others = equipped.filter((_, idx) => idx !== slotIdx);
+            return !others.includes(id);
+          })
+          .map((id) => {
+            const w = getWeaponById(id) || { id, name: id };
+            // Loadout menu: show only the verbal description (no stat lines)
+            const descOnly = w.desc ? String(w.desc).split('\n').map((s) => `(desc) ${s}`).join('\n') : '';
+            return ({ id: w.id, name: w.name, desc: descOnly });
+          });
         if (!list.length) return;
         const current = gs.equippedWeapons[slotIdx] || null;
         this.openChoicePopup(`Choose Weapon (Slot ${slotIdx + 1})`, list, current, (chosenId) => {
