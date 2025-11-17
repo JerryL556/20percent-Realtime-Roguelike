@@ -76,8 +76,8 @@ export default class HubScene extends Phaser.Scene {
           ui.bossRushText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
         }
         if (this.gs?.gameMode === 'BossRush') {
-          const left = Array.isArray(this.gs?.bossRushQueue) ? this.gs.bossRushQueue.length : 0;
-          const txt = (left === 0) ? 'Boss Rush Completed' : 'Boss Rush Not Completed';
+          const completed = !!this.gs?.bossRushCompleted;
+          const txt = completed ? 'Boss Rush Completed' : 'Boss Rush Not Completed';
           ui.bossRushText.setText(txt);
           ui.bossRushText.setVisible(true);
         } else {

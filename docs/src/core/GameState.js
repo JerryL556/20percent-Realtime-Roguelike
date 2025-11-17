@@ -20,8 +20,8 @@ export function difficultyModifiers(diff) {
 
 export class GameState {
   constructor() {
-    this.gold = 500;
-    this.droneCores = 1; // secondary currency for cores
+    this.gold = 1000;
+    this.droneCores = 3; // secondary currency for cores
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -65,6 +65,8 @@ export class GameState {
     this.deepDiveBest = { level: 0, stage: 0 };
     // Boss Rush sequence queue (array of boss type strings)
     this.bossRushQueue = [];
+    // Boss Rush completion flag (per-run)
+    this.bossRushCompleted = false;
     // Track last spawned boss type in Normal mode to alternate
     this.lastBossType = null; // 'Shotgunner' | 'Dasher' | null
     // Ability equipped (gadget)
@@ -77,8 +79,8 @@ export class GameState {
   }
 
   startNewRun(seed, difficulty) {
-    this.gold = 500;
-    this.droneCores = 1;
+    this.gold = 1000;
+    this.droneCores = 3;
     this.xp = 0;
     this.maxHp = 100;
     this.hp = 100;
@@ -109,6 +111,7 @@ export class GameState {
     this.campaignCompleted = false;
     this.deepDive = { level: 1, stage: 1, baseNormal: 5, baseElite: 1 };
     this.bossRushQueue = [];
+    this.bossRushCompleted = false;
     this.lastBossType = null;
     this.abilityId = 'ads';
     this.ownedAbilities = ['ads'];
@@ -161,7 +164,8 @@ export class GameState {
       if (this.bossRushQueue && this.bossRushQueue.length > 0) {
         this.nextScene = 'Boss';
       } else {
-        // Finished all bosses
+        // Finished all bosses in this Boss Rush run
+        this.bossRushCompleted = true;
         this.nextScene = 'Hub';
       }
       return;
@@ -203,6 +207,7 @@ export class GameState {
       this.gameMode = 'BossRush';
       // Fixed order: Bigwig (stage 1), Dandelion (stage 2), Hazel (stage 3)
       this.bossRushQueue = ['Bigwig', 'Dandelion', 'Hazel'];
+      this.bossRushCompleted = false;
       this.roomsClearedInCycle = 0;
       this.currentDepth = 1;
       this.nextScene = 'Boss';
@@ -259,6 +264,7 @@ export class GameState {
       deepDive: this.deepDive,
       deepDiveBest: this.deepDiveBest,
       bossRushQueue: this.bossRushQueue,
+      bossRushCompleted: this.bossRushCompleted,
       lastBossType: this.lastBossType,
       abilityId: this.abilityId,
       ownedAbilities: this.ownedAbilities,
@@ -274,6 +280,7 @@ export class GameState {
     if (typeof gs.droneCores !== 'number') gs.droneCores = 1;
     gs.rng = new RNG(gs.runSeed);
     if (!gs.deepDiveBest) gs.deepDiveBest = { level: 0, stage: 0 };
+    if (typeof gs.bossRushCompleted !== 'boolean') gs.bossRushCompleted = false;
     if (!gs.ownedWeapons) gs.ownedWeapons = ['pistol'];
     if (!gs.equippedWeapons || !Array.isArray(gs.equippedWeapons)) gs.equippedWeapons = [gs.ownedWeapons[0] || 'pistol', null];
     if (!gs.activeWeapon) gs.activeWeapon = gs.equippedWeapons[0] || gs.ownedWeapons[0] || 'pistol';
