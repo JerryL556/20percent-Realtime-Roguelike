@@ -1732,12 +1732,12 @@ export default class CombatScene extends Phaser.Scene {
     // Enemy bullets blocked by barricades as well
     this.physics.add.collider(this.enemyBullets, this.barricadesHard, (b, s) => this.onEnemyBulletHitBarricade(b, s));
     this.physics.add.collider(this.enemyBullets, this.barricadesSoft, (b, s) => this.onEnemyBulletHitBarricade(b, s));
-    // Player bullets (rockets, caustic) collide with barricades
-      this.physics.add.collider(this.bullets, this.barricadesHard, (b, s) => this.onPlayerBulletHitBarricade(b, s));
+    // Player bullets vs hard barricades: use overlap so railgun shots can pierce without being physically stopped.
+    this.physics.add.overlap(this.bullets, this.barricadesHard, (b, s) => this.onPlayerBulletHitBarricade(b, s));
     this.physics.add.overlap(this.bullets, this.barricadesSoft, (b, s) => {
       if (!b || !s) return;
-      // rail bullets and special caustic projectiles handled elsewhere
-      if (b._rail || b._cc || b._ccCluster) return;
+      // Special caustic projectiles handled elsewhere
+      if (b._cc || b._ccCluster) return;
       const isPierce = b._core === 'pierce';
       if (isPierce) {
         // Damage this soft barricade once, but let the bullet continue through
@@ -1900,6 +1900,12 @@ export default class CombatScene extends Phaser.Scene {
       if (e?.isDnMine) {
         try { e._explodeFn?.(e); } catch (_) {}
         return;
+      }
+    } catch (_) {}
+    // Dandelion special aim line: ensure it's cleared if Dandelion dies via any damage source
+    try {
+      if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
+        if (e._dnAimG) { e._dnAimG.clear(); e._dnAimG.destroy(); e._dnAimG = null; }
       }
     } catch (_) {}
     if (!e || !e.active) return;
@@ -3915,6 +3921,16 @@ export default class CombatScene extends Phaser.Scene {
                 e._repulseVX = nx * power; e._repulseVY = ny * power;
                 try { e.body?.setVelocity?.(e._repulseVX, e._repulseVY); } catch (_) { try { e.setVelocity(e._repulseVX, e._repulseVY); } catch (_) {} }
               }
+              // If Dandelion is currently drawing its laser aim line, clear it when repulsed
+              try {
+                if (e.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
+                  if (e._dnAimG) { e._dnAimG.clear(); e._dnAimG.destroy(); e._dnAimG = null; }
+                  if (e._dnSpecialState === 'aim') {
+                    e._dnSpecialState = 'idle';
+                    e._dnSpecialAimUntil = 0;
+                  }
+                }
+              } catch (_) {}
               // Mark this enemy as pushed for this pulse so re-contacts do not refresh/pile up
               rp._pushedSet.add(e);
               if (!rp._hitSet.has(e)) {
@@ -7606,9 +7622,9 @@ export default class CombatScene extends Phaser.Scene {
     const lz = this.laser;
     const canPress = ptr?.isDown && ((ptr.buttons & 1) === 1);
     const canFire = canPress && !lz.overheat;
-    const heatPerSec = 1 / 5; // overheat in 5s
-    const coolDelay = 0.5; // start cooling after 0.5s when not firing
-    const coolFastPerSec = 2.5; // fast cool
+    const heatPerSec = 1 / 6; // overheat in 6s
+    const coolDelay = 0.2; // start cooling after 0.2s when not firing
+    const coolFastPerSec = 0.75; // fast cool
     const tickRate = 0.1; // damage tick 10 Hz
 
     // Update heat/overheat state
@@ -7704,7 +7720,15 @@ export default class CombatScene extends Phaser.Scene {
       lz.lastTickAt += dt;
       if (lz.lastTickAt >= tickRate) {
         const step = lz.lastTickAt; lz.lastTickAt = 0;
-        const dps = 30; const ignitePerSec = 8;
+        let dps = 30; let ignitePerSec = 8;
+        try {
+          const w = getEffectiveWeapon(this.gs, this.gs?.activeWeapon);
+          const usingHeatReuse = w && w._core === 'laser_heat_reuse';
+          if (usingHeatReuse && lz.heat > 0.5) {
+            dps *= 2;
+            ignitePerSec *= 2;
+          }
+        } catch (_) {}
         const dmg = Math.max(0, Math.round(dps * step));
         const igniteAdd = ignitePerSec * step;
         // Only apply to the first hit enemy (no penetration)
@@ -7944,6 +7968,27 @@ export default class CombatScene extends Phaser.Scene {
   // Player bullet hits a barricade
   onPlayerBulletHitBarricade(b, s) {
     if (!b || !s || !b.active) return;
+    // Railgun: pierce both soft and hard barricades while still chipping them once per bullet.
+    if (b._rail) {
+      try {
+        if (!b._barrHitSet) b._barrHitSet = new Set();
+        if (b._barrHitSet.has(s)) return;
+        b._barrHitSet.add(s);
+        const isSoft = !!s.getData('destructible');
+        const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+        if (isSoft) {
+          const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+          const hp1 = hp0 - dmg;
+          try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+        } else {
+          // Hard barricades: tiny impact VFX but never destroyed by a single rail hit here.
+          try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'tiny' }); } catch (_) {}
+        }
+      } catch (_) {}
+      // Do not destroy or stop the rail bullet.
+      return;
+    }
     // Caustic Cluster: detonate on contact and spawn clusters if primary
     if (b._cc || b._ccCluster) {
       const ex = b.x; const ey = b.y; const r = b._blastRadius || 60; const r2 = r * r;

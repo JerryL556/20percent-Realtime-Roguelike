@@ -119,6 +119,25 @@ export const weaponCores = [
     },
   },
   {
+    id: 'core_laser_heat_reuse',
+    name: 'Heat Reuse',
+    onlyFor: 'laser',
+    desc: [
+      '+ Laser deals 2x DPS while charge bar is above 50%',
+      '+ Laser applies 2x Ignite buildup while charge bar is above 50%',
+      '- Beam lock-out time doubled',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'laser') return w;
+      const baseReload = (typeof w.reloadMs === 'number') ? w.reloadMs : 2000;
+      return {
+        ...w,
+        reloadMs: baseReload * 2,
+        _core: 'laser_heat_reuse',
+      };
+    },
+  },
+  {
     id: 'core_blast',
     name: 'Explosive Core',
     desc: '+Small explosion on hit',
