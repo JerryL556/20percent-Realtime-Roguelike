@@ -417,13 +417,13 @@ export const weaponCores = [
     name: 'Toxic Rounds',
     onlyFor: 'smg',
     desc: [
-      '+ Bullets apply Toxin buildup on hit',
+      '+ Bullets apply high Toxin buildup on hit',
       '-2 direct damage',
     ].join('\n'),
     apply: (w) => {
       if (!w || w.id !== 'smg') return w;
       const newDmg = Math.max(1, (w.damage || 0) - 2);
-      return { ...w, damage: newDmg, _toxinOnHit: 2 };
+      return { ...w, damage: newDmg, _toxinOnHit: 4 };
     },
   },
 ];
