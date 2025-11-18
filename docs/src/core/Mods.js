@@ -104,7 +104,20 @@ export const weaponMods = [
 // Weapon cores (1 slot)
 export const weaponCores = [
   { id: null, name: 'No Core', desc: 'No special effect', apply: (w) => w },
-  { id: 'core_pierce', name: 'Piercing Core', desc: '+Bullets pierce one target', allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket', apply: (w) => { if (w?.isLaser) return w; if (w?.projectile === 'rocket') return w; return ({ ...w, _core: 'pierce' }); } },
+  {
+    id: 'core_pierce',
+    name: 'Piercing Core',
+    desc: [
+      '+Bullets pierce one target',
+      '+15% bullet speed',
+    ].join('\n'),
+    allow: (base) => !!base && !base.isLaser && base.projectile !== 'rocket',
+    apply: (w) => {
+      if (!w || w.isLaser || w.projectile === 'rocket') return w;
+      const speed = typeof w.bulletSpeed === 'number' ? Math.floor(w.bulletSpeed * 1.15) : w.bulletSpeed;
+      return { ...w, _core: 'pierce', bulletSpeed: speed };
+    },
+  },
   {
     id: 'core_blast',
     name: 'Explosive Core',
@@ -320,6 +333,27 @@ export const weaponCores = [
       const newDmg = Math.max(1, Math.floor((w.damage || 1) * 0.35));
       const newSpread = Math.max(0, Math.floor((w.spreadDeg || 0) * 1.85));
       return { ...w, fireRateMs: faster, pelletCount: 10, damage: newDmg, spreadDeg: newSpread, magSize: 16 };
+    },
+  },
+  {
+    id: 'core_shotgun_pump',
+    name: 'Pump Action',
+    onlyFor: 'shotgun',
+    desc: [
+      '+ Pellets per shot +2',
+      '+ Damage per pellet +3',
+      '- Converts shotgun to semi-auto per click',
+      '- Magazine size set to 5',
+    ].join('\n'),
+    apply: (w) => {
+      if (!w || w.id !== 'shotgun') return w;
+      return {
+        ...w,
+        singleFire: true,
+        pelletCount: (w.pelletCount || 1) + 2,
+        damage: (w.damage || 0) + 3,
+        magSize: 5,
+      };
     },
   },
   {

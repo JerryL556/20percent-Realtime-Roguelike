@@ -1733,8 +1733,29 @@ export default class CombatScene extends Phaser.Scene {
     this.physics.add.collider(this.enemyBullets, this.barricadesHard, (b, s) => this.onEnemyBulletHitBarricade(b, s));
     this.physics.add.collider(this.enemyBullets, this.barricadesSoft, (b, s) => this.onEnemyBulletHitBarricade(b, s));
     // Player bullets (rockets, caustic) collide with barricades
-    this.physics.add.collider(this.bullets, this.barricadesHard, (b, s) => this.onPlayerBulletHitBarricade(b, s));
-    this.physics.add.collider(this.bullets, this.barricadesSoft, (b, s) => this.onPlayerBulletHitBarricade(b, s));
+      this.physics.add.collider(this.bullets, this.barricadesHard, (b, s) => this.onPlayerBulletHitBarricade(b, s));
+    this.physics.add.overlap(this.bullets, this.barricadesSoft, (b, s) => {
+      if (!b || !s) return;
+      // rail bullets and special caustic projectiles handled elsewhere
+      if (b._rail || b._cc || b._ccCluster) return;
+      const isPierce = b._core === 'pierce';
+      if (isPierce) {
+        // Damage this soft barricade once, but let the bullet continue through
+        try {
+          if (!b._softHitSet) b._softHitSet = new Set();
+          if (b._softHitSet.has(s)) return;
+          b._softHitSet.add(s);
+          const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 10;
+          const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
+          const hp1 = hp0 - dmg;
+          try { impactBurst(this, b.x, b.y, { color: 0xC8A165, size: 'small' }); } catch (_) {}
+          if (hp1 <= 0) { try { s.destroy(); } catch (_) {} } else { s.setData('hp', hp1); }
+        } catch (_) {}
+        return;
+      }
+      // Non-piercing bullets: behave like normal barricade hits (block + damage)
+      try { this.onPlayerBulletHitBarricade(b, s); } catch (_) {}
+    });
 
     // Exit appears when all enemies dead
     this.exitActive = false;
@@ -8349,6 +8370,16 @@ export default class CombatScene extends Phaser.Scene {
             const now = this.time.now;
             if (now >= (this.player.iframesUntil || 0)) {
               try { this.applyPlayerDamage(dmg); } catch (_) {}
+              // Mirror enemy bullet behaviour: if HP is now 0 or below, end run and return to Hub
+              try {
+                if (this.gs && (this.gs.hp | 0) <= 0) {
+                  const eff = getPlayerEffects(this.gs);
+                  this.gs.hp = (this.gs.maxHp || 0) + (eff.bonusHp || 0);
+                  this.gs.nextScene = SceneKeys.Hub;
+                  SaveManager.saveToLocal(this.gs);
+                  this.scene.start(SceneKeys.Hub);
+                }
+              } catch (_) {}
             }
           }
         } catch (_) {}
