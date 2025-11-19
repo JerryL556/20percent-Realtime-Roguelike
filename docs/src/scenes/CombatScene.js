@@ -257,8 +257,8 @@ export default class CombatScene extends Phaser.Scene {
           const { width } = this.scale;
           const mods = this.gs?.getDifficultyMods?.() || {};
           const cx = Math.floor(width / 2); const cy = 100;
-          // Match real boss-room stats: 600 base HP, 80 base speed, difficulty-scaled
-          const baseBossHp = 600;
+          // Per-boss base HP (Normal difficulty) before difficulty scaling
+          const baseBossHp = bossId === 'Bigwig' ? 2200 : (bossId === 'Dandelion' ? 1600 : 2000);
           const baseBossSpeed = 80;
           const hpScaled = Math.floor(baseBossHp * (mods.enemyHp || 1));
           const dmgScaled = Math.floor(10 * (mods.enemyDamage || 1));
@@ -944,10 +944,12 @@ export default class CombatScene extends Phaser.Scene {
                 const mods = this.gs?.getDifficultyMods?.() || {};
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
-        // Use a standard base speed, then optionally boost Dandelion only.
-        let boss = createBoss(this, cx, cy, 400, 10, 60, bossType);
+        // Per-boss base HP (Normal difficulty) before difficulty scaling
+        const baseBossHp = bossType === 'Bigwig' ? 2200 : (bossType === 'Dandelion' ? 1600 : 2000);
+        // Create boss with base HP, then apply difficulty scaling
+        let boss = createBoss(this, cx, cy, baseBossHp, 10, 60, bossType);
         boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
-        boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp;
+        boss.maxHp = Math.floor(baseBossHp * (mods.enemyHp || 1)); boss.hp = boss.maxHp;
         // Dandelion gets higher base speed; other bosses stay at standard speed.
         const baseBossSpeed = 60;
         boss.speed = (bossType === 'Dandelion') ? 120 : baseBossSpeed;
@@ -1100,27 +1102,44 @@ export default class CombatScene extends Phaser.Scene {
       }
     };
 
-    if (!this.gs?.shootingRange) {
-      if (this.gs?.gameMode === 'DeepDive') {
-        const dd = this.gs.deepDive || {};
-        const baseN = Math.max(1, dd.baseNormal || 5);
-        const baseE = Math.max(1, dd.baseElite || 1);
-        const stage = Math.max(1, Math.min(4, dd.stage || 1));
-        const stageNormal = baseN + Math.min(stage - 1, 2);
-        const stageElite = (stage === 4) ? (baseE * 2) : baseE;
-        if (!this._isBossRoom) {
-          for (let i = 0; i < stageNormal; i += 1) spawnOneNormal();
-          for (let i = 0; i < stageElite; i += 1) spawnOneElite();
-        }
-      } else {
-        // Campaign (Normal) game: composition based on depth for normals, elites by stage
-        if (!this._isBossRoom) {
-          room.spawnPoints.forEach(() => spawnOneNormal());
-        }
-        // Default 1 elite; Stage 3 uses 2 elites
-        let eliteCount = 1;
-        try {
-          const st = Math.max(1, this.gs?.campaignSelectedStage || this.gs?.campaignStage || 1);
+      if (!this.gs?.shootingRange) {
+        if (this.gs?.gameMode === 'DeepDive') {
+          const dd = this.gs.deepDive || {};
+          const baseN = Math.max(1, dd.baseNormal || 5);
+          const baseE = Math.max(1, dd.baseElite || 1);
+          const stage = Math.max(1, Math.min(4, dd.stage || 1));
+          const stageNormal = baseN + Math.min(stage - 1, 2);
+          const stageElite = (stage === 4) ? (baseE * 2) : baseE;
+          if (!this._isBossRoom) {
+            for (let i = 0; i < stageNormal; i += 1) spawnOneNormal();
+            for (let i = 0; i < stageElite; i += 1) spawnOneElite();
+          }
+        } else {
+          // Campaign (Normal) game: composition based on depth for normals, elites by stage
+          if (!this._isBossRoom) {
+          // Fixed normal enemy counts per stage/room in Campaign mode:
+          // Stage 1: 4, 5, 5  (rooms 1-1,1-2,1-3)
+          // Stage 2: 6, 7, 7  (rooms 2-1,2-2,2-3)
+          // Stage 3: 7, 7, 7  (rooms 3-1,3-2,3-3)
+          const stage = Math.max(1, Math.min(3, this.gs?.campaignSelectedStage || this.gs?.campaignStage || 1));
+          const roomIndex = Math.max(1, Math.min(3, (this.gs?.roomsClearedInCycle || 0) + 1));
+          let normals = 4;
+          if (stage === 1) {
+            const table = [4, 5, 5];
+            normals = table[Math.min(roomIndex - 1, table.length - 1)];
+          } else if (stage === 2) {
+            const table = [6, 7, 7];
+            normals = table[Math.min(roomIndex - 1, table.length - 1)];
+          } else {
+            const table = [7, 7, 7];
+            normals = table[Math.min(roomIndex - 1, table.length - 1)];
+          }
+          for (let i = 0; i < normals; i += 1) spawnOneNormal();
+          }
+          // Default 1 elite; Stage 3 uses 2 elites
+          let eliteCount = 1;
+          try {
+            const st = Math.max(1, this.gs?.campaignSelectedStage || this.gs?.campaignStage || 1);
           if (st === 3) eliteCount = 2;
         } catch (_) {}
         if (!this._isBossRoom) {
@@ -2342,10 +2361,11 @@ export default class CombatScene extends Phaser.Scene {
       const cx = width / 2; const cy = 100;
       // Default boss if not provided by caller
       let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
-      // Create boss with standardized stats + shooter movement
-      let boss = createBoss(this, cx, cy, 400, 10, 60, bossType);
-      boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
-      boss.maxHp = Math.floor(400 * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
+        // Create boss with per-boss base HP (Normal difficulty), then apply difficulty scaling
+        const baseBossHp = bossType === 'Bigwig' ? 2200 : (bossType === 'Dandelion' ? 1600 : 2000);
+        let boss = createBoss(this, cx, cy, baseBossHp, 10, 60, bossType);
+        boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
+        boss.maxHp = Math.floor(baseBossHp * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
       // Visual hint per boss type (tint)
       // visual comes from asset via createBoss catch (_) {} }
       // Initialize boss AI timers
@@ -3727,7 +3747,7 @@ export default class CombatScene extends Phaser.Scene {
     const ffTick = 0.1;
     if (this._ffTickAccum >= ffTick) {
       const step = this._ffTickAccum; this._ffTickAccum = 0;
-      const ignitePerSec = 10; const igniteAdd = ignitePerSec * step;
+      const ignitePerSec = 60; const igniteAdd = ignitePerSec * step;
       const nowT = this.time.now;
       this._firefields = (this._firefields || []).filter((f) => {
         if (nowT >= f.until) { try { f.g?.destroy(); } catch (_) {} try { f.pm?.destroy(); } catch (_) {} return false; }
@@ -7909,7 +7929,7 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   // Spawn a temporary fire field that applies ignite to enemies inside
-  spawnFireField(x, y, radius, durationMs = 2000) {
+  spawnFireField(x, y, radius, durationMs = 4000) {
     if (!this._firefields) this._firefields = [];
     // Additive glow
     const g = this.add.graphics();

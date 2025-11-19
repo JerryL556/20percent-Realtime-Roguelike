@@ -314,7 +314,7 @@ export const weaponCores = [
     name: 'Napalm Rounds',
     onlyFor: 'mgl',
     desc: [
-      '+ Leaves fire field on explosion (2s)',
+      '+ Leaves fire field on explosion (4s)',
       '+ Fire Field applies Ignition buildup to enemies inside',
       '- Explosion damage reduced to 25%',
       '- Mag size set to 4',
