@@ -2,7 +2,7 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
-import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy, createTurretEnemy } from '../systems/EnemyFactory.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy, createTurretEnemy, createHealDroneEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy, getScrapTintForEnemy, teleportSpawnVfx, bossSignalBeam, spawnBombardmentMarker } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
@@ -258,7 +258,7 @@ export default class CombatScene extends Phaser.Scene {
           const mods = this.gs?.getDifficultyMods?.() || {};
           const cx = Math.floor(width / 2); const cy = 100;
           // Per-boss base HP (Normal difficulty) before difficulty scaling
-          const baseBossHp = bossId === 'Bigwig' ? 2200 : (bossId === 'Dandelion' ? 1600 : 2000);
+          const baseBossHp = bossId === 'Bigwig' ? 2200 : (bossId === 'Dandelion' ? 1200 : 2000);
           const baseBossSpeed = 80;
           const hpScaled = Math.floor(baseBossHp * (mods.enemyHp || 1));
           const dmgScaled = Math.floor(10 * (mods.enemyDamage || 1));
@@ -945,7 +945,7 @@ export default class CombatScene extends Phaser.Scene {
         const cx = width / 2; const cy = 100;
         let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
         // Per-boss base HP (Normal difficulty) before difficulty scaling
-        const baseBossHp = bossType === 'Bigwig' ? 2200 : (bossType === 'Dandelion' ? 1600 : 2000);
+        const baseBossHp = bossType === 'Bigwig' ? 2200 : (bossType === 'Dandelion' ? 1200 : 2000);
         // Create boss with base HP, then apply difficulty scaling
         let boss = createBoss(this, cx, cy, baseBossHp, 10, 60, bossType);
         boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
@@ -2362,7 +2362,7 @@ export default class CombatScene extends Phaser.Scene {
       // Default boss if not provided by caller
       let bossType = this._bossId || (typeof this.gs?.chooseBossType === 'function' ? this.gs.chooseBossType() : 'Dandelion');
         // Create boss with per-boss base HP (Normal difficulty), then apply difficulty scaling
-        const baseBossHp = bossType === 'Bigwig' ? 2200 : (bossType === 'Dandelion' ? 1600 : 2000);
+        const baseBossHp = bossType === 'Bigwig' ? 2200 : (bossType === 'Dandelion' ? 1200 : 2000);
         let boss = createBoss(this, cx, cy, baseBossHp, 10, 60, bossType);
         boss.isEnemy = true; boss.isBoss = true; boss.isShooter = true; boss.bossType = bossType;
         boss.maxHp = Math.floor(baseBossHp * (mods.enemyHp || 1)); boss.hp = boss.maxHp; boss.speed = 60; boss.damage = Math.floor(10 * (mods.enemyDamage || 1));
@@ -4675,7 +4675,7 @@ export default class CombatScene extends Phaser.Scene {
         }
       } catch (_) {}
       // Hazel missiles: custom homing behavior, no nav/pathfinding
-      if (e.isHazelMissile) {
+        if (e.isHazelMissile) {
         try {
           const dtMs = (this.game?.loop?.delta || 16.7);
           const dtHz = dtMs / 1000;
@@ -4732,7 +4732,7 @@ export default class CombatScene extends Phaser.Scene {
             this._explodeHazelMissile(e);
             return;
           }
-          // Update visuals: glowing square + particle-based tracer
+            // Update visuals: glowing square + particle-based tracer
           try {
             // Subtle glow pulse on the missile sprite itself
             try {
@@ -4760,10 +4760,99 @@ export default class CombatScene extends Phaser.Scene {
                 alpha: 0.95,
               });
             } catch (_) {}
+            } catch (_) {}
           } catch (_) {}
-        } catch (_) {}
-        return;
-      }
+          return;
+        }
+        // Heal Drones: BIT-style hover around their owner boss and periodically heal them
+          if (e.isHealDrone) {
+            try {
+              const boss = e._ownerBoss;
+              if (!boss || !boss.active || boss.hp <= 0) {
+                try { e.destroy(); } catch (_) {}
+                return;
+              }
+              const dt = (this.game?.loop?.delta || 16.7) / 1000;
+              const nowHd = this.time.now;
+
+              // Initialize BIT-like idle/orbit state once
+              if (e._hdIdleAngle === undefined) e._hdIdleAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              if (e._hdIdleRadius === undefined) e._hdIdleRadius = Phaser.Math.Between(28, 40);
+              if (e._hdIdleSpeed === undefined) e._hdIdleSpeed = Phaser.Math.FloatBetween(0.8, 1.4); // rad/s, slower than BITs
+              if (typeof e._hdHoldUntil !== 'number') e._hdHoldUntil = 0;
+
+              const dxBoss = boss.x - e.x;
+              const dyBoss = boss.y - e.y;
+              const distBoss2 = dxBoss * dxBoss + dyBoss * dyBoss;
+              const distBoss = Math.sqrt(distBoss2) || 1;
+
+              // Movement: if currently holding to fire, stay still; otherwise hover like BIT idle around Dandelion
+              if (nowHd < (e._hdHoldUntil || 0)) {
+                try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
+              } else {
+                // If too far from boss, move straight back toward them
+                const maxDist = (e._hdIdleRadius || 32) + 24;
+                if (distBoss > maxDist) {
+                  const sp = 150; // slower than BITs (260)
+                  const vx = (dxBoss / distBoss) * sp;
+                  const vy = (dyBoss / distBoss) * sp;
+                  try { e.body?.setVelocity?.(vx, vy); } catch (_) { try { e.setVelocity(vx, vy); } catch (_) {} }
+                } else {
+                  // Idle orbit around boss, BIT-style but slower and closer
+                  e._hdIdleAngle += e._hdIdleSpeed * dt;
+                  const r = e._hdIdleRadius || 32;
+                  const tx = boss.x + Math.cos(e._hdIdleAngle) * r;
+                  const ty = boss.y + Math.sin(e._hdIdleAngle) * r;
+                  const dx = tx - e.x;
+                  const dy = ty - e.y;
+                  const len = Math.hypot(dx, dy) || 1;
+                  const sp = 140;
+                  const vx = (dx / len) * sp;
+                  const vy = (dy / len) * sp;
+                  try { e.body?.setVelocity?.(vx, vy); } catch (_) { try { e.setVelocity(vx, vy); } catch (_) {} }
+                }
+              }
+
+              // Healing logic: wait 2s after spawn, then heal 15 HP at 1/s while boss is not at max HP,
+              // with a much shorter heal range than BITs' attack range.
+              const firstAt = e._hdFirstHealAt || 0;
+              const nextAt = e._hdNextHealAt || 0;
+              const healR = 72;
+              const canHealRange = distBoss2 <= (healR * healR);
+              if (nowHd >= firstAt && nowHd >= nextAt && canHealRange) {
+                const maxHp = Math.max(1, boss.maxHp || 1);
+                const curHp = Math.max(0, boss.hp || 0);
+                if (curHp < maxHp) {
+                  const heal = 15;
+                  boss.hp = Math.min(maxHp, curHp + heal);
+                  // Yellow heal beam from drone to boss
+                  try {
+                    const g = this.add.graphics();
+                    try { g.setDepth(9050); g.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+                    try {
+                      g.lineStyle(3, 0xffee66, 0.98).beginPath();
+                      g.moveTo(e.x, e.y - 1);
+                      g.lineTo(boss.x, boss.y - 4);
+                      g.strokePath();
+                    } catch (_) {}
+                    try {
+                      this.tweens.add({
+                        targets: g,
+                        alpha: 0,
+                        duration: 200,
+                        ease: 'Quad.easeOut',
+                        onComplete: () => { try { g.destroy(); } catch (_) {} },
+                      });
+                    } catch (_) { try { g.destroy(); } catch (_) {} }
+                  } catch (_) {}
+                  // Hold briefly in place while "firing" heal laser, BIT-style
+                  e._hdHoldUntil = nowHd + 200;
+                }
+                e._hdNextHealAt = nowHd + 1000;
+              }
+            } catch (_) {}
+            return;
+          }
         // Turrets: fully stationary enemies with custom firing + aim logic
         if (e.isTurret) {
         const nowT = this.time.now;
@@ -6166,9 +6255,9 @@ export default class CombatScene extends Phaser.Scene {
     };
 
       if (e.bossType === 'Dandelion') {
-      // Initialize Dandelion-specific sweep/cooldown state once
-      if (!e._dnInit) {
-        e._dnInit = true;
+        // Initialize Dandelion-specific sweep/cooldown state once
+        if (!e._dnInit) {
+          e._dnInit = true;
         e._dnMode = 'idle'; // 'idle' | 'sweep' | 'cooldown'
         e._dnSweepDurationMs = 3000;
         e._dnCooldownMs = 1500;
@@ -6206,15 +6295,82 @@ export default class CombatScene extends Phaser.Scene {
         e._dnAssaultMineInterval = 100;
         e._dnAssaultNextMineAt = 0;
         e._dnAssaultLineG = null;
-        e._dnAssaultTrailLast = null;
-        e._dnAssaultDashInStartedAt = 0;
-        e._dnAssaultWindupStartAt = 0;
-        e._dnAssaultWindupLen = 200;
-        // Cache base speed for slow/restore
-        e._dnBaseSpeed = e.speed || 120;
-      }
+          e._dnAssaultTrailLast = null;
+          e._dnAssaultDashInStartedAt = 0;
+          e._dnAssaultWindupStartAt = 0;
+          e._dnAssaultWindupLen = 200;
+          // Cache base speed for slow/restore
+          e._dnBaseSpeed = e.speed || 120;
+          // Heal thresholds (60%, 40%, 25%, 10%) – each triggers at most once
+          e._dnHealUsed60 = false;
+          e._dnHealUsed40 = false;
+          e._dnHealUsed25 = false;
+          e._dnHealUsed10 = false;
+        }
 
-      const dtMsDn = (this.game?.loop?.delta || 16.7);
+        const dtMsDn = (this.game?.loop?.delta || 16.7);
+
+        // Heal drone ability: trigger once when HP crosses specific ratios
+        try {
+          const hp = Math.max(0, e.hp || 0);
+          const maxHp = Math.max(1, e.maxHp || 1);
+          const ratio = hp / maxHp;
+          const thresholds = [
+            { r: 0.50, flag: '_dnHealUsed50' },
+            { r: 0.25, flag: '_dnHealUsed25' },
+          ];
+          for (let i = 0; i < thresholds.length; i += 1) {
+            const t = thresholds[i];
+            if (ratio <= t.r && !e[t.flag]) {
+              e[t.flag] = true;
+              // Visual-only boss channel effect (same style as other bosses)
+              try { bossSignalBeam(this, e.x, e.y, { color: 0xaa66ff, duration: 2000 }); } catch (_) {}
+              // Queue a delayed HealDrone summon 2s after channel starts
+              if (!e._dnHealSummons) e._dnHealSummons = [];
+              e._dnHealSummons.push({ spawnAt: now + 2000 });
+            }
+          }
+          // Process any queued HealDrone summons once their delay has elapsed
+          if (e._dnHealSummons && e._dnHealSummons.length) {
+            const summons = e._dnHealSummons;
+            let idx = 0;
+            while (idx < summons.length) {
+              const s = summons[idx];
+              if (!s || now < (s.spawnAt || 0)) { idx += 1; continue; }
+              // Time to spawn: cap total HealDrones for this boss at 3
+              const enemiesArr2 = this.enemies?.getChildren?.() || [];
+              let existing = 0;
+              for (let i2 = 0; i2 < enemiesArr2.length; i2 += 1) {
+                const d2 = enemiesArr2[i2];
+                if (!d2?.active || !d2.isHealDrone) continue;
+                if (d2._ownerBoss === e) existing += 1;
+              }
+              const toSpawn = Math.max(0, 3 - existing);
+              if (toSpawn > 0) {
+                const baseAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                const radius = 60;
+                for (let k = 0; k < toSpawn; k += 1) {
+                  const ang = baseAngle + (k / Math.max(1, toSpawn)) * Math.PI * 2;
+                  const sx = e.x + Math.cos(ang) * radius;
+                  const sy = e.y + Math.sin(ang) * radius;
+                  try {
+                    teleportSpawnVfx(this, sx, sy, {
+                      color: 0xaa66ff, // purple, matches other boss summons
+                      ringOpts: { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 },
+                      onSpawn: () => {
+                        const d = createHealDroneEnemy(this, sx, sy, 30, e);
+                        // Initialize orbit angle based on spawn angle
+                        d._hdAngle = ang;
+                        try { this.enemies.add(d); } catch (_) {}
+                      },
+                    });
+                  } catch (_) {}
+                }
+              }
+              summons.splice(idx, 1);
+            }
+          }
+        } catch (_) {}
 
       // Handle Dandelion assault ability (dash to player, melee, dash back laying mines)
       const nowDn = now;

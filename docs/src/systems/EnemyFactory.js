@@ -14,6 +14,7 @@ const ENEMY_TEXTURE_PATHS = {
   enemy_rook: 'assets/Rook.png',
   enemy_bombardier: 'assets/Bombardier.png',
   enemy_bombardier_special: 'assets/BombardierSpecial.png',
+  enemy_heal_drone: 'assets/HealDrone.png',
   turret_base: 'assets/Turret Base.png',
   turret_head: 'assets/Turret Head.png',
 };
@@ -179,11 +180,16 @@ function _attachEnemyVisuals(e, keyNormal, keyCharge = null, bodyW = null, bodyH
   } catch (_) {}
   // Orientation + optional charge swap per-frame
   const onUpdate = () => {
-    try {
-      const p = e.scene?.player; if (!p || !e.active) return;
-      const faceLeft = (p.x < e.x);
-      try { e._vis?.setFlipX?.(faceLeft); } catch (_) {}
-      try { if (e._vis) e._vis.setPosition(e.x, e.y); } catch (_) {}
+      try {
+        const sc = e.scene;
+        if (!sc || !e.active) return;
+        // For Heal Drones, face their owner boss; otherwise face the player like other enemies
+        const ownerBoss = (e.isHealDrone && e._ownerBoss && e._ownerBoss.active) ? e._ownerBoss : null;
+        const target = ownerBoss || sc.player;
+        if (!target) return;
+        const faceLeft = (target.x < e.x);
+        try { e._vis?.setFlipX?.(faceLeft); } catch (_) {}
+        try { if (e._vis) e._vis.setPosition(e.x, e.y); } catch (_) {}
       try {
         if (e._hitbox && e._vis) {
           const w = Math.max(1, Math.round(e._vis.displayWidth || 12));
@@ -406,7 +412,7 @@ export function createSniperEnemy(scene, x, y, hp = 80, damage = 24, speed = 40)
   return sn;
 }
 
-// Prism (elite): laser specialist with sweeping beam and locked beam ability
+  // Prism (elite): laser specialist with sweeping beam and locked beam ability
 export function createPrismEnemy(scene, x, y, hp = 180, damage = 16, speed = 46) {
   const p = scene.physics.add.sprite(x, y, 'enemy_square');
   p.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
@@ -476,7 +482,7 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 10, speed =
 }
 
 // Stationary turret enemy: built by Bigwig, cannot move, fires continuous bursts at the player
-export function createTurretEnemy(scene, x, y, hp = 80, damage = 10) {
+  export function createTurretEnemy(scene, x, y, hp = 80, damage = 10) {
   const t = scene.physics.add.sprite(x, y, 'enemy_square');
   t.setSize(12, 12).setOffset(0, 0).setCollideWorldBounds(true);
   t.hp = hp;
@@ -544,8 +550,31 @@ export function createTurretEnemy(scene, x, y, hp = 80, damage = 10) {
       t._turretAimG = null;
     });
   } catch (_) {}
-  return t;
-}
+    return t;
+  }
+
+  // Heal Drone: support enemy that orbits a boss and fires heal beams
+  export function createHealDroneEnemy(scene, x, y, hp = 30, ownerBoss = null) {
+    const d = scene.physics.add.sprite(x, y, 'enemy_square');
+    // 10x10 hitbox for all weapons; visuals are handled via attached sprite and _hitbox like other enemies
+    d.setSize(10, 10).setOffset(0, 0).setCollideWorldBounds(true);
+    d.hp = hp;
+    d.maxHp = hp;
+    d.damage = 0;
+    d.speed = 0;
+    d.isEnemy = true;
+    d.isHealDrone = true;
+    d._ownerBoss = ownerBoss || null;
+    // Orbit/heal state
+    d._hdAngle = 0;
+    d._hdRadius = 48;
+    d._hdSpawnAt = scene.time.now;
+    d._hdFirstHealAt = d._hdSpawnAt + 2000;
+    d._hdNextHealAt = d._hdFirstHealAt;
+    // Attach visuals using the same helper as other enemies so sprite + hitbox follow the physics body
+    try { _attachEnemyVisuals(d, 'enemy_heal_drone', null, 10, 10, 1.0); } catch (_) {}
+    return d;
+  }
 
 
 
