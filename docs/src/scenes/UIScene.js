@@ -54,6 +54,7 @@ export default class UIScene extends Phaser.Scene {
     this._abilityGlows = [];
     this._abilityNextGlowAt = 0;
     this._abilityWasReady = false;
+    this._abilityRingWasReady = false;
 
     // HP hit vignette overlay (red screen-edge flash when HP is damaged)
     try {
@@ -357,16 +358,36 @@ export default class UIScene extends Phaser.Scene {
         const bx = Math.floor(b.right + 8);
         const by = Math.floor(ay + 2);
         const size = 14;
-          const prog = this.registry.get('abilityCooldownProgress');
-          const progVal = (typeof prog === 'number' ? prog : 1);
-          const w = Math.max(0, Math.min(size, Math.floor(progVal * size)));
-          this.abilityG.clear();
-          // Border
-          this.abilityG.lineStyle(1, 0xffffff, 1).strokeRect(bx + 0.5, by + 0.5, size, size);
-          // Fill proportional to cooldown progress
-          if (w > 0) {
-            this.abilityG.fillStyle(0x66aaff, 0.9).fillRect(bx + 1, by + 1, w - 1, size - 2);
-          }
+            const prog = this.registry.get('abilityCooldownProgress');
+            const progVal = (typeof prog === 'number' ? prog : 1);
+            const w = Math.max(0, Math.min(size, Math.floor(progVal * size)));
+            this.abilityG.clear();
+            // Border
+            this.abilityG.lineStyle(1, 0xffffff, 1).strokeRect(bx + 0.5, by + 0.5, size, size);
+            // Fill proportional to cooldown progress
+            if (w > 0) {
+              this.abilityG.fillStyle(0x66aaff, 0.9).fillRect(bx + 1, by + 1, w - 1, size - 2);
+            }
+            // Ability ready ring: single blue spawn-ring when ability becomes ready
+            try {
+              const ringReady = progVal >= 1;
+              if (typeof this._abilityRingWasReady !== 'boolean') this._abilityRingWasReady = ringReady;
+              if (ringReady && !this._abilityRingWasReady) {
+                const hubActive = !!this.scene?.isActive?.(SceneKeys.Hub);
+                if (!hubActive) {
+                  const cx = bx + size / 2;
+                  const cy = by + size / 2;
+                  bitSpawnRing(this, cx, cy, {
+                    color: 0x99ccff,
+                    radius: 12,
+                    lineWidth: 3,
+                    duration: 360,
+                    scaleTarget: 2.0,
+                  });
+                }
+              }
+              this._abilityRingWasReady = ringReady;
+            } catch (_) {}
           // Ability ready glow: recurring Hazel-style pulse when off cooldown
           try {
             const now = this.time?.now || (this.game?.loop?.now ?? 0);
