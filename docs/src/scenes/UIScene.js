@@ -9,6 +9,7 @@ import { getPlayerEffects } from '../core/Loadout.js';
 import { weaponMods, weaponCores, armourMods, armourDefs } from '../core/Mods.js';
 import { abilityDefs, getAbilityById } from '../core/Abilities.js';
 import { weaponDefs, getWeaponById } from '../core/Weapons.js';
+import { bitSpawnRing } from '../systems/Effects.js';
 
 export default class UIScene extends Phaser.Scene {
   constructor() { super(SceneKeys.UI); }
@@ -48,6 +49,11 @@ export default class UIScene extends Phaser.Scene {
     this.abilityG = this.add.graphics();
     // Resource toast stack (top of screen)
     this._resourceToasts = [];
+    // Dash/ability UI helper state
+    this._dashSlotLevels = [];
+    this._abilityGlows = [];
+    this._abilityNextGlowAt = 0;
+    this._abilityWasReady = false;
 
     // HP hit vignette overlay (red screen-edge flash when HP is damaged)
     try {
@@ -133,6 +139,10 @@ export default class UIScene extends Phaser.Scene {
       this.closeLoadout();
       this.closeChoicePopup();
       try { (this._resourceToasts || []).forEach((t) => t?.destroy?.()); this._resourceToasts = []; } catch (_) {}
+      this._dashSlotLevels = [];
+      // Cleanup any ability glow graphics
+      try { (this._abilityGlows || []).forEach((g) => { try { g?.g?.destroy?.(); } catch (_) {} }); } catch (_) {}
+      this._abilityGlows = [];
       if (this._refreshSaveButtons) {
         this.events.off('update', this._refreshSaveButtons);
         this._refreshSaveButtons = null;
@@ -249,11 +259,41 @@ export default class UIScene extends Phaser.Scene {
       this.goldText.setText(`Gold: ${gs.gold} | Drone Cores: ${dc}`);
       const wName = (getWeaponById(gs.activeWeapon)?.name || gs.activeWeapon);
       this.weaponText.setText(`Weapon: ${wName}`);
-      const charges = this.registry.get('dashCharges');
-      const progress = this.registry.get('dashRegenProgress') ?? 0;
-      const maxC = gs.dashMaxCharges ?? 3;
-      const c = (charges === undefined || charges === null) ? maxC : charges;
-      this.dashBar.draw(c, maxC, progress);
+        const charges = this.registry.get('dashCharges');
+        const progress = this.registry.get('dashRegenProgress') ?? 0;
+        const maxC = gs.dashMaxCharges ?? 3;
+        const c = (charges === undefined || charges === null) ? maxC : charges;
+        this.dashBar.draw(c, maxC, progress);
+        // Dash ready ring per slot when it becomes full
+        try {
+          const prev = Array.isArray(this._dashSlotLevels) ? this._dashSlotLevels : [];
+          const cur = [];
+          for (let i = 0; i < maxC; i += 1) {
+            let level = 0;
+            if (i < c) level = 1;
+            else if (i === c && c < maxC) {
+              const p = Math.max(0, Math.min(1, progress));
+              level = p;
+            }
+            cur[i] = level;
+            const was = (typeof prev[i] === 'number') ? prev[i] : level;
+            if (was < 1 && level === 1) {
+              const sx = this.dashBar.x + i * (this.dashBar.size + this.dashBar.gap);
+              const cx = sx + this.dashBar.size / 2;
+              const cy = this.dashBar.y + this.dashBar.size / 2;
+              try {
+                bitSpawnRing(this, cx, cy, {
+                  color: 0x99ccff,
+                  radius: 12,
+                  lineWidth: 3,
+                  duration: 360,
+                  scaleTarget: 2.0,
+                });
+              } catch (_) {}
+            }
+          }
+          this._dashSlotLevels = cur;
+        } catch (_) {}
       // Keep the weapon label visually next to the dash bar and at the bottom
       const dashX = 16 + 180 + 20;
       const dashWidth = maxC * (this.dashBar.size + this.dashBar.gap);
@@ -317,17 +357,46 @@ export default class UIScene extends Phaser.Scene {
         const bx = Math.floor(b.right + 8);
         const by = Math.floor(ay + 2);
         const size = 14;
-        const prog = this.registry.get('abilityCooldownProgress');
-        const progVal = (typeof prog === 'number' ? prog : 1);
-        const w = Math.max(0, Math.min(size, Math.floor(progVal * size)));
-        this.abilityG.clear();
-        // Border
-        this.abilityG.lineStyle(1, 0xffffff, 1).strokeRect(bx + 0.5, by + 0.5, size, size);
-        // Fill proportional to cooldown progress
-        if (w > 0) {
-          this.abilityG.fillStyle(0x66aaff, 0.9).fillRect(bx + 1, by + 1, w - 1, size - 2);
-        }
-      } catch (_) {}
+          const prog = this.registry.get('abilityCooldownProgress');
+          const progVal = (typeof prog === 'number' ? prog : 1);
+          const w = Math.max(0, Math.min(size, Math.floor(progVal * size)));
+          this.abilityG.clear();
+          // Border
+          this.abilityG.lineStyle(1, 0xffffff, 1).strokeRect(bx + 0.5, by + 0.5, size, size);
+          // Fill proportional to cooldown progress
+          if (w > 0) {
+            this.abilityG.fillStyle(0x66aaff, 0.9).fillRect(bx + 1, by + 1, w - 1, size - 2);
+          }
+          // Ability ready glow: recurring Hazel-style pulse when off cooldown
+          try {
+            const now = this.time?.now || (this.game?.loop?.now ?? 0);
+            const ready = progVal >= 1;
+            if (!Array.isArray(this._abilityGlows)) this._abilityGlows = [];
+            if (typeof this._abilityNextGlowAt !== 'number') this._abilityNextGlowAt = now + 2800;
+            if (ready) {
+              if (!this._abilityWasReady) {
+                // Immediately allow a glow when becoming ready
+                this._abilityNextGlowAt = now;
+              }
+              const hubActive = !!this.scene?.isActive?.(SceneKeys.Hub);
+              if (!hubActive && now >= (this._abilityNextGlowAt || 0)) {
+                const cx = bx + size / 2;
+                const cy = by + size / 2;
+                const gGlow = this.add.graphics({ x: cx, y: cy });
+                try {
+                  gGlow.setDepth(9001);
+                  gGlow.setBlendMode(Phaser.BlendModes.ADD);
+                } catch (_) {}
+                this._abilityGlows.push({ g: gGlow, createdAt: now, baseSize: size * 1.15 });
+                this._abilityNextGlowAt = now + 2800;
+              }
+              this._abilityWasReady = true;
+            } else {
+              this._abilityWasReady = false;
+              this._abilityNextGlowAt = now + 1500;
+            }
+          } catch (_) {}
+        } catch (_) {}
 
       // Reload bar handling
       const reloading = !!this.registry.get('reloadActive');
@@ -369,7 +438,45 @@ export default class UIScene extends Phaser.Scene {
         } catch (e) { /* no-op */ }
       }
 
-      // If HP hit overlay is visible and no tween is managing it, ensure geometry matches screen size
+        // Update ability glow pulses (Hazel-style square glow near ability when ready)
+        try {
+          if (this._abilityGlows && this._abilityGlows.length) {
+            const now = this.time?.now || (this.game?.loop?.now ?? 0);
+            const lifeTotal = 900; // ms
+            const phaseSplit = 540;
+            this._abilityGlows = this._abilityGlows.filter((entry) => {
+              if (!entry || !entry.g) return false;
+              const g = entry.g;
+              const age = now - (entry.createdAt || 0);
+              if (age >= lifeTotal) {
+                try { g.destroy(); } catch (_) {}
+                return false;
+              }
+              const baseSize = entry.baseSize || 14;
+              try {
+                g.clear();
+                if (age < phaseSplit) {
+                  // First phase: soft blue, slower pulse
+                  const t = age / phaseSplit;
+                  const pulse = 1.0 + 0.14 * Math.sin(t * Math.PI * 2.0);
+                  const size = baseSize * pulse;
+                  g.fillStyle(0x66aaff, 0.6);
+                  g.fillRect(-size / 2, -size / 2, size, size);
+                } else {
+                  // Second phase: lighter blue, faster pulse and slight growth
+                  const t = (age - phaseSplit) / (lifeTotal - phaseSplit);
+                  const pulse = 1.0 + 0.24 * Math.sin(t * Math.PI * 6.0);
+                  const size = baseSize * (1.08 + 0.22 * t) * pulse;
+                  g.fillStyle(0x99ccff, 0.75);
+                  g.fillRect(-size / 2, -size / 2, size, size);
+                }
+              } catch (_) {}
+              return true;
+            });
+          }
+        } catch (_) {}
+
+        // If HP hit overlay is visible and no tween is managing it, ensure geometry matches screen size
       if (this.hpHitOverlay && this.hpHitOverlay.visible && !this.hpHitTween) {
         const w = this.scale.width;
         const h = this.scale.height;

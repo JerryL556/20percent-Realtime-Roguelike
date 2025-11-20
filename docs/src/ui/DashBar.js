@@ -4,6 +4,7 @@ export class DashBar {
     this.x = x; this.y = y;
     this.size = size; this.gap = gap;
     this.g = scene.add.graphics();
+    try { this.g.setDepth?.(9500); } catch (_) {}
   }
   draw(current, max, progress = 0) {
     this.g.clear();
