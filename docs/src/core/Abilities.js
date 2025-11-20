@@ -17,7 +17,7 @@ export const abilityDefs = [
   },
   {
     id: 'caustic_cluster',
-    name: 'Caustic Cluster Grenade',
+    name: 'Caustic Grenade',
     desc: [
       'Throw a caustic grenade to the cursor that explodes,',
       'spawning 5 cluster bomblets that spread out and explode.',

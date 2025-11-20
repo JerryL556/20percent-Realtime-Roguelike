@@ -117,20 +117,20 @@ export default class CombatScene extends Phaser.Scene {
     // Difficulty modifiers for spawning range enemies (HP/damage scale)
     const mods = this.gs?.getDifficultyMods?.() || { enemyHp: 1, enemyDamage: 1 };
     let r = 1;
-    // Mass-Produced (normal) - use same difficulty-scaled stats as regular rooms
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Melee', () => {
+      // Mass-Produced (normal) - use same difficulty-scaled stats as regular rooms
+      nodes.push(addBtnAt(col1X, r0 + rLine * (r + 0), 'Shredder', () => {
       this.enemies.add(sp((sc, x, y) => {
         const meleeDmg = Math.floor(Math.floor(10 * (mods.enemyDamage || 1)) * 1.5);
         return createEnemy(sc, x, y, Math.floor(100 * (mods.enemyHp || 1)), meleeDmg, 60);
       }));
     }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Runner', () => {
+      nodes.push(addBtnAt(col1X, r0 + rLine * (r + 1), 'Charger', () => {
       this.enemies.add(sp((sc, x, y) => {
         const meleeDmg = Math.floor(Math.floor(10 * (mods.enemyDamage || 1)) * 1.5);
         return createRunnerEnemy(sc, x, y, Math.floor(60 * (mods.enemyHp || 1)), meleeDmg, 120);
       }));
     }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Shooter', () => {
+      nodes.push(addBtnAt(col1X, r0 + rLine * (r + 2), 'Gunner', () => {
       this.enemies.add(sp((sc, x, y) => createShooterEnemy(
         sc,
         x,
@@ -141,7 +141,7 @@ export default class CombatScene extends Phaser.Scene {
         900,
       )));
     }));
-    nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'Machine Gunner', () => {
+      nodes.push(addBtnAt(col1X, r0 + rLine * (r + 3), 'MachineGunner', () => {
       this.enemies.add(sp((sc, x, y) => createMachineGunnerEnemy(
         sc,
         x,
@@ -176,8 +176,8 @@ export default class CombatScene extends Phaser.Scene {
       )));
     }));
 
-    // Elite - use same difficulty-scaled stats as regular rooms
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Grenadier', () => {
+      // Elite - use same difficulty-scaled stats as regular rooms
+      nodes.push(addBtnAt(col2X, r0 + rLine * (r + 0), 'Bombardier', () => {
       this.enemies.add(sp((sc, x, y) => createGrenadierEnemy(
         sc,
         x,
@@ -198,7 +198,7 @@ export default class CombatScene extends Phaser.Scene {
         46,
       )));
     }));
-    nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Snitch', () => {
+      nodes.push(addBtnAt(col2X, r0 + rLine * (r + 2), 'Commander', () => {
       this.enemies.add(sp((sc, x, y) => createSnitchEnemy(
         sc,
         x,

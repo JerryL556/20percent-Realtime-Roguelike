@@ -149,7 +149,7 @@ export const weaponDefs = [
   },
   {
     id: 'rocket',
-    name: 'Rocket Launcher',
+    name: 'Rocket',
     desc: [
       'Launches a propelled explosive that deals area damage over a large radius.',
     ].join('\n'),

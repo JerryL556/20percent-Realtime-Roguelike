@@ -42,7 +42,9 @@ export default class UIScene extends Phaser.Scene {
     this.heatLabel = this.add.text(weaponX0 + 180, uiTextY - 8, 'HEAT', { fontFamily: 'monospace', fontSize: 10, color: '#ff6666' }).setOrigin(0, 0);
     this.heatBar.setVisible(false); this.heatLabel.setVisible(false);
     // Ability label + cooldown square
-    this.abilityText = this.add.text(weaponX0 + 340, uiTextY + 2, 'Ability: -', { fontFamily: 'monospace', fontSize: 14, color: '#66aaff' }).setOrigin(0, 0);
+    // Ability label starts near the bottom-right, just left of the movement/keybind hints in CombatScene
+    const abilityX0 = Math.max(16, width - 320);
+    this.abilityText = this.add.text(abilityX0, uiTextY + 2, 'Ability: -', { fontFamily: 'monospace', fontSize: 14, color: '#66aaff' }).setOrigin(0, 0);
     this.abilityG = this.add.graphics();
     // Resource toast stack (top of screen)
     this._resourceToasts = [];
@@ -306,7 +308,8 @@ export default class UIScene extends Phaser.Scene {
       // Ability label + cooldown box
       try {
         const abilityName = (getAbilityById(gs.abilityId)?.name || '-');
-        const ax = wx + 340; const ay = uiTextY + 2;
+          // Anchor ability label near bottom-right, just left of movement/keybind hints
+          const ax = Math.max(16, this.scale.width - 320); const ay = uiTextY + 2;
         this.abilityText.setText(`Ability: ${abilityName}`);
         this.abilityText.setPosition(ax, ay);
         // Draw cooldown box next to label
@@ -584,7 +587,8 @@ export default class UIScene extends Phaser.Scene {
 
     // Mods/Core for Active Weapon (Column 2)
     if (!gs.weaponBuilds[gs.activeWeapon]) gs.weaponBuilds[gs.activeWeapon] = { mods: [null, null, null], core: null };
-    nodes.push(this.add.text(col2X, y2, `Mods for ${gs.activeWeapon}`, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' })); y2 += 28;
+    const activeWeaponName = getWeaponById(gs.activeWeapon)?.name || gs.activeWeapon;
+    nodes.push(this.add.text(col2X, y2, `Mods for ${activeWeaponName}`, { fontFamily: 'monospace', fontSize: 16, color: '#ffffff' })); y2 += 28;
     const ensureBuild = () => { if (!gs.weaponBuilds[gs.activeWeapon]) gs.weaponBuilds[gs.activeWeapon] = { mods: [null, null, null], core: null }; };
     // Sanitize any legacy mod ids that were moved to cores (e.g., w_smg_toxin, w_rifle_incendiary)
     try {
