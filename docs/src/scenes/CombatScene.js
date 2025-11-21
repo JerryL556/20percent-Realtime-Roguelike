@@ -2,7 +2,7 @@ import { SceneKeys } from '../core/SceneKeys.js';
 import { InputManager } from '../core/Input.js';
 import { SaveManager } from '../core/SaveManager.js';
 import { generateRoom, generateBarricades } from '../systems/ProceduralGen.js';
-import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy, createTurretEnemy, createHealDroneEnemy } from '../systems/EnemyFactory.js';
+import { createEnemy, createShooterEnemy, createRunnerEnemy, createSniperEnemy, createMachineGunnerEnemy, createRocketeerEnemy, createBoss, createGrenadierEnemy, createPrismEnemy, createSnitchEnemy, createRookEnemy, createTurretEnemy, createHealDroneEnemy, createLaserDroneEnemy } from '../systems/EnemyFactory.js';
 import { weaponDefs } from '../core/Weapons.js';
 import { impactBurst, bitSpawnRing, pulseSpark, muzzleFlash, muzzleFlashSplit, ensureCircleParticle, ensurePixelParticle, pixelSparks, spawnDeathVfxForEnemy, getScrapTintForEnemy, teleportSpawnVfx, bossSignalBeam, spawnBombardmentMarker } from '../systems/Effects.js';
 import { getEffectiveWeapon, getPlayerEffects } from '../core/Loadout.js';
@@ -983,8 +983,8 @@ export default class CombatScene extends Phaser.Scene {
         const rng = this.gs.rng;
         const all = generateBarricades(rng, this.arenaRect, 'soft_many') || [];
         const softOnly = all.filter((b) => b && b.kind === 'soft');
-        // Reduce count to ~35% of soft_many (at least 4 for some cover)
-        const target = Math.max(4, Math.floor(softOnly.length * 0.35));
+        // Reduce count to ~20% of soft_many (at least 2 for some cover)
+        const target = Math.max(2, Math.floor(softOnly.length * 0.20));
         const used = new Set();
         const picks = [];
         for (let i = 0; i < target && softOnly.length > 0; i += 1) {
@@ -1007,7 +1007,7 @@ export default class CombatScene extends Phaser.Scene {
       } else {
         // Normal rooms: slightly reduce intensity of soft-only layouts
         const brRoll = this.gs.rng.next();
-        let variant = (brRoll < 0.34) ? 'normal' : (brRoll < 0.67) ? 'soft_many' : 'hard_sparse';
+        let variant = (brRoll < 0.5) ? 'normal' : (brRoll < 0.75) ? 'soft_many' : 'hard_sparse';
         let barricades = generateBarricades(this.gs.rng, this.arenaRect, variant);
         // If using the soft_many pattern, randomly drop some tiles to reduce density
         if (variant === 'soft_many' && Array.isArray(barricades) && barricades.length) {
@@ -1019,8 +1019,8 @@ export default class CombatScene extends Phaser.Scene {
             if (b.kind === 'hard') {
               filtered.push(b);
             } else {
-              // Keep ~60% of soft tiles, drop ~40% to thin out the maze
-              if (rng.next() < 0.6) filtered.push(b);
+              // Keep ~50% of soft tiles, drop ~50% to slightly thin out the maze
+              if (rng.next() < 0.5) filtered.push(b);
             }
           }
           barricades = filtered;
@@ -1825,11 +1825,11 @@ export default class CombatScene extends Phaser.Scene {
       const r2 = radius * radius;
       const pdx = this.player.x - ex; const pdy = this.player.y - ey;
       if ((pdx * pdx + pdy * pdy) <= r2) {
-        let dmg = 15;
+        let dmg = 20;
         try {
           const mods = this.gs?.getDifficultyMods?.() || {};
           const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
-          dmg = Math.max(1, Math.round(15 * mul));
+          dmg = Math.max(1, Math.round(20 * mul));
         } catch (_) {}
         const now = this.time.now;
         if (now >= (this.player.iframesUntil || 0)) {
@@ -1858,7 +1858,7 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
     // Also damage soft (destructible) barricades in radius
     try {
-      this.damageSoftBarricadesInRadius(ex, ey, radius, 15);
+      this.damageSoftBarricadesInRadius(ex, ey, radius, 30);
     } catch (_) {}
     // Cleanup visuals and destroy missile
     try { m._vis?.destroy(); } catch (_) {}
@@ -1907,6 +1907,13 @@ export default class CombatScene extends Phaser.Scene {
     } catch (_) {}
   }
 
+  // Helper: destroy a support enemy (turret/drone) without drops, but with standard death VFX
+  _destroySupportEnemy(e) {
+    if (!e) return;
+    try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
+    try { e.destroy(); } catch (_) {}
+  }
+
   // Centralized enemy death handler to keep removal tied to HP system
   killEnemy(e) {
     // Hazel missiles: custom explosion and no drops
@@ -1935,6 +1942,19 @@ export default class CombatScene extends Phaser.Scene {
     try { if (e._igniteIndicator) { e._igniteIndicator.destroy(); e._igniteIndicator = null; } } catch (_) {}
     try { if (e._toxinIndicator) { e._toxinIndicator.destroy(); e._toxinIndicator = null; } } catch (_) {}
     try { if (e._stunIndicator) { e._stunIndicator.destroy(); e._stunIndicator = null; } } catch (_) {}
+    // When any boss dies, clear all support enemies (turrets, HealDrones, LaserDrones) with death VFX
+    try {
+      if (e.isBoss) {
+        const arr = this.enemies?.getChildren?.() || [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const d = arr[i];
+          if (!d?.active) continue;
+          if (d.isTurret || d.isHealDrone || d.isLaserDrone) {
+            try { this._destroySupportEnemy(d); } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
     // Bigwig: destroy all active turrets on boss death so player does not have to clear them
     try {
       if (e.isBoss && (e.bossType === 'Bigwig' || e._bossId === 'Bigwig')) {
@@ -1945,7 +1965,7 @@ export default class CombatScene extends Phaser.Scene {
           for (let i = 0; i < arr.length; i += 1) {
             const t = arr[i];
             if (!t?.active || !t.isTurret) continue;
-            try { t.destroy(); } catch (_) {}
+            try { this._destroySupportEnemy(t); } catch (_) {}
             found = true;
           }
         }
@@ -2019,7 +2039,19 @@ export default class CombatScene extends Phaser.Scene {
           }
           this._dnMines = [];
         }
-      } catch (_) {}    // Death VFX (purely visual)
+      } catch (_) {}
+      // If Hazel died, destroy any remaining Laser Drones it spawned
+      try {
+        if (e?.isBoss && (e.bossType === 'Hazel' || e._bossId === 'Hazel')) {
+          const arr = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const d = arr[i];
+            if (!d?.active || !d.isLaserDrone) continue;
+            try { this._destroySupportEnemy(d); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    // Death VFX (purely visual)
     try { spawnDeathVfxForEnemy(this, e); } catch (_) {}
     // Destroy the enemy sprite
     try { e.destroy(); } catch (_) {}
@@ -2087,11 +2119,11 @@ export default class CombatScene extends Phaser.Scene {
       const r2 = radius * radius;
       const pdx = this.player.x - ex; const pdy = this.player.y - ey;
       if ((pdx * pdx + pdy * pdy) <= r2) {
-        let dmg = 20;
+        let dmg = 30;
         try {
           const mods = this.gs?.getDifficultyMods?.() || {};
           const mul = (typeof mods.enemyDamage === 'number') ? mods.enemyDamage : 1;
-          dmg = Math.max(1, Math.round(20 * mul));
+          dmg = Math.max(1, Math.round(30 * mul));
         } catch (_) {}
         const now = this.time.now;
         if (now >= (this.player.iframesUntil || 0)) {
@@ -2119,7 +2151,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     } catch (_) {}
     // Also damage nearby destructible (soft) barricades
-    try { this.damageSoftBarricadesInRadius(ex, ey, radius, 10); } catch (_) {}
+    try { this.damageSoftBarricadesInRadius(ex, ey, radius, 30); } catch (_) {}
     // Cleanup graphics
     try { bomb.g?.destroy(); } catch (_) {}
   }
@@ -4769,7 +4801,7 @@ export default class CombatScene extends Phaser.Scene {
             try {
               const boss = e._ownerBoss;
               if (!boss || !boss.active || boss.hp <= 0) {
-                try { e.destroy(); } catch (_) {}
+                try { this._destroySupportEnemy(e); } catch (_) {}
                 return;
               }
               const dt = (this.game?.loop?.delta || 16.7) / 1000;
@@ -4853,6 +4885,123 @@ export default class CombatScene extends Phaser.Scene {
             } catch (_) {}
             return;
           }
+        // Laser Drones: BIT-style hover around the player and sweep a Prism-style laser
+        if (e.isLaserDrone) {
+          try {
+            const player = this.player;
+            if (!player || !player.active) {
+              try { e.destroy(); } catch (_) {}
+              return;
+            }
+            const dt = (this.game?.loop?.delta || 16.7) / 1000;
+            const nowLd = this.time.now;
+
+            // Initialize BIT-like idle/orbit state once, centered on player
+            if (e._ldIdleAngle === undefined) e._ldIdleAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            if (e._ldIdleRadius === undefined) e._ldIdleRadius = Phaser.Math.Between(120, 160);
+            if (e._ldIdleSpeed === undefined) e._ldIdleSpeed = Phaser.Math.FloatBetween(1.4, 1.8); // faster than HealDrones
+            if (typeof e._ldNextSweepAt !== 'number') e._ldNextSweepAt = nowLd + Phaser.Math.Between(800, 1400);
+
+            const dxP = player.x - e.x;
+            const dyP = player.y - e.y;
+            const distP2 = dxP * dxP + dyP * dyP;
+
+            // Movement: if currently aiming or sweeping, stay still; otherwise hover around player at preferred distance
+            if (e._ldSweepActive) {
+              try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
+            } else {
+              // Idle orbit around player, BIT-style but a bit faster and farther out
+              e._ldIdleAngle += e._ldIdleSpeed * dt;
+              const r = e._ldIdleRadius || 140;
+              const tx = player.x + Math.cos(e._ldIdleAngle) * r;
+              const ty = player.y + Math.sin(e._ldIdleAngle) * r;
+              const dx = tx - e.x;
+              const dy = ty - e.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const sp = 220;
+              const vx = (dx / len) * sp;
+              const vy = (dy / len) * sp;
+              try { e.body?.setVelocity?.(vx, vy); } catch (_) { try { e.setVelocity(vx, vy); } catch (_) {} }
+            }
+
+            // Laser sweep logic: narrower arc than Prism, with a brief aim phase first
+            if (!e._ldSweepActive && nowLd >= (e._ldNextSweepAt || 0)) {
+              e._ldSweepActive = true;
+              // Total hold time while stationary remains 1500ms: 750ms aim + 750ms sweep
+              e._ldAimUntil = nowLd + 750;
+              e._ldSweepDuration = 750; // ms for actual laser sweep
+              e._ldSweepT = 0;
+              // Randomize sweep direction each attack (-1 or 1)
+              e._ldSweepDir = (Math.random() < 0.5) ? -1 : 1;
+              // Create/reuse aim line and laser graphics
+              if (!e._aimG) {
+                try {
+                  e._aimG = this.add.graphics();
+                  e._aimG.setDepth(8000);
+                  e._aimG.setBlendMode(Phaser.BlendModes.ADD);
+                } catch (_) {}
+              }
+              if (!e._laserG) {
+                try {
+                  e._laserG = this.add.graphics();
+                  e._laserG.setDepth(8000);
+                  e._laserG.setBlendMode(Phaser.BlendModes.ADD);
+                } catch (_) {}
+              }
+              e._beamTickAccum = 0;
+            }
+
+            if (e._ldSweepActive) {
+              const dtMs = (this.game?.loop?.delta || 16.7);
+              // Aim phase: draw a lock-on line toward the player, no damage yet
+              if (nowLd < (e._ldAimUntil || 0)) {
+                const gAim = e._aimG;
+                if (gAim) {
+                  try {
+                    gAim.clear();
+                    gAim.lineStyle(1, 0xff2222, 1);
+                    gAim.beginPath();
+                    gAim.moveTo(e.x, e.y);
+                    gAim.lineTo(player.x, player.y);
+                    gAim.strokePath();
+                  } catch (_) {}
+                }
+              } else {
+                // Transition into sweep if just leaving aim phase
+                if (e._ldAimUntil) {
+                  e._ldAimUntil = 0;
+                  // Clear aim graphics once when starting sweep
+                  try { e._aimG?.clear(); } catch (_) {}
+                  // Lock sweep arc based on player position at sweep start
+                  const base = Math.atan2(player.y - e.y, player.x - e.x);
+                  // Sweeping beam: 40 degrees total (±20)
+                  e._ldSweepFrom = base - Phaser.Math.DegToRad(20);
+                  e._ldSweepTo = base + Phaser.Math.DegToRad(20);
+                  e._ldSweepT = 0;
+                }
+                // Sweeping phase: apply damage with narrower arc
+                e._ldSweepT += dtMs;
+                const t = Phaser.Math.Clamp(e._ldSweepT / (e._ldSweepDuration || 750), 0, 1);
+                const tt = (e._ldSweepDir === -1) ? (1 - t) : t;
+                const ang = e._ldSweepFrom + (e._ldSweepTo - e._ldSweepFrom) * tt;
+                // Sweeping beam: slightly lower DPS than Prism
+                this.renderPrismBeam(e, ang, dtMs / 1000, {
+                  applyDamage: true,
+                  damagePlayer: true,
+                  dps: 30,
+                  tick: 0.05,
+                });
+                if (t >= 1) {
+                  e._ldSweepActive = false;
+                  e._ldNextSweepAt = nowLd + Phaser.Math.Between(1600, 2600);
+                  try { e._laserG?.clear(); } catch (_) {}
+                  try { e._aimG?.clear(); } catch (_) {}
+                }
+              }
+            }
+          } catch (_) {}
+          return;
+        }
         // Turrets: fully stationary enemies with custom firing + aim logic
         if (e.isTurret) {
         const nowT = this.time.now;
@@ -5499,13 +5648,13 @@ export default class CombatScene extends Phaser.Scene {
               const t = Phaser.Math.Clamp(e._sweepT / (e._sweepDuration || 900), 0, 1);
               const tt = (e._sweepDir === -1) ? (1 - t) : t;
               const ang = e._sweepFrom + (e._sweepTo - e._sweepFrom) * tt;
-              // Sweeping beam: lower DPS than narrow beam
+              // Sweeping beam: higher DPS than narrow beam
               this.renderPrismBeam(e, ang, dtMs / 1000, {
                 applyDamage: true,
                 damagePlayer: true,
-                // Sweeping beam: higher DPS
-                dps: 40,
-                tick: 0.05,
+                // Sweeping beam: increased DPS with faster ticks
+                dps: 60,
+                tick: 0.025,
               });
               if (t >= 1) {
                 e._sweepActive = false; try { e._laserG?.clear(); } catch (_) {}
@@ -6161,10 +6310,10 @@ export default class CombatScene extends Phaser.Scene {
             const sRect = s.getBounds?.() || new Phaser.Geom.Rectangle(s.x - 8, s.y - 8, 16, 16);
             if (Phaser.Geom.Intersects.LineToRectangle(line, sRect)) {
               const hp0 = (typeof s.getData('hp') === 'number') ? s.getData('hp') : 20;
-              // Prism and Dandelion lasers do reduced damage to barricades (50% of player DPS);
-              // other beams using this helper keep full DPS.
-              const isPrismOrDandelion = !!(e && (e.isPrism || e.bossType === 'Dandelion'));
-              const barricadeMul = isPrismOrDandelion ? 0.5 : 1;
+              // Dandelion lasers do reduced damage to barricades (50% of player DPS);
+              // all other beams using this helper (including Prism) keep full DPS.
+              const isDandelion = !!(e && e.bossType === 'Dandelion');
+              const barricadeMul = isDandelion ? 0.5 : 1;
               const dmg = Math.max(1, Math.round(dps * tick * barricadeMul));
               const hp1 = hp0 - dmg;
               if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
@@ -7292,14 +7441,15 @@ export default class CombatScene extends Phaser.Scene {
         if (!e._bwBurstLeft || e._bwBurstLeft <= 0) {
           e._bwBurstLeft = totalBullets;
           e._bwNextBurstShotAt = now;
-          e._bwBurstBaseAng = angToPlayer;
         }
 
-        // Fire bullets in the current burst
+        // Fire bullets in the current burst; aim updates each shot like MachineGunner
         if (e._bwBurstLeft && now >= (e._bwNextBurstShotAt || 0)) {
           const firedSoFar = totalBullets - e._bwBurstLeft;
           const t = (totalBullets === 1) ? 0 : (firedSoFar / (totalBullets - 1) - 0.5);
-          let ang = (e._bwBurstBaseAng || angToPlayer) + t * spreadRad;
+          // Recompute angle toward player each shot so burst tracks movement
+          const baseAng = angToPlayer;
+          let ang = baseAng + t * spreadRad;
           // Slight random jitter and toxin chaos
           const jitterScale = 0.18;
           ang += Phaser.Math.FloatBetween(-jitterScale, jitterScale) * spreadRad;
@@ -7341,15 +7491,20 @@ export default class CombatScene extends Phaser.Scene {
         e._hzPhaseChannelUntil = 0;
         e._hzPhaseStartAt = 0;
         e._hzPhaseNextAt = now + 12000;
+        // Laser Drone ability (35s CD): channel then spawn drones around Hazel
+        e._hzLaserDroneState = 'idle'; // 'idle' | 'channel'
+        e._hzLaserDroneChannelUntil = 0;
+        e._hzLaserDroneNextAt = now + 16000;
       }
 
       const dtMsHz = (this.game?.loop?.delta || 16.7);
       const phaseReady = now >= (e._hzPhaseNextAt || 0);
+      const laserReady = now >= (e._hzLaserDroneNextAt || 0);
       const tpReady = now >= (e._hzTpNextAt || 0);
       const afterSpecialBlock = now < (e._hzAfterSpecialUntil || 0);
 
       // Teleport-away mechanic: if player stays within radius for 1s and Hazel is not using specials
-      if (!e._hzSpecialActive && e._hzPhaseState !== 'channel' && tpReady) {
+      if (!e._hzSpecialActive && e._hzPhaseState !== 'channel' && e._hzLaserDroneState !== 'channel' && tpReady) {
         const dxp = this.player.x - e.x;
         const dyp = this.player.y - e.y;
         const distToPlayer = Math.hypot(dxp, dyp) || 0;
@@ -7363,8 +7518,58 @@ export default class CombatScene extends Phaser.Scene {
         } else {
           e._hzTpCloseSince = null;
         }
-      } else if (e._hzPhaseState === 'channel' || e._hzSpecialActive) {
+      } else if (e._hzPhaseState === 'channel' || e._hzSpecialActive || e._hzLaserDroneState === 'channel') {
         e._hzTpCloseSince = null;
+      }
+
+      // Laser Drone ability: 2s channel (freeze + upward beam), then spawn LaserDrones around Hazel
+      if (e._hzLaserDroneState === 'channel') {
+        try { e.body.setVelocity(0, 0); } catch (_) {}
+        if (now >= (e._hzLaserDroneChannelUntil || 0)) {
+          e._hzLaserDroneState = 'idle';
+          e._hzLaserDroneChannelUntil = 0;
+          // Spawn up to 5 LaserDrones around Hazel, capped at 5 total
+          try {
+            const enemiesArr = this.enemies?.getChildren?.() || [];
+            let existing = 0;
+            for (let i = 0; i < enemiesArr.length; i += 1) {
+              const d = enemiesArr[i];
+              if (!d?.active || !d.isLaserDrone) continue;
+              existing += 1;
+            }
+            const toSpawn = Math.max(0, 5 - existing);
+            if (toSpawn > 0) {
+              const baseAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+              const radius = 70;
+              for (let k = 0; k < toSpawn; k += 1) {
+                const ang = baseAngle + (k / Math.max(1, toSpawn)) * Math.PI * 2;
+                const sx = e.x + Math.cos(ang) * radius;
+                const sy = e.y + Math.sin(ang) * radius;
+                try {
+                  teleportSpawnVfx(this, sx, sy, {
+                    color: 0xaa66ff,
+                    ringOpts: { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 },
+                    onSpawn: () => {
+                      const d = createLaserDroneEnemy(this, sx, sy, 30, e);
+                      d._ldIdleAngle = ang;
+                      try { this.enemies.add(d); } catch (_) {}
+                    },
+                  });
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
+        } else {
+          // During channel, Hazel does nothing else
+          return;
+        }
+      } else if (laserReady && !e._hzSpecialActive && e._hzPhaseState !== 'channel') {
+        // Start Laser Drone ability: 2s channel with upward beam, drones spawn at end
+        e._hzLaserDroneState = 'channel';
+        e._hzLaserDroneChannelUntil = now + 2000;
+        e._hzLaserDroneNextAt = now + 35000; // 35s cooldown
+        try { bossSignalBeam(this, e.x, e.y, { color: 0xaa66ff, duration: 2000 }); } catch (_) {}
+        return;
       }
 
       // Phase Bomb ability: 1s channel (freeze + upward beam), then bombs around player
@@ -7429,8 +7634,8 @@ export default class CombatScene extends Phaser.Scene {
         for (let i = 0; i < pellets; i += 1) {
           const offset = -half + step * i;
           const ang = base + offset;
-          // Hazel shotgun pellets: 8 damage each
-          fireBullet(ang, speed, 8, 0xffeeff, 2);
+          // Hazel shotgun pellets: 12 damage each
+          fireBullet(ang, speed, 12, 0xffeeff, 2);
         }
         e._hzShotsSinceSpecial = (e._hzShotsSinceSpecial || 0) + 1;
         if (!afterSpecialBlock && e._hzShotsSinceSpecial >= 8) {

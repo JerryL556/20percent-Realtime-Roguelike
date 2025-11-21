@@ -38,6 +38,7 @@ export default class BootScene extends Phaser.Scene {
       A('enemy_bombardier', 'assets/Bombardier.png');   // grenadier
       A('enemy_bombardier_special', 'assets/BombardierSpecial.png');
       A('enemy_heal_drone', 'assets/HealDrone.png');
+      A('enemy_laser_drone', 'assets/LaserDrone.png');
     } catch (_) {}
     // Backgrounds
     try {

@@ -7,7 +7,7 @@ export const weaponDefs = [
     desc: [
       'Standard-issue pistol — accurate and reliable.',
     ].join('\n'),
-    damage: 18,
+    damage: 999,
     fireRateMs: 160,
     bulletSpeed: 450,
     pelletCount: 1,

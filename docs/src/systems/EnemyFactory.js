@@ -15,6 +15,7 @@ const ENEMY_TEXTURE_PATHS = {
   enemy_bombardier: 'assets/Bombardier.png',
   enemy_bombardier_special: 'assets/BombardierSpecial.png',
   enemy_heal_drone: 'assets/HealDrone.png',
+  enemy_laser_drone: 'assets/LaserDrone.png',
   turret_base: 'assets/Turret Base.png',
   turret_head: 'assets/Turret Head.png',
 };
@@ -576,7 +577,21 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 10, speed =
     return d;
   }
 
-
-
-
-
+  // Laser Drone: offensive drone that orbits Hazel and sweeps a laser at the player
+  export function createLaserDroneEnemy(scene, x, y, hp = 30, ownerBoss = null) {
+    const d = scene.physics.add.sprite(x, y, 'enemy_square');
+    // 10x10 hitbox, same as HealDrone
+    d.setSize(10, 10).setOffset(0, 0).setCollideWorldBounds(true);
+    d.hp = hp;
+    d.maxHp = hp;
+    d.damage = 0;
+    d.speed = 0;
+    d.isEnemy = true;
+    d.isLaserDrone = true;
+    d._ownerBoss = ownerBoss || null;
+    // Orbit/laser state (initialized lazily in scene update)
+    d._ldSpawnAt = scene.time.now;
+    // Attach visuals using the same helper as other enemies so sprite + hitbox follow the physics body
+    try { _attachEnemyVisuals(d, 'enemy_laser_drone', null, 10, 10, 1.0); } catch (_) {}
+    return d;
+  }
