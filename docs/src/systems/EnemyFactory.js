@@ -578,7 +578,7 @@ export function createGrenadierEnemy(scene, x, y, hp = 260, damage = 10, speed =
   }
 
   // Laser Drone: offensive drone that orbits Hazel and sweeps a laser at the player
-  export function createLaserDroneEnemy(scene, x, y, hp = 30, ownerBoss = null) {
+  export function createLaserDroneEnemy(scene, x, y, hp = 20, ownerBoss = null) {
     const d = scene.physics.add.sprite(x, y, 'enemy_square');
     // 10x10 hitbox, same as HealDrone
     d.setSize(10, 10).setOffset(0, 0).setCollideWorldBounds(true);

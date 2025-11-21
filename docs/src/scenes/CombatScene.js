@@ -1220,6 +1220,10 @@ export default class CombatScene extends Phaser.Scene {
       this.barricadesHard,
       undefined,
       (e, s) => {
+        // Heal/Laser Drones ignore hard barricade collisions
+        try {
+          if (e?.isHealDrone || e?.isLaserDrone) return false;
+        } catch (_) {}
         // Let Dandelion ignore hard barricade collision response while dashing/assaulting
         try {
           if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
@@ -1238,6 +1242,10 @@ export default class CombatScene extends Phaser.Scene {
       this.barricadesSoft,
       undefined,
       (e, s) => {
+        // Heal/Laser Drones ignore soft barricade collisions
+        try {
+          if (e?.isHealDrone || e?.isLaserDrone) return false;
+        } catch (_) {}
         // Let Dandelion ignore barricade collision response while dashing/assaulting;
         // soft barricades it touches are explicitly destroyed in _dandelionBreakSoftBarricades.
         try {
@@ -1258,6 +1266,10 @@ export default class CombatScene extends Phaser.Scene {
       this.barricadesSoft,
       (e, s) => this.onEnemyHitBarricade(e, s),
       (e, s) => {
+        // Heal/Laser Drones ignore soft barricade break-on-push logic
+        try {
+          if (e?.isHealDrone || e?.isLaserDrone) return false;
+        } catch (_) {}
         // While Dandelion is dashing/assault-dashing, ignore soft barricade collision resolution here too
         try {
           if (e?.isBoss && (e.bossType === 'Dandelion' || e._bossId === 'Dandelion')) {
@@ -3483,7 +3495,6 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
         if (nearPortal) {
-          try { this.gs.shootingRange = false; } catch (_) {}
           this.gs.nextScene = SceneKeys.Hub;
           SaveManager.saveToLocal(this.gs);
           this.scene.start(SceneKeys.Hub);
@@ -3504,12 +3515,19 @@ export default class CombatScene extends Phaser.Scene {
       this.registry.set('magSize', cap);
       this.registry.set('ammoInMag', this.ammoByWeapon[this._lastActiveWeapon]);
     }
+    // Detect if the loadout menu is open in the UI scene; when open, suppress firing.
+    let loadoutOpen = false;
+    try {
+      const uiScene = this.scene.get(SceneKeys.UI);
+      if (uiScene && uiScene.loadout && uiScene.loadout.panel) loadoutOpen = true;
+    } catch (_) {}
+
     // Update spread heat each frame based on whether player is holding fire
     const dt = (this.game?.loop?.delta || 16.7) / 1000;
     if (this._spreadHeat === undefined) this._spreadHeat = 0;
     const rampPerSec = 0.7; // time to max ~1.4s holding
     const coolPerSec = 1.2; // cool to 0 in ~0.8s
-    if (this.inputMgr.isLMBDown && !weapon.singleFire && !isRail && !isLaser) {
+    if (!loadoutOpen && this.inputMgr.isLMBDown && !weapon.singleFire && !isRail && !isLaser) {
       this._spreadHeat = Math.min(1, this._spreadHeat + rampPerSec * dt);
     } else {
       this._spreadHeat = Math.max(0, this._spreadHeat - coolPerSec * dt);
@@ -3519,41 +3537,43 @@ export default class CombatScene extends Phaser.Scene {
     if (this._lmbWasDown === undefined) this._lmbWasDown = false;
     const edgeDown = (!this._lmbWasDown) && !!ptr.isDown && ((ptr.buttons & 1) === 1);
     const wantsClick = !!ptr.justDown || edgeDown;
-    if (isRail) {
-      this.handleRailgunCharge(this.time.now, weapon, ptr);
-    }
-    // Laser handling (continuous)
-    if (isLaser) {
-      this.handleLaser(this.time.now, weapon, ptr, dt);
-    }
-    const wantsShot = (!isRail && !isLaser) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
-    if (wantsShot && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
-      const cap = this.getActiveMagCapacity();
-      const wid = this.gs.activeWeapon;
-      this.ensureAmmoFor(wid, cap);
-      const ammo = this.ammoByWeapon[wid] ?? 0;
-      if (ammo <= 0 || this.reload.active) {
-        // Start auto-reload when empty (or continue if already reloading)
-        if (!this.reload.active) {
-          this.reload.active = true;
-          this.reload.duration = this.getActiveReloadMs();
-          this.reload.until = this.time.now + this.reload.duration;
-          this.registry.set('reloadActive', true);
-          this.registry.set('reloadProgress', 0);
-        }
-      } else {
-        this.shoot();
-        this.lastShot = this.time.now;
-        this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
-        this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
-        // Auto-reload for rocket launcher (mag size 1)
-        if (wid === 'rocket' && this.ammoByWeapon[wid] <= 0) {
+    if (!loadoutOpen) {
+      if (isRail) {
+        this.handleRailgunCharge(this.time.now, weapon, ptr);
+      }
+      // Laser handling (continuous)
+      if (isLaser) {
+        this.handleLaser(this.time.now, weapon, ptr, dt);
+      }
+      const wantsShot = (!isRail && !isLaser) && (weapon.singleFire ? wantsClick : this.inputMgr.isLMBDown);
+      if (wantsShot && (!this.lastShot || this.time.now - this.lastShot > weapon.fireRateMs)) {
+        const cap = this.getActiveMagCapacity();
+        const wid = this.gs.activeWeapon;
+        this.ensureAmmoFor(wid, cap);
+        const ammo = this.ammoByWeapon[wid] ?? 0;
+        if (ammo <= 0 || this.reload.active) {
+          // Start auto-reload when empty (or continue if already reloading)
           if (!this.reload.active) {
             this.reload.active = true;
             this.reload.duration = this.getActiveReloadMs();
             this.reload.until = this.time.now + this.reload.duration;
             this.registry.set('reloadActive', true);
             this.registry.set('reloadProgress', 0);
+          }
+        } else {
+          this.shoot();
+          this.lastShot = this.time.now;
+          this.ammoByWeapon[wid] = Math.max(0, ammo - 1);
+          this.registry.set('ammoInMag', this.ammoByWeapon[wid]);
+          // Auto-reload for rocket launcher (mag size 1)
+          if (wid === 'rocket' && this.ammoByWeapon[wid] <= 0) {
+            if (!this.reload.active) {
+              this.reload.active = true;
+              this.reload.duration = this.getActiveReloadMs();
+              this.reload.until = this.time.now + this.reload.duration;
+              this.registry.set('reloadActive', true);
+              this.registry.set('reloadProgress', 0);
+            }
           }
         }
       }
@@ -4809,7 +4829,8 @@ export default class CombatScene extends Phaser.Scene {
 
               // Initialize BIT-like idle/orbit state once
               if (e._hdIdleAngle === undefined) e._hdIdleAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-              if (e._hdIdleRadius === undefined) e._hdIdleRadius = Phaser.Math.Between(28, 40);
+              // Keep HealDrones in a modest ring around Dandelion, but within heal range
+              if (e._hdIdleRadius === undefined) e._hdIdleRadius = Phaser.Math.Between(48, 72);
               if (e._hdIdleSpeed === undefined) e._hdIdleSpeed = Phaser.Math.FloatBetween(0.8, 1.4); // rad/s, slower than BITs
               if (typeof e._hdHoldUntil !== 'number') e._hdHoldUntil = 0;
 
@@ -4823,7 +4844,7 @@ export default class CombatScene extends Phaser.Scene {
                 try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
               } else {
                 // If too far from boss, move straight back toward them
-                const maxDist = (e._hdIdleRadius || 32) + 24;
+                const maxDist = (e._hdIdleRadius || 60) + 24;
                 if (distBoss > maxDist) {
                   const sp = 150; // slower than BITs (260)
                   const vx = (dxBoss / distBoss) * sp;
@@ -7528,35 +7549,26 @@ export default class CombatScene extends Phaser.Scene {
         if (now >= (e._hzLaserDroneChannelUntil || 0)) {
           e._hzLaserDroneState = 'idle';
           e._hzLaserDroneChannelUntil = 0;
-          // Spawn up to 5 LaserDrones around Hazel, capped at 5 total
+          // Spawn 5 LaserDrones around Hazel every time this ability resolves
           try {
-            const enemiesArr = this.enemies?.getChildren?.() || [];
-            let existing = 0;
-            for (let i = 0; i < enemiesArr.length; i += 1) {
-              const d = enemiesArr[i];
-              if (!d?.active || !d.isLaserDrone) continue;
-              existing += 1;
-            }
-            const toSpawn = Math.max(0, 5 - existing);
-            if (toSpawn > 0) {
-              const baseAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-              const radius = 70;
-              for (let k = 0; k < toSpawn; k += 1) {
-                const ang = baseAngle + (k / Math.max(1, toSpawn)) * Math.PI * 2;
-                const sx = e.x + Math.cos(ang) * radius;
-                const sy = e.y + Math.sin(ang) * radius;
-                try {
-                  teleportSpawnVfx(this, sx, sy, {
-                    color: 0xaa66ff,
-                    ringOpts: { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 },
-                    onSpawn: () => {
-                      const d = createLaserDroneEnemy(this, sx, sy, 30, e);
-                      d._ldIdleAngle = ang;
-                      try { this.enemies.add(d); } catch (_) {}
-                    },
-                  });
-                } catch (_) {}
-              }
+            const count = 5;
+            const baseAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const radius = 70;
+            for (let k = 0; k < count; k += 1) {
+              const ang = baseAngle + (k / Math.max(1, count)) * Math.PI * 2;
+              const sx = e.x + Math.cos(ang) * radius;
+              const sy = e.y + Math.sin(ang) * radius;
+              try {
+                teleportSpawnVfx(this, sx, sy, {
+                  color: 0xaa66ff,
+                  ringOpts: { radius: 18, lineWidth: 3, duration: 420, scaleTarget: 2.0 },
+                  onSpawn: () => {
+                    const d = createLaserDroneEnemy(this, sx, sy, 30, e);
+                    d._ldIdleAngle = ang;
+                    try { this.enemies.add(d); } catch (_) {}
+                  },
+                });
+              } catch (_) {}
             }
           } catch (_) {}
         } else {
