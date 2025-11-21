@@ -1957,12 +1957,17 @@ export default class CombatScene extends Phaser.Scene {
     // When any boss dies, clear all support enemies (turrets, HealDrones, LaserDrones) with death VFX
     try {
       if (e.isBoss) {
-        const arr = this.enemies?.getChildren?.() || [];
-        for (let i = 0; i < arr.length; i += 1) {
-          const d = arr[i];
-          if (!d?.active) continue;
-          if (d.isTurret || d.isHealDrone || d.isLaserDrone) {
-            try { this._destroySupportEnemy(d); } catch (_) {}
+        let found = true;
+        while (found) {
+          found = false;
+          const arr = this.enemies?.getChildren?.() || [];
+          for (let i = 0; i < arr.length; i += 1) {
+            const d = arr[i];
+            if (!d?.active) continue;
+            if (d.isTurret || d.isHealDrone || d.isLaserDrone) {
+              try { this._destroySupportEnemy(d); } catch (_) {}
+              found = true;
+            }
           }
         }
       }
@@ -2719,10 +2724,70 @@ export default class CombatScene extends Phaser.Scene {
               }
             } // else: within straight-flight window; keep current desired (= b._angle)
             const dt = (this.game?.loop?.delta || 16.7) / 1000;
-            b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, (b._maxTurn || 0) * dt);
+            const maxTurn = (b._maxTurn || 0) * dt;
+            if (b._smart) {
+              // Smart missiles: keep existing RotateTo behavior
+              b._angle = Phaser.Math.Angle.RotateTo(b._angle, desired, maxTurn);
+            } else {
+              // Non-smart guided missiles: apply capped step with manual unwrap
+              if (typeof b._angle === 'number') {
+                const current = b._angle;
+                const diff = Phaser.Math.Angle.Wrap(desired - current);
+                const step = Math.sign(diff) * Math.min(Math.abs(diff), maxTurn);
+                b._angle = current + step;
+              } else {
+                b._angle = desired;
+              }
+            }
             const vx = Math.cos(b._angle) * b._speed;
             const vy = Math.sin(b._angle) * b._speed;
             b.setVelocity(vx, vy);
+            // Proximity detonation vs enemies: auto-explode when within 15px
+            try {
+              const senseR = 15;
+              const senseR2 = senseR * senseR;
+              const enemies = this.enemies?.getChildren?.() || [];
+              let close = false;
+              for (let i = 0; i < enemies.length; i += 1) {
+                const e = enemies[i];
+                if (!e?.active || e.isDummy) continue;
+                const dx = e.x - b.x;
+                const dy = e.y - b.y;
+                if ((dx * dx + dy * dy) <= senseR2) { close = true; break; }
+              }
+              if (close) {
+                const ex = b.x;
+                const ey = b.y;
+                const radius = b._blastRadius || 40;
+                try { impactBurst(this, ex, ey, { color: 0xffaa33, size: 'large', radius }); } catch (_) {}
+                // Apply blast splash to enemies (reuse generic blast logic)
+                try {
+                  const arrE = this.enemies?.getChildren?.() || [];
+                  const r2 = radius * radius;
+                  for (let i = 0; i < arrE.length; i += 1) {
+                    const other = arrE[i];
+                    if (!other?.active) continue;
+                    const dx = other.x - ex;
+                    const dy = other.y - ey;
+                    if ((dx * dx + dy * dy) <= r2) {
+                      const splashDmg = b._aoeDamage || b.damage || 10;
+                      if (other.isDummy) {
+                        this._dummyDamage = (this._dummyDamage || 0) + splashDmg;
+                      } else {
+                        if (typeof other.hp !== 'number') other.hp = other.maxHp || 20;
+                        other.hp -= splashDmg;
+                        try { this._flashEnemyHit(other); } catch (_) {}
+                        if (other.hp <= 0) { this.killEnemy(other); }
+                      }
+                    }
+                  }
+                } catch (_) {}
+                // Damage soft barricades in radius
+                try { this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 10)); } catch (_) {}
+                try { b.destroy(); } catch (_) {}
+                return;
+              }
+            } catch (_) {}
           } catch (_) {}
 
           // Draw small elongated orange body + tracer tail

@@ -176,8 +176,8 @@ export const weaponDefs = [
       'Effectively hits targets even without direct line of sight.',
     ].join('\n'),
     // Micro homing rockets that follow the cursor with limited turn rate
-    damage: 10,           // increased direct hit
-    aoeDamage: 10,        // reduced splash
+    damage: 10,           // direct hit (rare; explosion handles most damage)
+    aoeDamage: 20,        // boosted splash (direct rarely applies)
     fireRateMs: 400,      // slightly faster ROF
     bulletSpeed: 220,     // low velocity
     pelletCount: 1,
