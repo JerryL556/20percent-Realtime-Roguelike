@@ -108,6 +108,11 @@ export default class UIScene extends Phaser.Scene {
       if (gs) {
         this.registry.set('gameState', gs);
         SaveManager.saveToLocal(gs);
+        // If we're in the Hub, refresh its view of GameState and Hub labels
+        try {
+          const hub = this.scene.get(SceneKeys.Hub);
+          if (hub && typeof hub.refreshFromGameState === 'function') hub.refreshFromGameState();
+        } catch (_) {}
       }
     }, 170);
     this._saveButtonsVisible = null;

@@ -11,6 +11,83 @@ import { Difficulty } from '../core/GameState.js';
 export default class HubScene extends Phaser.Scene {
   constructor() { super(SceneKeys.Hub); }
 
+  // Refresh Hub's view of GameState and Hub-related UI labels (campaign/deep dive/boss rush/mode)
+  refreshFromGameState() {
+    try {
+      // Update local reference from registry if present
+      const gsFromRegistry = this.registry.get('gameState');
+      if (gsFromRegistry) this.gs = gsFromRegistry;
+    } catch (_) {}
+
+    try {
+      const ui = this.scene.get(SceneKeys.UI);
+      if (ui) {
+        // Deep Dive label
+        try {
+          if (!ui.deepDiveText || !ui.deepDiveText.active) {
+            ui.deepDiveText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          }
+          if (this.gs?.gameMode === 'DeepDive') {
+            const best = this.gs?.deepDiveBest || { level: 0, stage: 0 };
+            const L = Math.max(0, best.level || 0);
+            const S = Math.max(0, Math.min(4, best.stage || 0));
+            ui.deepDiveText.setText(`Deepest dive: ${L}-${S}`);
+            ui.deepDiveText.setVisible(true);
+          } else {
+            ui.deepDiveText.setVisible(false);
+          }
+        } catch (_) {}
+
+        // Campaign label
+        try {
+          if (!ui.campaignText || !ui.campaignText.active) {
+            ui.campaignText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          }
+          if (this.gs?.gameMode === 'Normal') {
+            const st = Math.max(1, this.gs?.campaignSelectedStage || 1);
+            const completed = !!this.gs?.campaignCompleted;
+            const txt = completed ? 'Campaign: Completed' : `Campaign: Stage ${st}`;
+            ui.campaignText.setText(txt);
+            ui.campaignText.setVisible(true);
+          } else {
+            ui.campaignText.setVisible(false);
+          }
+        } catch (_) {}
+
+        // Boss Rush label
+        try {
+          if (!ui.bossRushText || !ui.bossRushText.active) {
+            ui.bossRushText = ui.add.text(12, 28, '', { fontFamily: 'monospace', fontSize: 12, color: '#66ffcc' }).setOrigin(0, 0).setAlpha(0.95);
+          }
+          if (this.gs?.gameMode === 'BossRush') {
+            const completed = !!this.gs?.bossRushCompleted;
+            const txt = completed ? 'Boss Rush Completed' : 'Boss Rush Not Completed';
+            ui.bossRushText.setText(txt);
+            ui.bossRushText.setVisible(true);
+          } else {
+            ui.bossRushText.setVisible(false);
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // Update mode prompt text if it exists
+    try {
+      if (this.prompt && this.prompt.active) {
+        const modeLabel = () => {
+          try {
+            if (this.gs?.shootingRange) return 'Mode: Shooting Range';
+            const m = this.gs?.gameMode || 'Normal';
+            if (m === 'BossRush') return 'Mode: Boss Rush';
+            if (m === 'DeepDive') return 'Mode: Deep Dive';
+            return 'Mode: Campaign';
+          } catch (_) { return 'Mode: Campaign'; }
+        };
+        this.prompt.setText(modeLabel());
+      }
+    } catch (_) {}
+  }
+
   create() {
     const { width, height } = this.scale;
     // Launch UI overlay for gameplay scenes
