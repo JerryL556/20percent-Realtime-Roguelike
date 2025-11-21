@@ -79,7 +79,90 @@ export default class CombatScene extends Phaser.Scene {
       });
     } catch (_) {}
   }
-  
+
+  // Small spark burst when an enemy bullet hits the player; color matches the bullet tint
+  _spawnEnemyBulletHitPlayerVfx(b) {
+    try {
+      if (!b) return;
+      const x = b.x;
+      const y = b.y;
+      // Derive color from bullet tint; fall back to a generic enemy bullet yellow
+      let color = 0xffcc00;
+      try {
+        const tint = (typeof b.tintTopLeft === 'number') ? b.tintTopLeft : null;
+        if (tint && tint !== 0xffffff) color = tint;
+      } catch (_) {}
+      // Use bullet velocity to orient sparks so they streak along the incoming direction
+      let ang = 0;
+      try {
+        const vx = b.body?.velocity?.x || 0;
+        const vy = b.body?.velocity?.y || 0;
+        ang = Math.atan2(vy, vx || 1);
+      } catch (_) {}
+      try {
+        pixelSparks(this, x, y, {
+          angleRad: ang,
+          count: 4,
+          spreadDeg: 40,
+          speedMin: 220,
+          speedMax: 360,
+          lifeMs: 160,
+          color,
+          size: 2,
+          alpha: 0.9,
+        });
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  // Brief overlay flash on the player sprite when hit by an enemy bullet; tinted to the bullet color
+  _flashPlayerHitFromBullet(b) {
+    try {
+      const sprite = this.player;
+      if (!sprite || !sprite.active) return;
+      const tex = sprite.texture;
+      const key = tex && tex.key;
+      if (!key) return;
+      let color = 0xffaa66;
+      try {
+        const tint = (typeof b?.tintTopLeft === 'number') ? b.tintTopLeft : null;
+        if (tint && tint !== 0xffffff) color = tint;
+      } catch (_) {}
+      const overlay = this.add.image(sprite.x, sprite.y, key);
+      try {
+        overlay.setOrigin(sprite.originX ?? 0.5, sprite.originY ?? 0.5);
+        overlay.setScale(sprite.scaleX ?? 1, sprite.scaleY ?? 1);
+        if (sprite.flipX) overlay.setFlipX(true);
+        if (sprite.flipY) overlay.setFlipY(true);
+        overlay.setDepth((sprite.depth ?? 0) + 1);
+        overlay.setBlendMode(Phaser.BlendModes.ADD);
+      } catch (_) {}
+      try { overlay.setTintFill(color); } catch (_) {}
+      overlay.setAlpha(0.22);
+
+      const updatePos = () => {
+        try {
+          if (!overlay.active || !sprite.active) return;
+          overlay.x = sprite.x;
+          overlay.y = sprite.y;
+        } catch (_) {}
+      };
+      this.events.on('update', updatePos, this);
+
+      this.tweens.add({
+        targets: overlay,
+        alpha: { from: 0.22, to: 0 },
+        duration: 80,
+        ease: 'Quad.easeOut',
+        onUpdate: () => { updatePos(); },
+        onComplete: () => {
+          try { this.events.off('update', updatePos, this); } catch (_) {}
+          try { overlay.destroy(); } catch (_) {}
+        },
+      });
+    } catch (_) {}
+  }
+
   openTerminalPanel() {
     if (this.panel) return;
     const { width } = this.scale;
@@ -1703,9 +1786,15 @@ export default class CombatScene extends Phaser.Scene {
         try { impactBurst(this, ex, ey, { color: 0xff3333, size: 'large', radius }); } catch (_) {}
         // Chip nearby destructible barricades
         this.damageSoftBarricadesInRadius(ex, ey, radius, (b.damage || 12));
-        try { b.destroy(); } catch (_) {}
+        try {
+          try { b._hzTrailG?.destroy(); } catch (_) {}
+          b.destroy();
+        } catch (_) {}
         return;
       }
+      const gs = this.gs;
+      const beforeHp = gs ? (gs.hp | 0) : 0;
+      const beforeShield = gs ? Math.max(0, (gs.shield | 0)) : 0;
       if (!inIframes) {
         const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8; // default shooter damage
         this.applyPlayerDamage(dmg);
@@ -1719,8 +1808,23 @@ export default class CombatScene extends Phaser.Scene {
           this.scene.start(SceneKeys.Hub);
         }
       }
+      // Visual hit feedback should appear even during i-frames
+      try { this._flashPlayerHitFromBullet(b); } catch (_) {}
+      // Only spawn impact particles when the hit actually reaches HP
+      try {
+        let shieldBlocked = false;
+        if (gs) {
+          const afterHp = gs.hp | 0;
+          const afterShield = Math.max(0, (gs.shield | 0));
+          shieldBlocked = (beforeShield > 0 && afterHp === beforeHp && afterShield < beforeShield);
+        }
+        if (!shieldBlocked) this._spawnEnemyBulletHitPlayerVfx(b);
+      } catch (_) {}
       // Always destroy enemy bullet on contact, even during i-frames
-      try { b.destroy(); } catch (_) {}
+      try {
+        try { b._hzTrailG?.destroy(); } catch (_) {}
+        b.destroy();
+      } catch (_) {}
     });
     // Mirror overlap for invisible player hitbox (guard creation to avoid undefined references)
     if (this.playerHitbox && this.enemyBullets) this.physics.add.overlap(this.playerHitbox, this.enemyBullets, (_hb, b) => {
@@ -1745,6 +1849,9 @@ export default class CombatScene extends Phaser.Scene {
         try { b.destroy(); } catch (_) {}
         return;
       }
+      const gs = this.gs;
+      const beforeHp = gs ? (gs.hp | 0) : 0;
+      const beforeShield = gs ? Math.max(0, (gs.shield | 0)) : 0;
       if (!inIframes) {
         const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
         this.applyPlayerDamage(dmg);
@@ -1758,7 +1865,22 @@ export default class CombatScene extends Phaser.Scene {
           this.scene.start(SceneKeys.Hub);
         }
       }
-      try { b.destroy(); } catch (_) {}
+      // Visual hit feedback should appear even during i-frames
+      try { this._flashPlayerHitFromBullet(b); } catch (_) {}
+      // Only spawn impact particles when the hit actually reaches HP
+      try {
+        let shieldBlocked = false;
+        if (gs) {
+          const afterHp = gs.hp | 0;
+          const afterShield = Math.max(0, (gs.shield | 0));
+          shieldBlocked = (beforeShield > 0 && afterHp === beforeHp && afterShield < beforeShield);
+        }
+        if (!shieldBlocked) this._spawnEnemyBulletHitPlayerVfx(b);
+      } catch (_) {}
+      try {
+        try { b._hzTrailG?.destroy(); } catch (_) {}
+        b.destroy();
+      } catch (_) {}
     });
     // Enemy bullets blocked by barricades as well
     this.physics.add.collider(this.enemyBullets, this.barricadesHard, (b, s) => this.onEnemyBulletHitBarricade(b, s));
@@ -2114,6 +2236,27 @@ export default class CombatScene extends Phaser.Scene {
       e.x = tx; e.y = ty;
       try { e.body?.setVelocity?.(0, 0); } catch (_) { try { e.setVelocity(0, 0); } catch (_) {} }
       try { this._spawnHazelPulse(tx, ty); } catch (_) {}
+      // Spawn two LaserDrones to Hazel's left and right after each teleport (generic Hazel-style teleport VFX)
+      try {
+        const offset = 48;
+        const spots = [
+          { x: tx - offset, y: ty },
+          { x: tx + offset, y: ty },
+        ];
+        for (let i = 0; i < spots.length; i += 1) {
+          const sx = Phaser.Math.Clamp(spots[i].x, rect.left + 24, rect.right - 24);
+          const sy = Phaser.Math.Clamp(spots[i].y, rect.top + 24, rect.bottom - 24);
+          teleportSpawnVfx(this, sx, sy, {
+            color: 0xaa66ff,
+            onSpawn: () => {
+              try {
+                const d = createLaserDroneEnemy(this, sx, sy, 20, e);
+                if (d) this.enemies.add(d);
+              } catch (_) {}
+            },
+          });
+        }
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -2272,7 +2415,10 @@ export default class CombatScene extends Phaser.Scene {
           }
         });
       }
-      try { b.destroy(); } catch (_) {}
+      try {
+        try { b._hzTrailG?.destroy(); } catch (_) {}
+        b.destroy();
+      } catch (_) {}
       return;
     }
     const dmg = (typeof b.damage === 'number' && b.damage > 0) ? b.damage : 8;
@@ -2282,7 +2428,10 @@ export default class CombatScene extends Phaser.Scene {
       if (hp1 <= 0) { try { s.destroy(); } catch (_) {} }
       else s.setData('hp', hp1);
     }
-    try { b.destroy(); } catch (_) {}
+    try {
+      try { b._hzTrailG?.destroy(); } catch (_) {}
+      b.destroy();
+    } catch (_) {}
   }
 
   // Utility: damage all destructible barricades within radius
@@ -4015,7 +4164,13 @@ export default class CombatScene extends Phaser.Scene {
           const arrB = this.enemyBullets?.getChildren?.() || [];
           for (let i = 0; i < arrB.length; i += 1) {
             const b = arrB[i]; if (!b?.active) continue; const dx = b.x - rp.x; const dy = b.y - rp.y; const d2 = dx * dx + dy * dy;
-            if (d2 >= r2min && d2 <= r2max) { try { impactBurst(this, b.x, b.y, { color: colImpact, size: 'small' }); } catch (_) {} try { b.destroy(); } catch (_) {} }
+            if (d2 >= r2min && d2 <= r2max) {
+              try { impactBurst(this, b.x, b.y, { color: colImpact, size: 'small' }); } catch (_) {}
+              try {
+                try { b._hzTrailG?.destroy(); } catch (_) {}
+                b.destroy();
+              } catch (_) {}
+            }
           }
         } catch (_) {}
         // Push Hazel missiles that enter the band instead of destroying them
@@ -6370,12 +6525,23 @@ export default class CombatScene extends Phaser.Scene {
         ey = pts[0].y;
       }
     } catch (_) {}
+    // Choose beam colors: default red/blue for Prism, Hazel-style purple for LaserDrones
+    let outerColor = 0xff3333;
+    let innerColor = 0x66aaff;
+    let impactColor = 0xff4455;
     try {
-      g.lineStyle(5, 0xff3333, 0.95).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
-      g.lineStyle(2, 0x66aaff, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
+      if (e && e.isLaserDrone) {
+        outerColor = 0xaa66ff;
+        innerColor = 0xaa66ff;
+        impactColor = 0xaa66ff;
+      }
+    } catch (_) {}
+    try {
+      g.lineStyle(5, outerColor, 0.95).beginPath(); g.moveTo(e.x, e.y); g.lineTo(ex, ey); g.strokePath();
+      g.lineStyle(2, innerColor, 1).beginPath(); g.moveTo(e.x, e.y - 1); g.lineTo(ex, ey); g.strokePath();
     } catch (_) {}
     // Particles at endpoint
-    try { impactBurst(this, ex, ey, { color: 0xff4455, size: 'small' }); } catch (_) {}
+    try { impactBurst(this, ex, ey, { color: impactColor, size: 'small' }); } catch (_) {}
     // Damage ticking to player if intersecting beam
     if (applyDamage) {
       e._beamTickAccum = (e._beamTickAccum || 0) + dt;
@@ -6481,13 +6647,29 @@ export default class CombatScene extends Phaser.Scene {
     const angToPlayer = Math.atan2(dy, dx);
     const fireBullet = (angle, speed = 260, damage = e.damage, tint = 0xffaa00, size = 2) => {
       const b = this.enemyBullets.get(e.x, e.y, 'bullet');
-      if (!b) return;
+      if (!b) return null;
       b.setActive(true).setVisible(true);
       if (size >= 6) b.setCircle(6).setOffset(-6, -6); else b.setCircle(2).setOffset(-2, -2);
       b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
       b.setTint(tint);
       b.damage = damage;
-      b.update = () => { const view = this.cameras?.main?.worldView; if (view && !view.contains(b.x, b.y)) { try { b.destroy(); } catch (_) {} } };
+      // Ensure any Hazel-style tracer graphics are cleaned up whenever this bullet is destroyed
+      try {
+        b.on('destroy', () => {
+          try { b._hzTrailG?.destroy(); } catch (_) {}
+        });
+      } catch (_) {}
+      b.update = () => {
+        // Destroy when leaving camera view
+        try {
+          const view = this.cameras?.main?.worldView;
+          if (view && !view.contains(b.x, b.y)) {
+            try { b._hzTrailG?.destroy(); } catch (_) {}
+            try { b.destroy(); } catch (_) {}
+          }
+        } catch (_) {}
+      };
+      return b;
     };
     const fireRocket = (angle, speed = 300, damage = e.damage + 4, radius = 70) => {
       const b = this.enemyBullets.get(e.x, e.y, 'bullet'); if (!b) return;
@@ -7722,8 +7904,36 @@ export default class CombatScene extends Phaser.Scene {
         for (let i = 0; i < pellets; i += 1) {
           const offset = -half + step * i;
           const ang = base + offset;
-          // Hazel shotgun pellets: 12 damage each
-          fireBullet(ang, speed, 12, 0xffeeff, 2);
+          // Hazel shotgun pellets: 12 damage each, purple tint + small tracer
+          const pellet = fireBullet(ang, speed, 12, 0xaa66ff, 2);
+          if (pellet) {
+            try {
+              const trail = this.add.graphics();
+              try { trail.setDepth(8790); trail.setBlendMode(Phaser.BlendModes.ADD); } catch (_) {}
+              pellet._hzTrailG = trail;
+              const prevUpdate = pellet.update;
+              pellet.update = () => {
+                try {
+                  if (pellet.active && pellet._hzTrailG && pellet.body) {
+                    const g = pellet._hzTrailG;
+                    g.clear();
+                    const vx = pellet.body.velocity.x || 0;
+                    const vy = pellet.body.velocity.y || 0;
+                    const mag = Math.hypot(vx, vy) || 1;
+                    const vxN = vx / mag;
+                    const vyN = vy / mag;
+                    const lenSeg = 6;
+                    g.lineStyle(2, 0xaa66ff, 0.9);
+                    g.beginPath();
+                    g.moveTo(pellet.x, pellet.y);
+                    g.lineTo(pellet.x - vxN * lenSeg, pellet.y - vyN * lenSeg);
+                    g.strokePath();
+                  }
+                } catch (_) {}
+                try { prevUpdate && prevUpdate(); } catch (_) {}
+              };
+            } catch (_) {}
+          }
         }
         e._hzShotsSinceSpecial = (e._hzShotsSinceSpecial || 0) + 1;
         if (!afterSpecialBlock && e._hzShotsSinceSpecial >= 8) {
