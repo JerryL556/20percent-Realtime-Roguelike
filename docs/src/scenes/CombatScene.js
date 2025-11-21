@@ -4737,13 +4737,24 @@ export default class CombatScene extends Phaser.Scene {
           if (!straightUntil || nowHz >= straightUntil) {
             const dxm = this.player.x - e.x;
             const dym = this.player.y - e.y;
-            const desired = Math.atan2(dym, dxm);
+            let desired = Math.atan2(dym, dxm);
+            // Unwrap desired relative to current angle to avoid sudden flips around ±π
+            if (typeof e._angle === 'number') {
+              const current = e._angle;
+              const diffWrapped = Phaser.Math.Angle.Wrap(desired - current);
+              desired = current + diffWrapped;
+            }
             // Hazel missile turn rate: fixed 100 deg/s (time-based)
             const baseTurn = Phaser.Math.DegToRad(100);
-            const maxTurn = baseTurn * dtHz; // time-based turn step
-            e._angle = (typeof e._angle === 'number')
-              ? Phaser.Math.Angle.RotateTo(e._angle, desired, maxTurn)
-              : desired;
+            const maxTurn = baseTurn * dtHz; // radians this frame
+            if (typeof e._angle === 'number') {
+              const current = e._angle;
+              let diff = Phaser.Math.Angle.Wrap(desired - current);
+              const step = Math.sign(diff) * Math.min(Math.abs(diff), maxTurn);
+              e._angle = current + step;
+            } else {
+              e._angle = desired;
+            }
           } else if (typeof e._angle !== 'number') {
             // Failsafe: ensure we have some angle even during straight phase
             const dxm = this.player.x - e.x;
