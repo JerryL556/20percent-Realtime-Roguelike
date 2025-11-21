@@ -41,8 +41,8 @@ export default class StartScene extends Phaser.Scene {
       const loaded = SaveManager.loadFromLocal();
       if (loaded) {
         this.registry.set('gameState', loaded);
-        const next = loaded.nextScene || SceneKeys.Hub;
-        this.scene.start(next);
+        // Always resume from Hub regardless of saved nextScene
+        this.scene.start(SceneKeys.Hub);
       } else {
         this.add.text(width / 2, height / 2 + 100, 'No save found', { fontFamily: 'monospace', fontSize: 14, color: '#ff6666' }).setOrigin(0.5);
       }
@@ -53,8 +53,8 @@ export default class StartScene extends Phaser.Scene {
       if (gs) {
         this.registry.set('gameState', gs);
         SaveManager.saveToLocal(gs);
-        const next = gs.nextScene || SceneKeys.Hub;
-        this.scene.start(next);
+        // Always load into Hub regardless of saved nextScene
+        this.scene.start(SceneKeys.Hub);
       }
     });
   }
